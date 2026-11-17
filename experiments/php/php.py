@@ -269,7 +269,7 @@ def crosscheck(root, drat_trim):
         if cad_rc == 20:
             proof = logs / "cadical.drat"
             r, proof_gen_ns, _ = execute(
-                "cadical", [str(source), str(proof)],
+                "cadical", ["--no-binary", str(source), str(proof)],
                 logs / "cadical-proof.log", logs / "cadical-proof.rss")
             assert r == 20 and proof.is_file() and proof.stat().st_size > 0
             proof_bytes = proof.stat().st_size
