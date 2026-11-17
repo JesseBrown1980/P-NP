@@ -44,7 +44,10 @@ def independent_affine(n, clauses):
     work = [[mask, rhs] for mask, rhs in equations]
     pivots = []
     rank = 0
-    for bit in range(n):
+    # A full Gauss-Jordan sweep with *highest* pivots reproduces the
+    # free-coordinate convention while remaining independent of the
+    # engine's incremental sparse elimination implementation.
+    for bit in range(n - 1, -1, -1):
         matching = next((j for j in range(rank, len(work))
                          if (work[j][0] >> bit) & 1), None)
         if matching is None:
