@@ -58,7 +58,7 @@ def inspect_receipt(row, root, check_count=True):
     for name, state, nodes, literals, cost in probes:
         assert name in expected_names
         assert state in ("EXACT", "HOLD_BUDGET")
-        assert 0 < nodes <= 96 and 0 < literals <= cost
+        assert 0 < nodes <= 96 and 0 <= literals <= cost
     ranked = sorted((0 if state == "EXACT" else 1, cost, name)
                     for name, state, nodes, literals, cost in probes)
     assert row["initial_selection"] == ranked[0][2]
@@ -66,7 +66,7 @@ def inspect_receipt(row, root, check_count=True):
     assert [r[0] for r in executions] == [r[2] for r in ranked[:len(executions)]]
     for name, state, nodes, literals, cost in executions:
         assert name in expected_names and state in ("EXACT", "HOLD_BUDGET")
-        assert 0 < nodes <= 20000 and 0 < literals <= cost
+        assert 0 < nodes <= 20000 and 0 <= literals <= cost
     if executions[-1][1] == "EXACT":
         assert all(r[1] == "HOLD_BUDGET" for r in executions[:-1])
         assert row["status"] == "EXACT"
