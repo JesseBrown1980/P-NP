@@ -109,21 +109,21 @@ def recover(p, g, h):
             "digit_verifications": 0, "modular_pow_calls": 0}
     recovered = []
     for q, e in factors:
-        tower = q ** e
+        tower = pow(q, e)
         base = pow(g, order // tower, p)
         value = pow(h, order // tower, p)
-        order_q = pow(base, q ** (e - 1), p)
+        order_q = pow(base, pow(q, e - 1), p)
         x = 0
         digits = []
         for j in range(e):
             remainder = value * pow(pow(base, x, p), -1, p) % p
-            observed = pow(remainder, q ** (e - j - 1), p)
+            observed = pow(remainder, pow(q, e - j - 1), p)
             work["modular_pow_calls"] += 4
             digit = bsgs(order_q, observed, p, q, work)
             assert pow(order_q, digit, p) == observed
             work["digit_verifications"] += 1
             digits.append(digit)
-            x += digit * q ** j
+            x += digit * pow(q, j)
         assert pow(base, x, p) == value
         recovered.append((q, e, tower, x, tuple(digits)))
     exponent, modulus = combine_crt(tuple((row[3], row[2]) for row in recovered))
