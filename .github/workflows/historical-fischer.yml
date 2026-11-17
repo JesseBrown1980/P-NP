@@ -1,0 +1,106 @@
+name: P-NP original byte-for-byte Fischer source replay and comparison
+on:
+  pull_request:
+    paths:
+      - 'historical/asolaria-2026-07-21/**'
+      - 'experiments/historical/**'
+      - '.github/workflows/historical-fischer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-source-and-comparison:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Authenticate untouched original upstream Git blobs
+        run: |
+          set -euo pipefail
+          H=historical/asolaria-2026-07-21
+          test "$(git hash-object "$H/rime_fischer.py")" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object "$H/rime_sphere.py")" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          test "$(git hash-object "$H/rime_fischer_cluster.py")" = 2895e1e4a1fb4629005422429aeaf8020d15c6cf
+          test "$(git hash-object "$H/rime_27fischers.py")" = c26228781c7e726b12efa8d18d6c68cc711cfd80
+          mkdir -p build/historical
+          printf 'HISTORICAL_ORIGIN|repository=ASOLARIA_UNIVERSE_SIMULATOR|commit=3f9f42dab6247c40b30921b253e3f73c9e942ca5|four_git_blobs_identical=PASS\n' | tee build/historical/ORIGIN.hbp
+          git hash-object "$H"/*.py | tee build/historical/BLOB_SHA.txt
+      - name: Run original historical Bobby Fischer script unchanged
+        run: |
+          set -euo pipefail
+          python3 -B historical/asolaria-2026-07-21/rime_fischer.py | tee build/historical/HISTORICAL_DIRECT.txt
+          test "$(grep -c 'reached=True' build/historical/HISTORICAL_DIRECT.txt)" -eq 5
+          grep -Fq 'every target reached from the null center, rime-dimensionally: True' build/historical/HISTORICAL_DIRECT.txt
+          echo 'HISTORICAL_DIRECT|original_source=PASS|five_original_targets=PASS' | tee build/historical/DIRECT_VERDICT.hbp
+      - name: Execute original historical cluster and 27-Fischer source unchanged
+        run: |
+          set -euo pipefail
+          python3 -B historical/asolaria-2026-07-21/rime_fischer_cluster.py | tee build/historical/HISTORICAL_CLUSTER.txt
+          test "$(grep -c 'reached=True' build/historical/HISTORICAL_CLUSTER.txt)" -eq 3
+          grep -Fq 'every target reached, work split across independent nodes, CRT-combined: True' build/historical/HISTORICAL_CLUSTER.txt
+          python3 -B historical/asolaria-2026-07-21/rime_27fischers.py | tee build/historical/HISTORICAL_27.txt
+          grep -Fq 'CRT recompose X from its 27 coordinates: byte-exact = True' build/historical/HISTORICAL_27.txt
+          grep -Fq 'exact=True' build/historical/HISTORICAL_27.txt
+          echo 'HISTORICAL_VARIANTS|cluster=PASS|27_fischers=PASS|unmodified_sources=PASS' | tee build/historical/VARIANTS.hbp
+      - name: Independently verify original historical code on 21 identical group inputs
+        run: |
+          set -euo pipefail
+          python3 -I -B tools/exact_policy.py experiments/historical/test_original_fischer.py experiments/historical/compare_original_new.py
+          python3 -s -B experiments/historical/test_original_fischer.py build/historical/ORIGINAL-21.txt | tee build/historical/HISTORICAL-VERIFY.hbp
+          grep -Fq 'FISCHER_HISTORICAL_FINAL|cases=21|' build/historical/HISTORICAL-VERIFY.hbp
+          grep -Fq '|full_order_BSGS_agreement=21|' build/historical/HISTORICAL-VERIFY.hbp
+          grep -Fq 'FISCHER_HISTORICAL_TAMPER|altered_exponent=REJECTED|altered_sha=REJECTED|' build/historical/HISTORICAL-VERIFY.hbp
+      - name: Compare same 21 targets against new exact Rime PH source and verifier
+        run: |
+          set -euo pipefail
+          python3 -s -B algebra/rime_fischer.py | tee build/historical/NEW-21.hbp
+          python3 -s -B algebra/verify_rime_fischer.py build/historical/NEW-21.hbp | tee build/historical/NEW-VERIFY.hbp
+          python3 -s -B experiments/historical/compare_original_new.py build/historical/ORIGINAL-21.txt build/historical/NEW-21.hbp | tee build/historical/COMPARISON.hbp
+          grep -Fq 'RIME_PH_INDEPENDENT|cases=21|full_order_BSGS_agreement=21|' build/historical/NEW-VERIFY.hbp
+          grep -Fq 'FISCHER_OLD_NEW_FINAL|cases=21|same_targets=PASS|same_exact_exponents=21|' build/historical/COMPARISON.hbp
+          mkdir -p build/historical/source
+          cp historical/asolaria-2026-07-21/*.py build/historical/source/
+          cp experiments/historical/*.py experiments/historical/README.md build/historical/source/
+          cp .github/workflows/historical-fischer.yml build/historical/source/
+          cp algebra/rime_fischer.py algebra/verify_rime_fischer.py build/historical/source/
+          ( cd build/historical && sha256sum *.hbp *.txt source/* > MANIFEST.sha256 )
+          ( cd build/historical && sha256sum -c MANIFEST.sha256 > /dev/null )
+      - name: Publish byte-exact historical source and independently checked evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnp-original-asolaria-fischer-byte-identical-21-exact
+          path: build/historical/
+          retention-days: 90
+          if-no-files-found: error
+  published-historical-evidence:
+    needs: historical-source-and-comparison
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-original-asolaria-fischer-byte-identical-21-exact
+          path: evidence
+      - name: Recheck uploaded source, original stdout and exact receipts
+        run: |
+          set -euo pipefail
+          cd evidence
+          test -s MANIFEST.sha256
+          test -s HISTORICAL_DIRECT.txt
+          test -s HISTORICAL_CLUSTER.txt
+          test -s HISTORICAL_27.txt
+          test -s ORIGINAL-21.txt
+          test -s NEW-21.hbp
+          test -s COMPARISON.hbp
+          test "$(grep -c '^FISCHER_OLD_NEW|' COMPARISON.hbp)" -eq 21
+          test -s source/rime_fischer.py
+          test -s source/rime_sphere.py
+          test -s source/rime_fischer_cluster.py
+          test -s source/rime_27fischers.py
+          test "$(git hash-object source/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object source/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          test "$(git hash-object source/rime_fischer_cluster.py)" = 2895e1e4a1fb4629005422429aeaf8020d15c6cf
+          test "$(git hash-object source/rime_27fischers.py)" = c26228781c7e726b12efa8d18d6c68cc711cfd80
+          grep -Fq 'FISCHER_OLD_NEW_FINAL|cases=21|same_targets=PASS|same_exact_exponents=21|' COMPARISON.hbp
+          sha256sum -c MANIFEST.sha256
+          echo 'FISCHER_ORIGINAL_ARCHIVE|published=PASS|four_original_git_blobs=PASS|21_old_new_agreements=PASS|source_manifest=PASS'
