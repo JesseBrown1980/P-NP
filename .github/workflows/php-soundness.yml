@@ -1,0 +1,107 @@
+name: P-NP PHP source, five SAT crosschecks, 100 flips and DRAT
+on:
+  pull_request:
+    paths:
+      - 'experiments/php/**'
+      - '.github/workflows/php-soundness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  php-source-and-soundness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Exact integer source policy
+        run: |
+          set -euo pipefail
+          python3 -I -B tools/exact_policy.py experiments/php/php.py experiments/php/verify_php.py
+      - name: Generate and audit original PHP CNF sizes, including PHP 21/20
+        run: |
+          set -euo pipefail
+          mkdir -p build/php
+          python3 -I -B experiments/php/php.py build build/php | tee build/php/SOURCE.hbp
+          test "$(grep -c '^PHP_CNF|' build/php/SOURCE.hbp)" -eq 6
+          grep -Fq 'PHP_CNF|instance=php-21-20|variables=420|pigeon_ALO=21|hole_AMO=4200|pigeon_AMO=0|clauses=4221|' build/php/SOURCE.hbp
+          grep -Fq 'PHP_FUNCTIONAL|variables=420|pigeon_ALO=21|hole_AMO=4200|pigeon_AMO=3990|clauses=8211|' build/php/SOURCE.hbp
+      - name: Native general-CNF DPLL and separately metered witnesses
+        run: |
+          set -euo pipefail
+          python3 -I -B experiments/php/php.py native build/php | tee build/php/NATIVE.hbp
+          test "$(grep -c '^PHP_NATIVE|' build/php/NATIVE.hbp)" -eq 5
+      - name: Install release-pinned MiniSat and CaDiCaL and source-pin DRAT-trim
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' time build-essential
+          dpkg-query -W minisat cadical | tee build/php/SOLVERS.txt
+          git clone --quiet https://github.com/marijnheule/drat-trim.git build/php/drat-trim-source
+          git -C build/php/drat-trim-source checkout --quiet 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          test "$(git -C build/php/drat-trim-source rev-parse HEAD)" = 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          make -C build/php/drat-trim-source drat-trim
+          cp build/php/drat-trim-source/drat-trim build/php/drat-trim
+          printf 'drat-trim commit 2e3b2dc0ecf938addbd779d42877b6ed69d9a985\n' >> build/php/SOLVERS.txt
+      - name: Five original-source MiniSat and CaDiCaL decisions with DRAT
+        run: |
+          set -euo pipefail
+          python3 -I -B experiments/php/php.py crosscheck build/php build/php/drat-trim | tee build/php/EXTERNAL.hbp
+          test "$(grep -c '^PHP_EXTERNAL|' build/php/EXTERNAL.hbp)" -eq 5
+          grep -Fq 'PHP_EXTERNAL_FINAL|five_cases=PASS|two_solvers_agree=PASS|drat_produced_for_all_three_unsat=PASS|' build/php/EXTERNAL.hbp
+          test "$(find build/php/solver -name 'cadical.drat' -type f | wc -l)" -eq 3
+          test "$(find build/php/solver -name 'minisat.sol' -type f | wc -l)" -eq 5
+      - name: Cleanroom independent clause count, models, DRAT and 100 flips
+        run: |
+          set -euo pipefail
+          python3 -I -B experiments/php/verify_php.py build/php build/php/drat-trim | tee build/php/INDEPENDENT.hbp
+          grep -Fq 'PHP_SPEC|php_21_20_variables=420|at_least_one=21|hole_at_most_one=4200|functional_extra=3990|basic_clauses=4221|functional_clauses=8211|' build/php/INDEPENDENT.hbp
+          grep -Fq 'PHP_FLIP|total=100|rejected=100|false_acceptances=0|' build/php/INDEPENDENT.hbp
+          grep -Fq 'PHP_INDEPENDENT_FINAL|source_large=PASS|five_cases=PASS|two_solver_verdicts=AGREE|original_models=PASS|checked_DRAT_proofs=PASS|100_flips=REJECTED|' build/php/INDEPENDENT.hbp
+          mkdir -p build/php/source
+          cp experiments/php/php.py experiments/php/verify_php.py experiments/php/README.md build/php/source/
+          cp .github/workflows/php-soundness.yml build/php/source/
+          ( cd build/php && sha256sum php-*.cnf *.hbp SOLVERS.txt solver/*/* source/* drat-trim > MANIFEST.sha256 )
+          ( cd build/php && sha256sum -c MANIFEST.sha256 > /dev/null )
+      - name: Publish complete source and checkable proof archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnp-php-source-five-crosschecks-100-flips-drat
+          path: |
+            build/php/*.cnf
+            build/php/*.hbp
+            build/php/SOLVERS.txt
+            build/php/MANIFEST.sha256
+            build/php/drat-trim
+            build/php/native/
+            build/php/solver/
+            build/php/source/
+          retention-days: 90
+          if-no-files-found: error
+  published-artifact-check:
+    needs: php-source-and-soundness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download GitHub-published bytes
+        uses: actions/download-artifact@v4
+        with:
+          name: pnp-php-source-five-crosschecks-100-flips-drat
+          path: evidence
+      - name: Verify actual archive completeness and checksums
+        run: |
+          set -euo pipefail
+          cd evidence
+          test -s MANIFEST.sha256
+          test -s php-21-20.cnf
+          test -s php-21-20-functional.cnf
+          test -s INDEPENDENT.hbp
+          test "$(find . -maxdepth 1 -name 'php-*.cnf' -type f | wc -l)" -eq 7
+          test "$(find solver -name 'cadical.drat' -type f | wc -l)" -eq 3
+          test "$(find solver -name 'minisat.sol' -type f | wc -l)" -eq 5
+          test -s drat-trim
+          test -s source/verify_php.py
+          test -s source/php-soundness.yml
+          grep -Fq 'PHP_FLIP|total=100|rejected=100|false_acceptances=0|' INDEPENDENT.hbp
+          grep -Fq 'PHP_INDEPENDENT_FINAL|source_large=PASS|five_cases=PASS|' INDEPENDENT.hbp
+          sha256sum -c MANIFEST.sha256
+          echo 'PHP_ARCHIVE|download=PASS|all_source_and_Drat=PASS|manifest=PASS|status=PASS'
