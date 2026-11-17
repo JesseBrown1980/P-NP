@@ -32,3 +32,27 @@ Every accepted result has immutable input identity (SHA-256), explicit generator
 See [docs/RESEARCH_PROTOCOL.md](docs/RESEARCH_PROTOCOL.md) for the acceptance contract once the first port is complete.
 
 **Research direction:** aggressively test the possibility of new structural reductions while keeping all mathematical conclusions open to evidence.
+
+
+## Run the exact research pilots
+
+The core scripts use Python 3 and exact integer arithmetic; the archived GitHub Actions workflows run the pinned external SAT tools and re-download their evidence. The local commands for the original 11-case regression are:
+
+```bash
+python3 -I -B sat/engine.py > integrated.hbp
+python3 -I -B sat/verify.py integrated.hbp
+```
+
+The first adaptive selector is separately executable, including raw source and independent exact-count verification:
+
+```bash
+mkdir -p build/selector/cnf
+python3 -s -B sat/selector.py build/selector/cnf > build/selector/SELECTOR.hbp
+python3 -s -B sat/verify_selector.py build/selector/SELECTOR.hbp build/selector/cnf
+```
+
+See [architecture](docs/ARCHITECTURE.md), [provenance](docs/PROVENANCE.md), [evidence ledger](docs/RESULTS.md), [research protocol](docs/RESEARCH_PROTOCOL.md) and [first selector analysis](docs/SELECTOR_V0.md).
+
+## Active mathematical and engineering questions
+
+[Exact representation selection](https://github.com/JesseBrown1980/P-NP/issues/2), [independent SAT/#SAT benchmarking](https://github.com/JesseBrown1980/P-NP/issues/3), [formal complexity proof obligations](https://github.com/JesseBrown1980/P-NP/issues/4), and [MTP/Fischer/N-Nest watcher architecture](https://github.com/JesseBrown1980/P-NP/issues/5) are tracked independently. We preserve the original questions and experiments as input evidence, while treating new P-NP work as its own reproducible program.

@@ -1,0 +1,76 @@
+name: P-NP exact adaptive representation selector and receipts
+on:
+  pull_request:
+    paths:
+      - 'sat/selector.py'
+      - 'sat/verify_selector.py'
+      - 'docs/SELECTOR_V0.md'
+      - '.github/workflows/representation-selector.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  selector-exact-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Integer-only source and original engine blob identity
+        run: |
+          set -euo pipefail
+          python3 -I -B tools/exact_policy.py sat/engine.py sat/verify_heldout.py sat/selector.py sat/verify_selector.py
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object sat/verify_heldout.py)" = ca3362038d954401337403d6168751856459142b
+      - name: Run 21-case adaptive frozen source and rank-all-candidates pilot
+        run: |
+          set -euo pipefail
+          mkdir -p build/selector/cnf
+          python3 -s -B sat/selector.py build/selector/cnf > build/selector/SELECTOR.hbp
+          test "$(grep -c '^PNP_SELECTOR|' build/selector/SELECTOR.hbp)" -eq 21
+          grep -Fq 'PNP_SELECTOR_CONTROL|opposite_parity=UNSAT|' build/selector/SELECTOR.hbp
+          grep -Fq 'PNP_SELECTOR_FINAL|cases=21|' build/selector/SELECTOR.hbp
+      - name: Independently replay original CNF, all SHA receipts, exact counts and rejection controls
+        run: |
+          set -euo pipefail
+          OUT=build/selector
+          python3 -s -B sat/verify_selector.py "$OUT/SELECTOR.hbp" "$OUT/cnf" | tee "$OUT/INDEPENDENT.hbp"
+          grep -Fq 'PNP_SELECTOR_TAMPER|altered_receipts_rejected=10|status=PASS|' "$OUT/INDEPENDENT.hbp"
+          grep -Fq 'PNP_SELECTOR_INDEPENDENT|cases=21|' "$OUT/INDEPENDENT.hbp"
+          grep -Fq '|candidate_score_and_total_cost=PASS|original_CNF_counts=PASS|' "$OUT/INDEPENDENT.hbp"
+          mkdir -p "$OUT/source"
+          cp sat/selector.py sat/verify_selector.py sat/engine.py sat/verify_heldout.py "$OUT/source/"
+          cp docs/SELECTOR_V0.md "$OUT/source/"
+          cp .github/workflows/representation-selector.yml "$OUT/source/"
+          ( cd "$OUT" && sha256sum cnf/*.cnf *.hbp source/* > MANIFEST.sha256 )
+          ( cd "$OUT" && sha256sum -c MANIFEST.sha256 > /dev/null )
+      - name: Publish original evidence bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnp-selector-v0-source-probes-and-exact-counts
+          path: build/selector/
+          retention-days: 90
+          if-no-files-found: error
+  archive-acceptance:
+    needs: selector-exact-replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-selector-v0-source-probes-and-exact-counts
+          path: archive
+      - name: Replay published byte identities after independent download
+        run: |
+          set -euo pipefail
+          cd archive
+          test -s SELECTOR.hbp
+          test -s INDEPENDENT.hbp
+          test -s MANIFEST.sha256
+          test -s source/selector.py
+          test -s source/verify_selector.py
+          test -s source/representation-selector.yml
+          test "$(find cnf -maxdepth 1 -type f -name '*.cnf' | wc -l)" -eq 21
+          grep -Fq 'PNP_SELECTOR_INDEPENDENT|cases=21|' INDEPENDENT.hbp
+          grep -Fq '|corruption_rejection=PASS|status=PASS' INDEPENDENT.hbp
+          sha256sum -c MANIFEST.sha256
+          echo 'PNP_SELECTOR_ARCHIVE|published=PASS|sha_manifest=PASS|full_21_cases=PASS'
