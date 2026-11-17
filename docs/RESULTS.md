@@ -30,3 +30,11 @@ These metrics preserve the negative controls and counterexamples. The next miles
 - Pure XOR n=24/48/96 exact counts 4/1/4 required one final search node each, though probing all candidate representations increased the total reported work to 25,307/71,327/251,582 defined units.
 
 Full source, proof and work receipts in the hosted archive; methodology in [SELECTOR_V0.md](SELECTOR_V0.md). Generalized scaling and strong external #SAT competitiveness remain OPEN.
+
+## Frozen Yang–Mills vs independently implemented Rime Fischer competition
+
+[Research PR #9](https://github.com/JesseBrown1980/P-NP/pull/9), [initial hosted acceptance #44198991467](https://github.com/JesseBrown1980/P-NP/actions/runs/44198991467): **PASS** for 21 same-source paired 3-CNF cases, independent SHA/affine-rank/counted-model witness referee, 11 corrupted result rejections and independently downloaded artifact acceptance. Both contestants gave 20 exact counts and one budget HOLD. On the 20 complete cases, the experimental Rime-inspired branch order won 6, lost 7, tied 7 by *search nodes*. Sum over all 21: frozen 75,388 nodes, Rime 72,414 nodes (both include 20,000 on the common HOLD).
+
+Each arm was isolated with alternating process order. Observed aggregate subprocess elapsed: frozen 7.542 s; challenger 2.874 s. A separate fixed-order baseline is executed by the frozen solver, so this raw elapsed ratio is **not a matched-kernel performance ratio**. Median peak RSS: 18,636 versus 18,724 KiB. The original discrete-logarithm Law-14 PH prime-power lifting and CRT were independently reimplemented and passed all 21 math cases against full-order Shanks BSGS; these are **separate mathematical problem classes**, not general 3-SAT complexity evidence.
+
+Detailed family table, source pins and acceptance limitations: [Competition protocol](../experiments/competition/README.md). Next: common-cost single-order comparison, repeated runs and unseen SAT classes. All counterexamples retained.

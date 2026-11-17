@@ -1,0 +1,90 @@
+name: P-NP Yang-Mills frozen vs Rime Fischer competition
+on:
+  pull_request:
+    paths:
+      - 'algebra/rime_fischer.py'
+      - 'algebra/verify_rime_fischer.py'
+      - 'sat/competition.py'
+      - 'experiments/competition/**'
+      - '.github/workflows/fischer-competition.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paired-sat-and-cyclic-group-math:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Exact integer policy, frozen Yang-Mills source authenticity
+        run: |
+          set -euo pipefail
+          python3 -I -B tools/exact_policy.py algebra/rime_fischer.py algebra/verify_rime_fischer.py sat/competition.py experiments/competition/run_competition.py experiments/competition/verify_competition.py
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object sat/verify_heldout.py)" = ca3362038d954401337403d6168751856459142b
+          echo 'FISCHER_COMPETITION_SOURCE|frozen_yangmills_engine=PASS|challenge_source=RESEARCH'
+      - name: Classical prime-power Rime Fischer exact mathematics
+        run: |
+          set -euo pipefail
+          mkdir -p build/fischer-competition/math
+          python3 -s -B algebra/rime_fischer.py | tee build/fischer-competition/math/PH.hbp
+          python3 -s -B algebra/verify_rime_fischer.py build/fischer-competition/math/PH.hbp | tee build/fischer-competition/math/INDEPENDENT.hbp
+          grep -Fq 'RIME_PH_FINAL|cases=21|exact=21|' build/fischer-competition/math/PH.hbp
+          grep -Fq 'RIME_PH_INDEPENDENT|cases=21|full_order_BSGS_agreement=21|' build/fischer-competition/math/INDEPENDENT.hbp
+      - name: Paired identical-input source-frozen SAT contest
+        run: |
+          set -euo pipefail
+          OUT=build/fischer-competition
+          python3 -s -B experiments/competition/run_competition.py "$OUT/arena" | tee "$OUT/ARENA.hbp"
+          test "$(grep -c '^PNP_ARENA_CASE|' "$OUT/ARENA.hbp")" -eq 21
+          grep -Fq 'PNP_ARENA_FINAL|cases=21|paired_source_sha=PASS|paired_proof_sha=PASS|equal_node_budget=20000|' "$OUT/ARENA.hbp"
+      - name: Independent exact count, SHA, GF2, prime-power and corruption referee
+        run: |
+          set -euo pipefail
+          OUT=build/fischer-competition
+          python3 -s -B experiments/competition/verify_competition.py "$OUT/arena" | tee "$OUT/REFEREE.hbp"
+          grep -Fq 'PNP_COMPETITION_FINAL|cases=21|' "$OUT/REFEREE.hbp"
+          grep -Fq '|original_CNF_model_counts=PASS|rime_prime_power_dlogs=PASS|corrupt_receipts_rejected=11|' "$OUT/REFEREE.hbp"
+          mkdir -p "$OUT/source"
+          cp sat/engine.py sat/verify_heldout.py sat/competition.py "$OUT/source/"
+          cp algebra/rime_fischer.py algebra/verify_rime_fischer.py "$OUT/source/"
+          cp experiments/competition/run_competition.py experiments/competition/verify_competition.py "$OUT/source/"
+          cp experiments/competition/README.md "$OUT/source/"
+          cp .github/workflows/fischer-competition.yml "$OUT/source/"
+          ( cd "$OUT" && sha256sum math/*.hbp *.hbp arena/cases/*/* source/* > MANIFEST.sha256 )
+          ( cd "$OUT" && sha256sum -c MANIFEST.sha256 > /dev/null )
+      - name: Publish full contestant receipts and independent math checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnp-frozen-yangmills-versus-rime-fischer-sat-competition
+          path: build/fischer-competition/
+          retention-days: 90
+          if-no-files-found: error
+  archived-competition-acceptance:
+    needs: paired-sat-and-cyclic-group-math
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-frozen-yangmills-versus-rime-fischer-sat-competition
+          path: evidence
+      - name: Replay published SHA and full original input collection
+        run: |
+          set -euo pipefail
+          cd evidence
+          test -s ARENA.hbp
+          test -s REFEREE.hbp
+          test -s math/PH.hbp
+          test -s math/INDEPENDENT.hbp
+          test -s MANIFEST.sha256
+          test "$(find arena/cases -type f -name 'source.cnf' | wc -l)" -eq 21
+          test "$(find arena/cases -type f -name 'PAIR.txt' | wc -l)" -eq 21
+          test "$(find arena/cases -type f -name 'legacy.receipt' | wc -l)" -eq 21
+          test "$(find arena/cases -type f -name 'rime.receipt' | wc -l)" -eq 21
+          test -s source/engine.py
+          test -s source/verify_competition.py
+          grep -Fq 'PNP_COMPETITION_FINAL|cases=21|' REFEREE.hbp
+          grep -Fq 'RIME_PH_INDEPENDENT|cases=21|full_order_BSGS_agreement=21|' math/INDEPENDENT.hbp
+          sha256sum -c MANIFEST.sha256
+          echo 'PNP_COMPETITION_ARCHIVE|same_inputs=21|two_contestants=PASS|independent_referee=PASS|math=PASS|archive_SHA=PASS'
