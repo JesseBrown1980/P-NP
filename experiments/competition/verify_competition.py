@@ -104,7 +104,7 @@ def verify_rime_digit(row, clauses, n):
                                          for lit in c)) for c in residual)
         assert coverage == recomputed_coverage
         records.append((v, target, exponent, proof, coverage))
-    expect_order = tuple(v for v, _, _ in sorted(
+    expect_order = tuple(item[2] for item in sorted(
         (-covered, exponent, v) for v, target, exponent, proof, covered in records))
     assert row["variable_order"] == expect_order
     return tuple(records)
