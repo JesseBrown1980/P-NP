@@ -29,7 +29,7 @@ def audit(path):
     for node in ast.walk(root):
         if isinstance(node, ast.Constant) and isinstance(node.value, (float, complex)):
             issues.append(("noninteger_literal", node.lineno))
-        elif isinstance(node, (ast.Div, ast.Pow)):
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Div, ast.Pow)):
             issues.append(("potential_noninteger_operation", node.lineno))
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = ([alias.name for alias in node.names]
