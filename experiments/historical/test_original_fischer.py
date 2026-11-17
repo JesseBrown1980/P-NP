@@ -12,7 +12,7 @@ from math import isqrt
 from pathlib import Path
 from time import monotonic_ns
 
-HISTORY = Path(__file__).resolve().parents[1].joinpath(
+HISTORY = Path(__file__).resolve().parents[2].joinpath(
     "historical/asolaria-2026-07-21")
 sys.path.insert(0, str(HISTORY))
 import rime_fischer as original
