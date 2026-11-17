@@ -24,3 +24,22 @@ Benchmark this mathematical candidate on 21 known group inputs across primes 97,
 ## Acceptance and next iteration
 
 Status: **OPEN until hosted checks**. Compare exact correctness, completed instances under the fixed node budget, node counts, launch+solve nanoseconds, and peak RSS. Publish win/tie/loss and counterexamples by family. Then preregister independent benchmark families and multiple repetitions with strong CDCL SAT and exact #SAT external controls. No improvement, regression, or reduction to general P=NP is presumed.
+## Hosted acceptance and first measured result — 2026-11-17
+
+[GitHub run #44198991467](https://github.com/JesseBrown1980/P-NP/actions/runs/44198991467) **PASS**: both paired SAT/referee and downloaded-archive jobs. Archive ID **14379359268**; published ZIP SHA-256 **a8bcc35fb68de96cfdf185049332d9875b6e55dfd36f93e6be39f7fece398b9b**. The independent referee reconstructed all original 21 inputs, all model counts, both source/proof hashes, Rime digit/CRT receipts, and rejected 11 forged competitor records. The independent full-order Shanks checker agreed with all 21 original Law-14 Pohlig–Hellman digit-lifting answers.
+
+| Family | Frozen Yang–Mills search nodes | Rime-guided search nodes |
+|---|---:|---:|
+| XOR | 3 | 3 |
+| Mixed | 9,287 | 9,139 |
+| Planted | 29,361 | 29,639 |
+| Random | 24,196 | 23,018 |
+| Hub | 12,448 | 10,490 |
+| Explicit UNSAT controls | 93 | 125 |
+| **All 21** | **75,388** | **72,414** |
+
+Both returned **20 independently verified exact #SAT counts and one explicit HOLD**, on planted n=30, counting the 20,000 budget nodes in both totals. Among **20 jointly completed** cases: Rime wins in branch nodes on **6**, incumbent on **7**, with **7 ties**. Both have correct exact counts when completed. The 11 corrupted competitor receipts were rejected.
+
+Single-hosted-pass *total subprocess launch + execution time* was **7.542 seconds** for the incumbent versus **2.874 seconds** for the Rime candidate summed over all 21 cases (21 isolated processes each, alternating launch order). Median peak RSS was **18,636 KiB** incumbent and **18,724 KiB** Rime, with maxima **18,808 KiB** versus **18,780 KiB**. These are observed values, not calibrated speedup estimates. Importantly, the incumbent performs its extra fixed-order baseline search and associated witness checks; the challenger runs one order and has a different metric definition. Thus **the 7.54/2.87 elapsed ratio is not evidence that the PH algorithm itself speeds up SAT**. The Rime method's verified PH-digit work is actually extra computation for an experimental tie-break.
+
+Next acceptance gate: repeated hardware-matched trials under controlled CPU frequency and fixed cost definitions, a shared single-order baseline for apples-to-apples kernel comparison, independent external SAT/#SAT solvers, and unseen SAT instance families. Preserve the original 21 development fixtures and the mixed wins, planted/UNSAT losses, and all time differences without rewriting them. P versus NP remains OPEN.
