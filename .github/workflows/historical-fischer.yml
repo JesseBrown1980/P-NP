@@ -58,12 +58,14 @@ jobs:
           python3 -s -B experiments/historical/compare_original_new.py build/historical/ORIGINAL-21.txt build/historical/NEW-21.hbp | tee build/historical/COMPARISON.hbp
           grep -Fq 'RIME_PH_INDEPENDENT|cases=21|full_order_BSGS_agreement=21|' build/historical/NEW-VERIFY.hbp
           grep -Fq 'FISCHER_OLD_NEW_FINAL|cases=21|same_targets=PASS|same_exact_exponents=21|' build/historical/COMPARISON.hbp
-          mkdir -p build/historical/source
-          cp historical/asolaria-2026-07-21/*.py build/historical/source/
-          cp experiments/historical/*.py experiments/historical/README.md build/historical/source/
-          cp .github/workflows/historical-fischer.yml build/historical/source/
-          cp algebra/rime_fischer.py algebra/verify_rime_fischer.py build/historical/source/
-          ( cd build/historical && sha256sum *.hbp *.txt source/* > MANIFEST.sha256 )
+          mkdir -p build/historical/source/historical
+          mkdir -p build/historical/source/new
+          mkdir -p build/historical/source/referee
+          cp historical/asolaria-2026-07-21/*.py build/historical/source/historical/
+          cp experiments/historical/*.py experiments/historical/README.md build/historical/source/referee/
+          cp .github/workflows/historical-fischer.yml build/historical/source/referee/
+          cp algebra/rime_fischer.py algebra/verify_rime_fischer.py build/historical/source/new/
+          ( cd build/historical && { sha256sum *.hbp *.txt; find source -type f -print0 | sort -z | xargs -0 sha256sum; } > MANIFEST.sha256 )
           ( cd build/historical && sha256sum -c MANIFEST.sha256 > /dev/null )
       - name: Publish byte-exact historical source and independently checked evidence
         uses: actions/upload-artifact@v4
@@ -93,14 +95,14 @@ jobs:
           test -s NEW-21.hbp
           test -s COMPARISON.hbp
           test "$(grep -c '^FISCHER_OLD_NEW|' COMPARISON.hbp)" -eq 21
-          test -s source/rime_fischer.py
-          test -s source/rime_sphere.py
-          test -s source/rime_fischer_cluster.py
-          test -s source/rime_27fischers.py
-          test "$(git hash-object source/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
-          test "$(git hash-object source/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
-          test "$(git hash-object source/rime_fischer_cluster.py)" = 2895e1e4a1fb4629005422429aeaf8020d15c6cf
-          test "$(git hash-object source/rime_27fischers.py)" = c26228781c7e726b12efa8d18d6c68cc711cfd80
+          test -s source/historical/rime_fischer.py
+          test -s source/historical/rime_sphere.py
+          test -s source/historical/rime_fischer_cluster.py
+          test -s source/historical/rime_27fischers.py
+          test "$(git hash-object source/historical/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object source/historical/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          test "$(git hash-object source/historical/rime_fischer_cluster.py)" = 2895e1e4a1fb4629005422429aeaf8020d15c6cf
+          test "$(git hash-object source/historical/rime_27fischers.py)" = c26228781c7e726b12efa8d18d6c68cc711cfd80
           grep -Fq 'FISCHER_OLD_NEW_FINAL|cases=21|same_targets=PASS|same_exact_exponents=21|' COMPARISON.hbp
           sha256sum -c MANIFEST.sha256
           echo 'FISCHER_ORIGINAL_ARCHIVE|published=PASS|four_original_git_blobs=PASS|21_old_new_agreements=PASS|source_manifest=PASS'
