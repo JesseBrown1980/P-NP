@@ -22,6 +22,17 @@ DENIED_ATTRS = {
 }
 
 
+def is_path_expression(node):
+    """Allow pathlib's slash composition for known Path-typed roots only."""
+    if isinstance(node, ast.Name):
+        return node.id in ("root", "logs", "source_path")
+    if isinstance(node, ast.Attribute) and node.attr == "parent":
+        return is_path_expression(node.value)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        return is_path_expression(node.left)
+    return False
+
+
 def audit(path):
     source = Path(path).read_text(encoding="utf-8")
     root = ast.parse(source, filename=str(path))
@@ -29,7 +40,10 @@ def audit(path):
     for node in ast.walk(root):
         if isinstance(node, ast.Constant) and isinstance(node.value, (float, complex)):
             issues.append(("noninteger_literal", node.lineno))
-        elif isinstance(node, (ast.Div, ast.Pow)):
+        elif isinstance(node, ast.BinOp) and (
+                isinstance(node.op, ast.Pow) or
+                (isinstance(node.op, ast.Div) and
+                 not is_path_expression(node.left))):
             issues.append(("potential_noninteger_operation", node.lineno))
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = ([alias.name for alias in node.names]
