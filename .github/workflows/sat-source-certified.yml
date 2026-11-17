@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'sat/**'
+      - 'tools/**'
       - '.github/workflows/sat-source-certified.yml'
   workflow_dispatch:
 permissions:
@@ -13,6 +14,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Authenticate verbatim upstream SAT source blobs
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object sat/verify.py)" = df30dba9aaf079faf64e39af6001355dda5cddb5
+          test "$(git hash-object sat/verify_heldout.py)" = ca3362038d954401337403d6168751856459142b
+          test "$(git hash-object sat/README.md)" = 39e6072198a413e13c4aab65bac20271c65c3ba1
+          test "$(git hash-object sat/HELDOUT.md)" = 6a5c559feb39657f08998b2ae72cefc0621631e7
+          printf 'PNP_UPSTREAM_SOURCE|five_blobs_identical=PASS|origin=b9fd691d74adc72b2e4378db711a2237873cb818\n'
       - name: Repository exact integer / no-float gates
         run: |
           set -euo pipefail
