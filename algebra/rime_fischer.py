@@ -84,11 +84,11 @@ def bsgs(base, target, p, order_q, work):
 def combine_crt(congruences):
     """Exact CRT; independent pairwise-coprime prime-power residues."""
     modulus = 1
+    seen_moduli = set()
     for residue, m in congruences:
         assert 0 <= residue < m and m > 0
-        for _, previous_m in congruences:
-            if previous_m == m and len(congruences) > 1:
-                raise AssertionError("repeated modulus")
+        assert m not in seen_moduli
+        seen_moduli.add(m)
         modulus *= m
     x = 0
     for residue, m in congruences:
