@@ -11,7 +11,7 @@ from pathlib import Path
 from subprocess import run
 from time import monotonic_ns
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1].joinpath("sat")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2].joinpath("sat")))
 import engine
 
 
