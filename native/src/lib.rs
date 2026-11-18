@@ -17,6 +17,7 @@ pub mod omnibit_tournament;
 #[allow(clippy::unusual_byte_groupings)]
 pub mod omega_operator_catalog;
 pub mod omnibit_operator_gate;
+pub mod omnibit_charged_codec;
 pub mod policy;
 pub mod relic;
 pub mod prism;
