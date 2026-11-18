@@ -339,9 +339,12 @@ mod tests {
             out.extend_from_slice(&((n * 128) as u64).to_le_bytes());
         }
         out.resize(aligned(out.len()).expect("alignment"), 0);
-        for _ in 0..TENSORS {
-            out.extend_from_slice(&0x3f80_0000_u32.to_le_bytes());
-            out.resize(out.len() + (GLYPHS - 1) * 4, 0);
+        for n in 0..TENSORS {
+            for i in 0..GLYPHS {
+                // Delta at the zero glyph transforms to the all-ones Rime vector.
+                let word = if n % 2 != 0 || i == 0 { 0x3f80_0000_u32 } else { 0 };
+                out.extend_from_slice(&word.to_le_bytes());
+            }
             out.resize(aligned(out.len()).expect("alignment"), 0);
         }
         out
