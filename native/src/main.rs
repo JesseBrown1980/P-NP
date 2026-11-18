@@ -4,7 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
-    http0_compute, microkernel_compute, full_matrix_fabric,
+    http0_compute, microkernel_compute, full_matrix_fabric, prl_temporal_fabric,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -96,6 +96,37 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("prl-temporal-fabric-attest") => {
+            let previous=arguments.next().ok_or("missing accepted PRL source and fabric evidence")?;
+            let out=arguments.next().ok_or("missing PRL causal forecast output directory")?;
+            if arguments.next().is_some(){return_fail("too many PRL causal attest arguments");}
+            let stats=prl_temporal_fabric::attest(Path::new(&previous),Path::new(&out))?;
+            println!("PNP_PRL_CAUSAL|source_doi=10.1103/j1r2-5ph7|cases={}|paired_rows={}|binary_floors=4|original_operators=40|native_http0_calls={}|exact_event_predictions={}|source_events={}|gnn_forward=HOLD|forecasts_sha256={}|status=PASS|json=0",
+                stats.cases,stats.verified_pairs,stats.calls,stats.forecasts,
+                stats.events,stats.checksum);
+            for arm in stats.arms{
+                println!("PNP_PRL_CAUSAL_ARM|arity={}|calls={}|events={}|coupled_heldout_gains={}|coupled_shuffle_reversals={}|iid_null_holds={}|wall_ns={}|learned=ORIGINAL_INTEGER_SOURCE_TRAINED|source=HELDOUT|status=PASS|json=0",
+                    arm.arity,arm.calls,arm.events,arm.held_gains,
+                    arm.shuffled_reversals,arm.iid_holds,arm.wall_ns);
+            }
+            Ok(())
+        }
+        Some("prl-temporal-fabric-verify") => {
+            let previous=arguments.next().ok_or("missing original PRL source evidence")?;
+            let out=arguments.next().ok_or("missing PRL causal forecast evidence")?;
+            if arguments.next().is_some(){return_fail("too many PRL causal verification arguments");}
+            let stats=prl_temporal_fabric::verify(Path::new(&previous),Path::new(&out))?;
+            println!("PNP_PRL_CAUSAL_VERIFY|cases={}|paired_rows={}|http0_calls={}|every_probability=EXACT|shuffles=COUNT_PRESERVED|archive=BYTE_IDENTICAL|source=FROZEN|status=PASS|json=0",
+                stats.cases,stats.verified_pairs,stats.calls);
+            Ok(())
+        }
+        Some("prl-temporal-fabric-inspect") => {
+            let source=arguments.next().ok_or("missing PRL causal prediction binary")?;
+            if arguments.next().is_some(){return_fail("too many PRL causal inspection arguments");}
+            let streams=prl_temporal_fabric::inspect(Path::new(&source))?;
+            println!("PNP_PRL_CAUSAL_INSPECT|streams={streams}|forecasts_per_stream=8000|baseline_and_memory_probabilities=EXACT_Q10000|status=PASS|json=0");
             Ok(())
         }
         Some("full-matrix-attest") => {
