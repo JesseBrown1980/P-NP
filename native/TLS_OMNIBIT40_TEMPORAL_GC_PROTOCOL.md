@@ -35,6 +35,29 @@ The experiment reports:
 
 A raw 144,000-byte event dataset, a hypothetical 18,000-byte bit-packed reference and the three-fold, 54-stream coded archive are **different denominators**. Numerical savings must be compared within the same route and source-stream set, not by summing three encodings and claiming that sum is compression.
 
+## Hosted, reproducible results — November 18, 2026
+
+The accepted [PR-head hosted run #44322846648](https://github.com/JesseBrown1980/P-NP/actions/runs/44322846648) passed Rust 1.81/Clippy, source-prerequisite checks, full decoder comparisons, actual owned scratch reclamation and independent HBI/HBP evidence verification. The exact computed values printed by the frozen release CLI:
+
+| Item | Source-bound result |
+|---|---:|
+| Source streams | 18 × 8,000 events |
+| Independent route frames | 54 |
+| Selected 20-symbol blocks | 9,540 |
+| Original operator candidates evaluated | 381,600 |
+| Nonidentity operators chosen | 8,266 of 9,540 (86.65%) |
+| Actual selected encoded archive | **294,615 bytes** |
+| Same-route, same-frame identity-only reference | **357,338 bytes** |
+| Bytes saved versus identity-only | **62,723 (17.553%)** |
+| All-route reconstructed event archive | 432,461 bytes including metadata |
+| Full compiled P-NP native release executable | **1,449,920 bytes** |
+| Selected archive plus full decoder charge | **1,744,535 bytes** |
+| Identity-only archive plus same decoder | 1,807,258 bytes |
+| Hypothetical minimal 1-bit-per-event storage for all 54 routes | **54,000 bytes** |
+| Original distinct event scratch actually removed after GULP | **144,000 bytes** |
+
+**Interpretation:** The original 40-operator selection beats the same codec's **identity-only** candidate on this fixed synthetic corpus. This represents a real, measured advantage in the selected family of reversible transforms and literals/RLE, **not** a compression advantage over bit-packed binary streams or a full-standalone executable benchmark. The complete P-NP binary is deliberately charged as the decoder, so its large fixed program cost is visible rather than hidden. The transcript separately records hosted wall time and resident memory in `PNP_TLS_OMNI40_RESOURCE.hbp`; those measures include upstream attestations and repeated verification.
+
 ## Physical GC after complete GULP acceptance
 
 No live human operator approval occurs in any event or selection loop. The native `tls-omni40-gulp-discard` command performs an **actual owned scratch file deletion**, not merely a policy verdict:
