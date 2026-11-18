@@ -26,9 +26,9 @@ jobs:
           set -euo pipefail
           mkdir -p build/source
           python3 -s -B experiments/bitcoin/genesis.py build/source | tee build/source/GENESIS_BUILD.hbp
-          grep -Fq 'BTC_SOURCE_FINAL|three_sources=PASS|SHA256d_genesis=PASS|full_32_bit_nonce=ENCODED|SAT_reference_models=3|status=PASS' build/source/GENESIS_BUILD.hbp
-          test "$(find build/source -maxdepth 1 -name '*.cnf' | wc -l)" -eq 3
-          test "$(grep -c '^BTC_CNF|' build/source/GENESIS_BUILD.hbp)" -eq 3
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|full_32_bit_nonce=ENCODED|merkle_nonce_288_bits=ENCODED|SAT_reference_models=4|status=PASS' build/source/GENESIS_BUILD.hbp
+          test "$(find build/source -maxdepth 1 -name '*.cnf' | wc -l)" -eq 4
+          test "$(grep -c '^BTC_CNF|' build/source/GENESIS_BUILD.hbp)" -eq 4
           ( cd build/source && sha256sum *.cnf *.txt GENESIS_BUILD.hbp > SOURCE.sha256 )
           ( cd build/source && sha256sum -c SOURCE.sha256 >/dev/null )
       - uses: actions/upload-artifact@v4
@@ -63,11 +63,11 @@ jobs:
             dpkg-query -W minisat cadical picosat
           fi
           mkdir -p "build/arm-results/$ARM"
-          for case in nonce4 nonce8 nonce32; do
+          for case in nonce4 nonce8 nonce32 merkle_nonce288; do
             python3 -s -B experiments/bitcoin/runner.py "$ARM" "$case" source "build/arm-results/$ARM/$case" | tee "build/arm-results/$ARM/$case.hbp"
           done
-          test "$(find "build/arm-results/$ARM" -name receipt.txt -type f | wc -l)" -eq 3
-          ( cd build/arm-results && find "$ARM" -type f -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
+          test "$(find "build/arm-results/$ARM" -name receipt.txt -type f | wc -l)" -eq 4
+          ( cd build/arm-results && find "$ARM" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
           ( cd build/arm-results && sha256sum -c "$ARM/MANIFEST.sha256" >/dev/null )
       - uses: actions/upload-artifact@v4
         with:
@@ -98,8 +98,8 @@ jobs:
             ( cd evidence/arm-results && sha256sum -c "$arm/MANIFEST.sha256" >/dev/null )
           done
           python3 -s -B experiments/bitcoin/verify.py evidence | tee evidence/BTC_VERIFIED.hbp
-          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=3|observations=21|' evidence/BTC_VERIFIED.hbp
-          grep -Fq '|wrong_nonce_rejections=12|all_claimed_models=PASS|status=PASS' evidence/BTC_VERIFIED.hbp
+          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=4|observations=28|' evidence/BTC_VERIFIED.hbp
+          grep -Fq '|wrong_header_rejections=20|all_claimed_models=PASS|status=PASS' evidence/BTC_VERIFIED.hbp
           mkdir -p evidence/research-source
           cp experiments/bitcoin/*.py evidence/research-source/
           cp .github/workflows/bitcoin-genesis-7.yml evidence/research-source/
@@ -126,6 +126,7 @@ jobs:
           cd verified
           test -s BTC_VERIFIED.hbp
           test -s source/nonce32.cnf
-          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=3|observations=21|' BTC_VERIFIED.hbp
+          test -s source/merkle_nonce288.cnf
+          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=4|observations=28|' BTC_VERIFIED.hbp
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
           echo 'BITCOIN_7WAY_FINAL|genesis_SHA256d=PASS|source=PASS|archive=PASS|status=PASS'
