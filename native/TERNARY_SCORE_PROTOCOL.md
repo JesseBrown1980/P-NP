@@ -20,7 +20,7 @@ The original SHA baseline and reverse-gain primitives in `JesseBrown1980/Shannon
 - `reverse_risk_q10000 = 10000 − baseline_q10000`.
 - The original `reverseGain` gate marks `GENIUS` when `score_q10000 ≥ 7200` and `reverse_risk_q10000 ≤ 2800`; otherwise `MISTAKE`.
 
-This port deliberately applies reverse gain to the **baseline score**, not an invented output from the unavailable trained L0/L4 neural models. Both original standalone helper functions are tested using **nine independently calculated SHA-256 fixtures** in `native/fixtures/SOURCE_SCORE_VECTORS.hbi`. The fixtures include empty strings, signed trits, Unicode, whitespace, and newline-containing inputs. Source-supplied `pid|content` serialization can be ambiguous; receipts also bind separate PID and content SHA-256 values to prevent ambiguity in *provenance*.
+This port deliberately applies reverse gain to the **baseline score**, not an invented output from the unavailable trained L0/L4 neural models. For new, previously unseen inputs, the canonical HBI case fields `baseline_q`, `reverse_q` and `mark` may each be set to `none`; the native kernel then calculates fresh scores and emits the complete authenticated HBI/HBP receipt. The nine pinned reference fixtures retain explicit expected outputs and must still match exactly. Both original standalone helper functions are tested using **nine independently calculated SHA-256 fixtures** in `native/fixtures/SOURCE_SCORE_VECTORS.hbi`. The fixtures include empty strings, signed trits, Unicode, whitespace, and newline-containing inputs. Source-supplied `pid|content` serialization can be ambiguous; receipts also bind separate PID and content SHA-256 values to prevent ambiguity in *provenance*.
 
 ## Evidence chain — HBI → HBP → SHA → SH → HASH
 
