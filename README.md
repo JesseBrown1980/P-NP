@@ -10,6 +10,20 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## PRL-informed temporal prediction through the complete fabric (November 18, 2026)
+
+[Research protocol](native/PRL_TEMPORAL_MEMORY_FABRIC_PREDICTION_PROTOCOL.md) · [actual source-trained evaluator](native/src/prl_temporal_fabric.rs) · [separate native HTTP-0 temporal worker](native/src/temporal_fabric.rs)
+
+Building directly on the accepted Gosling PRL-inspired classical TLS experiments, this gate tests the **information content of temporal order** after the complete four-floor binary/ternary and original Omnibit40 transformations. Nine source-authenticated synthetic cases are fitted on 8,000 training events and selected on the original 4,000-event validation partition. Each final model is evaluated on 8,000 chronological unseen events and the same events in count-preserving shuffled order.
+
+All four binary floors (64/256/1024/4096), all 40 original reversible Omnibit operators, Fischer-addressed native backend HTTP-0 rooms at 3/27/81 capacity, exact 27-cell/243-step integer matrix witnesses and independent worker/reflection checks are exercised in the actual data path. The independent process predicts every event **before incorporating the current outcome**, preserving strict causal context across 297 frames per stream. The native third seat verifies each reconstructed trit, all 27 matrix fields, each Q10000 probability and per-stream Brier accumulation.
+
+Acceptance requires **64,152 fully executed HTTP-0 frames**, **1,728,000 source-matched event forecasts**, 108 paired chronological-versus-shuffled scores, 72 positive chronological coupled-model gains and the same 72 advantages disappearing under the original count-preserving shuffle. Thirty-six IID null controls must not infer false memory. The constant-rate baseline must score identically between the two orders, ensuring the test isolates temporal information rather than class imbalance.
+
+Every run retains the original scientific DOI, the fixed-point and stochastic TLS HBP roots, full binary–ternary matrix and Omnibit40 proof roots, the original nine PyTorch checkpoint identities and authentic G4 missing-neural-signal HOLD. The predictive model in this experiment is the accepted **train-observations-only integer TLS memory model**. Original source-matched trained GNN forward inference remains a separately gated task.
+
+**Status:** implementation in native hosted acceptance; measurements will be recorded from passing acceptance receipts, including zero or reversed gains if observed.
+
 ## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
 
 **Experimental source lineage:** [Gosling et al., *Probing the memory of a superconducting qubit environment*](https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7) (PRL accepted October 28, 2026; DOI `10.1103/j1r2-5ph7`) inspired the original **classical** Solomon/TLS memory model and synthetic held-out non-Poissonian-versus-IID event experiments. Those accepted event traces are the actual inputs to the Omnibit40/entropy/Fischer HTTP-0/mixed-radix matrix stack. PRL hardware measurements are distinct from our precommitted synthetic event corpus. The full-matrix verifier now imports both original DOI-bearing `PNP_TLS.hbp` and `PNP_TLS_STOCHASTIC.hbp` roots directly into its HBI/HBP receipt ledger (eight prior-plane SHA roots total).
