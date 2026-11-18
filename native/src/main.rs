@@ -31,7 +31,7 @@ fn main() {
                 return_fail("Brown Ledger acceptance takes no arguments");
             }
             let result = pnp_native::brown_ledger::certify().map_err(str::to_owned)?;
-            println!("PNP_BROWN_LEDGER|schema=v1|rooms={}|verified_cells={}|raw_bytes={}|paid_slice_bytes={}|paid_delta_bytes={}|tamper_rejections={}|prism_floor_roundtrips={}|fischer_null_outward=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+            println!("PNP_BROWN_LEDGER|schema=v1|rooms={}|verified_cells={}|raw_bytes={}|paid_slice_bytes={}|paid_delta_bytes={}|tamper_rejections={}|prism_floor_roundtrips={}|fischer_null_outward=PASS|fischer_prime_towers=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
                 result.rooms, result.checked_cells, result.source_bytes,
                 result.slice_bytes, result.delta_bytes, result.corruptions_rejected,
                 result.floor_roundtrips);
