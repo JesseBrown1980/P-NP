@@ -4,6 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
+    http0_compute, microkernel_compute,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -95,6 +96,43 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("compute-fabric-serve") => {
+            if arguments.next().is_some() {
+                return_fail("compute fabric worker accepts no source or public endpoint");
+            }
+            http0_compute::serve()
+        }
+        Some("microkernel-compute-attest") => {
+            let prior=arguments.next().ok_or("missing source-authenticated prior archive")?;
+            let out=arguments.next().ok_or("missing microkernel receipt destination")?;
+            if arguments.next().is_some(){return_fail("too many microkernel attest arguments");}
+            let stats=microkernel_compute::attest(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_COMPUTE_BASE|jobs={}|direct_calls=162|direct_wall_ns={}|direct_cached_wall_ns={}|result_sha256={}|full_binary_bytes={}|status=PASS|json=0",
+                stats.jobs,stats.direct_ns,stats.direct_cache_ns,
+                stats.result_sha,stats.full_binary_bytes);
+            for arm in &stats.arms {
+                println!("PNP_COMPUTE_ARM|mode={}|arity={}|calls={}|hits={}|physical_computations={}|rooms={}|memo_entries={}|wall_ns={}|http0=BACKEND_ONLY|independent_replay=PASS|status=PASS|json=0",
+                    arm.mode,arm.arity,arm.calls,arm.hits,arm.calls-arm.hits,
+                    arm.rooms,arm.entries,arm.elapsed_ns);
+            }
+            Ok(())
+        }
+        Some("microkernel-compute-verify") => {
+            let prior=arguments.next().ok_or("missing source-authenticated prior archive")?;
+            let out=arguments.next().ok_or("missing microkernel archive")?;
+            if arguments.next().is_some(){return_fail("too many microkernel verify arguments");}
+            let stats=microkernel_compute::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_COMPUTE_VERIFY|jobs={}|arms={}|archive=BYTE_IDENTICAL|microkernel_witness=EXACT|status=PASS|json=0",
+                stats.jobs,stats.arms.len());
+            Ok(())
+        }
+        Some("microkernel-compute-inspect") => {
+            let source=arguments.next().ok_or("missing microkernel witness file")?;
+            if arguments.next().is_some(){return_fail("too many witness arguments");}
+            let jobs=microkernel_compute::verify_witness_file(Path::new(&source))?;
+            println!("PNP_COMPUTE_INSPECT|jobs={jobs}|stencil=27_CELLS_243_TICKS|integer_replay=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("stream-fabric-serve") => {
