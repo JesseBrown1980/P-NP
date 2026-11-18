@@ -1,0 +1,135 @@
+name: "MTP N-Nest Fischer — 15-arm ablation on 18 original SAT and Bitcoin CNFs"
+on:
+  pull_request:
+    paths:
+      - "experiments/mtp_nnest/**"
+      - ".github/workflows/mtp-nnest-fischer.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freeze-18-sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Original Fischer and Yang-Mills code SHA pins
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/mtp_nnest/hybrid.py experiments/mtp_nnest/instance.py experiments/mtp_nnest/sweep.py experiments/mtp_nnest/referee.py
+          python3 -m py_compile experiments/mtp_nnest/*.py
+      - name: N-Nest corrective watcher clean and planted-fault acceptance
+        run: |
+          set -euo pipefail
+          python3 -s -B experiments/mtp_nnest/hybrid.py | tee NNEST_INDEPENDENT_GATES.hbp
+          grep -Fq 'NNEST_TAMPER|levels=3,9,27,81|injected_levels=10|all_blocked=PASS|' NNEST_INDEPENDENT_GATES.hbp
+      - name: Original 14 SAT array and 4 bit-exact Bitcoin SHA256d sources
+        run: |
+          set -euo pipefail
+          mkdir -p build/original/array build/original/bitcoin
+          cp NNEST_INDEPENDENT_GATES.hbp build/original/
+          python3 -s -B experiments/array/suite.py build/original/array | tee build/original/ARRAY.hbp
+          python3 -s -B experiments/bitcoin/genesis.py build/original/bitcoin | tee build/original/BITCOIN.hbp
+          grep -Fq 'SAT_ARRAY_FINAL|cases=14|unsat=11|sat=3|arms=6|observations=84|' build/original/ARRAY.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' build/original/BITCOIN.hbp
+          test "$(find build/original -name '*.cnf' | wc -l)" -eq 18
+          ( cd build/original && find . -type f ! -name SOURCE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > SOURCE_MANIFEST.sha256 )
+          ( cd build/original && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtp-nnest-fischer-18-original-sources
+          path: build/original/
+          retention-days: 90
+          if-no-files-found: error
+  contenders:
+    needs: freeze-18-sources
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [baseline, mtp, fischer, nest3, nest9, nest27, nest81, mtp_nest3, mtp_nest9, mtp_nest27, mtp_nest81, all3, all9, all27, all81]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtp-nnest-fischer-18-original-sources
+          path: source
+      - name: Run exact same kernel against each MTP N-Nest Fischer ablation
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+          mkdir -p "build/contest/$ARM"
+          python3 -s -B experiments/mtp_nnest/sweep.py "$ARM" source build/contest | tee "build/contest/$ARM/RUN.hbp"
+          grep -Fq "MTP_NNEST_ARM_FINAL|arm=$ARM|cases=18|" "build/contest/$ARM/RUN.hbp"
+          test "$(find "build/contest/$ARM" -name receipt.txt | wc -l)" -eq 18
+          ( cd build/contest && find "$ARM" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
+          ( cd build/contest && sha256sum -c "$ARM/MANIFEST.sha256" >/dev/null )
+      - name: Publish exact original-source SAT/Bitcoin outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtp-nnest-arm-${{ matrix.arm }}-18-receipts
+          path: build/contest/
+          retention-days: 90
+          if-no-files-found: error
+  independent-referee:
+    needs: contenders
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtp-nnest-fischer-18-original-sources
+          path: evidence/original
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mtp-nnest-arm-*-18-receipts
+          path: evidence/contest
+          merge-multiple: true
+      - name: Independently verify all 270 source-aligned results
+        run: |
+          set -euo pipefail
+          ( cd evidence/original && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+          for arm in baseline mtp fischer nest3 nest9 nest27 nest81 mtp_nest3 mtp_nest9 mtp_nest27 mtp_nest81 all3 all9 all27 all81; do
+            ( cd evidence/contest && sha256sum -c "$arm/MANIFEST.sha256" >/dev/null )
+          done
+          python3 -I -B experiments/mtp_nnest/referee.py evidence | tee MTP_NNEST_270_ACCEPTANCE.hbp
+          grep -Fq 'MTP_NNEST_FINAL|arms=15|original_cases=18|observations=270|' MTP_NNEST_270_ACCEPTANCE.hbp
+          grep -Fq '|status=PASS' MTP_NNEST_270_ACCEPTANCE.hbp
+          cp MTP_NNEST_270_ACCEPTANCE.hbp evidence/
+          mkdir -p evidence/source-code
+          cp experiments/mtp_nnest/*.py evidence/source-code/
+          cp .github/workflows/mtp-nnest-fischer.yml evidence/source-code/
+          ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
+          ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtp-nnest-fischer-270-final-accepted
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+  published-archive-recheck:
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtp-nnest-fischer-270-final-accepted
+          path: checked
+      - name: Independently re-check complete evidence artifact
+        run: |
+          set -euo pipefail
+          cd checked
+          test "$(find contest -name receipt.txt | wc -l)" -eq 270
+          test "$(find original -name '*.cnf' | wc -l)" -eq 18
+          grep -Fq 'MTP_NNEST_FINAL|arms=15|original_cases=18|observations=270|' MTP_NNEST_270_ACCEPTANCE.hbp
+          sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
+          echo 'MTP_NNEST_ARCHIVE|cases=18|arms=15|observations=270|source_shas=PASS|status=PASS'
