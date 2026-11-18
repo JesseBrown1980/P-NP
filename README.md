@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## All 40 original Omnibit operators on native mixed binary/ternary floors (November 18, 2026)
+
+The [40-operator mixed-floor protocol](native/OMNIBIT_40_OPERATOR_GATE.md) integrates the **exact original Rust source** from [Asolaria Omega Omnibit Tournament](https://github.com/JesseBrown1980/asolaria-omega-omnibit-tournament/tree/dad4647ad19a1b08ee90990c34aab1255f9a6046/reference/omega-operator-catalog-v0): 8 inherited **RNQ** operators, 12 chunk-rotation **TRI** operators and 20 icosahedral-face BFS **PI** operators. The source is imported byte-for-byte and checked against the frozen Git blob.
+
+The native Rust 1.81 gate executes **20,160 exact operator/source inversions** over all four original binary floors and composed 256+64 mixed routes derived from balanced ternary inputs. Six Acer/Liris/Relic × NORMAL/ANTI labels are **public synthetic comparison vantages**, not private seat-local executions. All transformed 20-symbol floor banks, explicit operator selectors, framed bytes, work proxies, 504 source-defined candidate selections and **20,710 SHA/SH/HASH-linked HBI/HBP receipts** are independently replayed. The source's original operator tests are run separately on the hosted reference checkout.
+
+Because the 40 operations are fixed-length permutations, the first byte-cost selection policy chooses identity where framed sizes tie. This result is recorded without a claim of compression gain, elapsed speedup, private-seat tournament score or trained GNN parity. **No per-candidate human approval** is required under the accepted frozen policy.
+
+---
+
 ## Source-authenticated Omnibit public tournament — binary, ternary and mixed routing (November 18, 2026)
 
 The original [Asolaria Omega Omnibit Tournament](https://github.com/JesseBrown1980/asolaria-omega-omnibit-tournament) now contributes five immutable source pins, the Acer/Liris/Relic × NORMAL/ANTI **six-slot tournament format**, and exact reconstruction/GC retention requirements. The first [native public tournament protocol](native/OMNIBIT_PUBLIC_TOURNAMENT_PROTOCOL.md) evaluates **360 real reversible software routes**: 20 frozen public synthetic trit fixtures × 3 binary/ternary/mixed arms × 6 labeled seat/view slots. All resulting encoded frames, original source SHA identities, charged frame bytes, deterministic logical-step counts, full HBI/HBP offsets and SHA/SH/HASH witnesses are archived and independently replayed. The original 40-operator Rust reference suite runs separately under the frozen toolchain.

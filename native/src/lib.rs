@@ -12,6 +12,11 @@ pub mod gulp_gc;
 pub mod guidance;
 pub mod matrix;
 pub mod omnibit_tournament;
+// The original frozen source contains two historic literal-grouping styles.
+// Scope this lint allowance exclusively to the byte-identical vendor module.
+#[allow(clippy::unusual_byte_groupings)]
+pub mod omega_operator_catalog;
+pub mod omnibit_operator_gate;
 pub mod policy;
 pub mod relic;
 pub mod prism;
