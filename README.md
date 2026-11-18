@@ -10,6 +10,30 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Fischer function-room computation, actual recall and HRM-shape routing (November 18, 2026)
+
+[Exact native acceptance protocol](native/HTTP0_MICROKERNEL_COMPUTE_PROTOCOL.md) · [source-side reference](native/src/microkernel_compute.rs) · [separate native HTTP-0 worker](native/src/http0_compute.rs)
+
+Building on PR46's exact HTTP-0 fabric witness, the next gate computes
+**real 27-cell ternary modular stencil recurrences for 243 ticks** on
+54 source-derived jobs in forward/reverse/rotated orders (162 calls
+per arm). The same tasks run directly, with direct memoization, through
+Fischer-addressed backend-only HTTP-0 rooms, through room-local recall,
+and through a source-derived HRM-shape routing proxy with room recall.
+
+Each network configuration is measured at 3, 27 and 81 rooms,
+requiring **1,458 independent native HTTP-0 compute/replay calls**.
+The watcher compares all 27 modular field outputs from a separately
+programmed worker, not just a checksum. A useful recall must reduce
+162 actual calculations to 54 and independently report 108 hits;
+direct memoization is an essential control. Every room has an eight-byte
+state word. Trained-model checkpoint loading remains HOLD: the HRM-shaped
+route is deterministic and is not described as a trained model.
+
+**Status:** source implementation and hosted acceptance pending.
+The new speed and cache-use verdicts will be published only from
+passing hosted logs, with zero-gain results retained.
+
 ## Continuous entropy and native backend-only HTTP-0 fabric witness (November 18, 2026)
 
 [Full exact protocol](native/HTTP0_CONTINUOUS_STREAM_FABRIC_PROTOCOL.md) · [stream comparator](native/src/tls_stream_fabric.rs) · [independent worker-process witness](native/src/http0_fabric_witness.rs)
