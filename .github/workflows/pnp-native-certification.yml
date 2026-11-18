@@ -44,7 +44,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/lib.rs native/src/main.rs native/src/matrix.rs native/src/freeze.rs native/src/triad.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -65,6 +65,39 @@ jobs:
           sha256sum PNP_MATRIX.hbp native/target/release/pnp-native > PNP_NATIVE_OUTPUT.sha256
           sha256sum -c PNP_NATIVE_OUTPUT.sha256
           echo 'PNP_DETERMINISM|byte_exact=PASS|replay=PASS|status=PASS|json=0'
+      - name: Relic rediscovery source-exact integer wave and frozen center replays
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native relic | tee PNP_RELIC.hbp
+          grep -Fq 'RELIC_NATIVE|level=0|center=1|center_coordinate=0|outward=27|waves=[81, 243]|next=243|status=PASS|json=0' PNP_RELIC.hbp
+          grep -Fq 'RELIC_NATIVE_FINAL|landings=5|invariant_center=PASS|exact_integers=PASS|status=PASS|json=0' PNP_RELIC.hbp
+          native/target/release/pnp-native relic > PNP_RELIC_REPEAT.hbp
+          cmp PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp
+      - name: Nine native ternary engines on SAT, UNSAT, PHP and budget HOLDs
+        run: |
+          set -euo pipefail
+          : > PNP_TERNARY.hbp
+          for arm in base mtp fischer nest3 nest27 nest81 hybrid3 hybrid27 hybrid81; do
+            native/target/release/pnp-native sat "$arm" native/fixtures/sat3.cnf | tee -a PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/unsat2.cnf | tee -a PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/php4_3.cnf | tee -a PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/php4_3.cnf 0 | tee -a PNP_TERNARY.hbp
+            grep -Fq "PNP_TERNARY_SAT|engine=$arm|" PNP_TERNARY.hbp
+          done
+          test "$(grep -c '|status=SAT|json=0' PNP_TERNARY.hbp)" -eq 9
+          test "$(grep -c '|status=UNSAT|json=0' PNP_TERNARY.hbp)" -eq 18
+          test "$(grep -c '|status=HOLD_RESOURCE|json=0' PNP_TERNARY.hbp)" -eq 9
+          test "$(grep -c 'PNP_TERNARY_MODEL|engine=' PNP_TERNARY.hbp)" -eq 9
+          cp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp
+          : > PNP_TERNARY.hbp
+          for arm in base mtp fischer nest3 nest27 nest81 hybrid3 hybrid27 hybrid81; do
+            native/target/release/pnp-native sat "$arm" native/fixtures/sat3.cnf >> PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/unsat2.cnf >> PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/php4_3.cnf >> PNP_TERNARY.hbp
+            native/target/release/pnp-native sat "$arm" native/fixtures/php4_3.cnf 0 >> PNP_TERNARY.hbp
+          done
+          cmp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp
+          echo 'PNP_TERNARY_ACCEPT|engines=9|sat=9|unsat=18|budget_holds=9|models_original=PASS|replay=PASS|json=0'
       - name: Scan compiled LLVM IR for floating arithmetic instructions
         working-directory: native
         run: |
@@ -104,7 +137,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp > evidence/SOURCE_PINS.sha256
@@ -134,5 +167,9 @@ jobs:
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
+          cmp PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp
+          cmp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp
+          grep -Fq 'RELIC_NATIVE_FINAL|landings=5|invariant_center=PASS|' PNP_RELIC.hbp
+          test "$(grep -c '|status=UNSAT|json=0' PNP_TERNARY.hbp)" -eq 18
           grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
           echo 'PNP_NATIVE_ARCHIVE|locked_rust=1.81.0|reproducible=PASS|sha256=PASS|status=PASS|json=0'
