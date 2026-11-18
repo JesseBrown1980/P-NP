@@ -3,6 +3,7 @@
 //! Historical Python algorithms are retained solely as legacy evidence.
 
 pub mod binary_ternary_bridge;
+pub mod brown_ledger;
 pub mod checkpoint;
 pub mod ensemble;
 pub mod freeze;
