@@ -60,7 +60,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -173,6 +173,41 @@ jobs:
           native/target/release/pnp-native score-verify native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence > /dev/null
           ( cd evidence && sha256sum -c PNP_SCORE_DIGESTS.sha256 )
           echo 'PNP_SCORE_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|oracle=REJECTED|restored=PASS|json=0'
+      - name: Full multi-GNN roster and source-matched G4 Tier-0 control
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native gnn-gate-attest evidence evidence | tee PNP_MULTIGNN_ATTEST.hbp
+          native/target/release/pnp-native gnn-gate-verify evidence evidence | tee PNP_MULTIGNN_VERIFY.hbp
+          grep -Fq 'PNP_MULTIGNN|families=10|trained_architectures=4|checkpoints=9|scoring_signals=8|g4_cases=13|records=23|tier0=SOURCE_MATCHED|operator_approval=HELD|g3=HOLD_SOURCE|neural_forward=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_MULTIGNN_ATTEST.hbp
+          grep -Fq 'PNP_MULTIGNN_VERIFY|records=23|g4=SOURCE_MATCHED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_MULTIGNN_VERIFY.hbp
+          test "$(grep -c '^GNN_GATE|' evidence/PNP_GNN_GATE.hbp)" -eq 23
+          test "$(grep -c '^HBI|' evidence/PNP_GNN_GATE.hbi)" -eq 23
+          grep -Fq '|source_port=G4_INTEGER_TEST|' evidence/PNP_GNN_GATE.hbp
+          grep -Fq '|source_port=MULTIMODEL_HOLD|' evidence/PNP_GNN_GATE.hbp
+          cp evidence/PNP_GNN_GATE.hbp "$RUNNER_TEMP/original-gnn.hbp"
+          cp evidence/PNP_GNN_GATE.hbi "$RUNNER_TEMP/original-gnn.hbi"
+          cp evidence/PNP_GNN_GATE.anchor "$RUNNER_TEMP/original-gnn.anchor"
+          native/target/release/pnp-native gnn-gate-attest evidence evidence > "$RUNNER_TEMP/repeat-gnn.hbp"
+          cmp evidence/PNP_GNN_GATE.hbp "$RUNNER_TEMP/original-gnn.hbp"
+          cmp evidence/PNP_GNN_GATE.hbi "$RUNNER_TEMP/original-gnn.hbi"
+          cmp evidence/PNP_GNN_GATE.anchor "$RUNNER_TEMP/original-gnn.anchor"
+          ( cd evidence && sha256sum PNP_GNN_GATE.hbp PNP_GNN_GATE.hbi PNP_GNN_GATE.anchor > PNP_MULTIGNN_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 )
+      - name: Multi-GNN HBI HBP and source-identity negative controls
+        run: |
+          set -euo pipefail
+          for path in PNP_GNN_GATE.hbp PNP_GNN_GATE.hbi PNP_GNN_GATE.anchor; do
+            cp "evidence/$path" "$RUNNER_TEMP/$path"
+            printf 'X' >> "evidence/$path"
+            if native/target/release/pnp-native gnn-gate-verify evidence evidence > "$RUNNER_TEMP/gnn-tamper.hbp" 2>&1; then
+              echo "PNP_MULTIGNN_TAMPER_FAIL|path=$path|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$path" "evidence/$path"
+          done
+          native/target/release/pnp-native gnn-gate-verify evidence evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 )
+          echo 'PNP_MULTIGNN_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -245,10 +280,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -275,6 +310,13 @@ jobs:
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
           sha256sum -c PNP_SOURCE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_SCORE_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_MULTIGNN|families=10|trained_architectures=4|checkpoints=9|scoring_signals=8|g4_cases=13|records=23|tier0=SOURCE_MATCHED|' PNP_MULTIGNN_ATTEST.hbp
+          grep -Fq 'PNP_MULTIGNN_VERIFY|records=23|g4=SOURCE_MATCHED|' PNP_MULTIGNN_VERIFY.hbp
+          test "$(grep -c '^GNN_GATE|' PNP_GNN_GATE.hbp)" -eq 23
+          test "$(grep -c '^HBI|' PNP_GNN_GATE.hbi)" -eq 23
+          grep -Fq '|neural_forward=HOLD|' PNP_MULTIGNN_ATTEST.hbp
+          grep -Fq '|operator_approval=HELD|' PNP_MULTIGNN_ATTEST.hbp
           grep -Fq 'PNP_SOURCE_SCORE|cases=9|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_ATTEST.hbp
           grep -Fq 'PNP_SCORE_VERIFY|cases=9|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_REPLAY.hbp
           test "$(grep -c '^SCORE|' PNP_SCORE.hbp)" -eq 9
