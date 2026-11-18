@@ -22,13 +22,13 @@ const EVENTS: usize = 8_000;
 const ROWS: usize = 1 + 9 + 54 + 9 + 3 + 4 + 1;
 
 #[derive(Clone)]
-struct Case {
-    mode: u8,
-    rep: u8,
-    train: Vec<u8>,
-    valid: Vec<u8>,
-    held: Vec<u8>,
-    shuffle: Vec<u8>,
+pub(crate) struct Case {
+    pub(crate) mode: u8,
+    pub(crate) rep: u8,
+    pub(crate) train: Vec<u8>,
+    pub(crate) valid: Vec<u8>,
+    pub(crate) held: Vec<u8>,
+    pub(crate) shuffle: Vec<u8>,
 }
 #[derive(Clone)]
 struct Model {
@@ -77,7 +77,7 @@ fn put_u32(out: &mut Vec<u8>, n: usize) -> Result<(), String> {
     out.extend_from_slice(&u32::try_from(n).map_err(|_| "u32 length overflow")?.to_le_bytes());
     Ok(())
 }
-fn cases(bytes: &[u8]) -> Result<Vec<Case>, String> {
+pub(crate) fn cases(bytes: &[u8]) -> Result<Vec<Case>, String> {
     if !bytes.starts_with(SOURCE_MAGIC) { return Err("untrusted stochastic source magic".into()); }
     let mut at = SOURCE_MAGIC.len();
     let mut out = Vec::with_capacity(9);
