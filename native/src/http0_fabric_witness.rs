@@ -281,7 +281,7 @@ fn execute_request(path: &str, body: &[u8], states: &mut BTreeMap<u64, u64>)
     if Some(given) != independent_address(frame, arity) {
         return Err("Fischer room address not independently reproduced".into());
     }
-    if body.len() < 7 || body[0] != 1 {
+    if body.len() < 7 || !matches!(body[0], 1 | 2) {
         return Err("room message version missing".into());
     }
     let sn = usize::from(u16::from_le_bytes([body[1],body[2]]));
@@ -289,7 +289,16 @@ fn execute_request(path: &str, body: &[u8], states: &mut BTreeMap<u64, u64>)
     if body.len() != 7 + sn + pn || sn > 658 {
         return Err("room wire lengths inconsistent".into());
     }
-    let result = decode_independently(&body[7 + sn..], &body[7..7 + sn])?;
+    let result = if body[0] == 1 {
+        decode_independently(&body[7 + sn..], &body[7..7 + sn])?
+    } else {
+        if sn != 0 || pn != COUNT / 8 {
+            return Err("bitpack frame has invalid dimensions".into());
+        }
+        (0..COUNT).map(|index| {
+            (body[7 + index / 8] >> (7 - index % 8)) & 1
+        }).collect::<Vec<_>>()
+    };
     if result.len() != COUNT { return Err("fabric reconstructed incorrect count".into()); }
     // Exactly one eight-byte state cell per visited function room. This is an
     // execution checksum, not an archive of the original event stream.
@@ -385,13 +394,14 @@ impl FabricClient {
         if !trailing.is_empty() { return Err("HTTP-0 trailing response".into()); }
         Ok((status,out))
     }
-    pub fn decode(&self, arity: usize, frame: usize,
+    pub fn decode(&self, arity: usize, frame: usize, codec: u8,
                   snapshot: &[u8], payload: &[u8]) -> Result<Vec<u8>, String> {
         let lane = frame % arity;
         let address = fischer_address((lane % 27) as u64,
             (frame / arity + lane / 27) as u64).ok_or("Fischer routing impossible")?;
         let mut body = Vec::with_capacity(snapshot.len() + payload.len() + 7);
-        body.push(1);
+        if !matches!(codec, 1 | 2) { return Err("unknown fabric codec".into()); }
+        body.push(codec);
         body.extend_from_slice(&u16::try_from(snapshot.len())
             .map_err(|_| "snapshot too large")?.to_le_bytes());
         body.extend_from_slice(&u32::try_from(payload.len())
