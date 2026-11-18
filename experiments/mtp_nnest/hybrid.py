@@ -63,7 +63,7 @@ def mtp_metrics(candidates, clauses):
     rows = sample(clauses)
     sequences = training_sequences(rows)
     forward = freeze_order2(sequences[::2])
-    backward = freeze_order2(tuple(reversed(x) for x in sequences[::2]))
+    backward = freeze_order2(tuple(tuple(reversed(x)) for x in sequences[::2]))
     forward_weight = Counter()
     backward_weight = Counter()
     eligible = set(candidates)
