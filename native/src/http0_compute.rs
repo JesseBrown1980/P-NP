@@ -9,6 +9,7 @@ use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use crate::freeze::fischer_address;
 use crate::matrix_wire;
+use crate::asolaria_pump;
 use crate::temporal_fabric::TemporalService;
 
 const PRIME: u64 = 1_000_081;
@@ -99,6 +100,9 @@ struct Service{
 }
 impl Service{
     fn calculate(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        if route.starts_with("/pump/"){
+            return self.calculate_pump(route,body);
+        }
         if route.starts_with("/temporal/"){
             return self.temporal.handle(route,body);
         }
@@ -140,6 +144,48 @@ impl Service{
         let mut out=Vec::with_capacity(1+OUTPUT_SIZE);
         out.push(u8::from(hit));
         for value in result {out.extend_from_slice(&value.to_le_bytes());}
+        Ok(out)
+    }
+    /// The source-pinned Asolaria Rime spherical pump. The producer sends
+    /// original Omnibit-transformed floor symbols; this separate process
+    /// recomputes the 27-component spectrum by independent ij powers.
+    fn calculate_pump(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        let parts:Vec<&str>=route.split('/').collect();
+        if parts.len()!=5 || !parts[0].is_empty() || parts[1]!="pump"{
+            return Err("pump room address format invalid".into());
+        }
+        let arity:usize=parts[2].parse().map_err(|_|"pump room count")?;
+        let lane:usize=parts[3].parse().map_err(|_|"pump room lane")?;
+        let address:u64=parts[4].parse().map_err(|_|"pump Fischer address")?;
+        if !matches!(arity,3|27|81) || lane>=arity
+            || address!=address_for(lane){
+            return Err("pump independent Fischer route mismatch".into());
+        }
+        let (task,_,_)=matrix_wire::decode_independent(body)?;
+        if usize::from(task.id)%arity!=lane{
+            return Err("pump message addressed to wrong function room".into());
+        }
+        let mut out=Vec::with_capacity(CELLS+asolaria_pump::PHASES*4
+            +asolaria_pump::SPECTRAL_VALUES*8);
+        out.extend_from_slice(&task.trits);
+        let mut folded=*self.state.entry((arity,address)).or_insert(0);
+        for phase in 0..asolaria_pump::PHASES{
+            let (spectral,shell)=asolaria_pump::independent_spectrum(&task.trits,phase)?;
+            out.extend_from_slice(&shell.to_le_bytes());
+            for &value in &spectral{
+                out.extend_from_slice(&value.to_le_bytes());
+                folded=folded.rotate_left(5).wrapping_add(value)
+                    .wrapping_mul(0x100_0000_01b3);
+            }
+            let expected=asolaria_pump::phase_trits(&task.trits,phase)?;
+            let inverse=asolaria_pump::unprism(&spectral);
+            if inverse.iter().zip(expected.iter())
+                .any(|(value,expected)|*value!=u64::from(*expected)){
+                return Err("pump native 27-point spectral inverse differs".into());
+            }
+        }
+        self.state.insert((arity,address),folded);
+        self.calls+=1;
         Ok(out)
     }
     /// A genuine matrix-floor message, decoded inside the independent HTTP-0
@@ -322,6 +368,55 @@ impl Client{
             if *value>=PRIME{return Err("out-of-domain stencil field element".into());}
         }
         Ok(ResultFrame{values:result,hit:bytes[0]==1})
+    }
+    pub fn execute_pump(&self,arity:usize,task:&Task,floor:u16,
+                        operator:u8)->Result<asolaria_pump::PumpFrame,String>{
+        let lane=usize::from(task.id)%arity;
+        let address=fischer_address((lane%27)as u64,(lane/27)as u64)
+            .ok_or("pump Fischer address unavailable")?;
+        let route=format!("/pump/{arity}/{lane}/{address}");
+        let input=matrix_wire::encode(task,floor,operator)?;
+        let (status,response)=self.call(&route,&input)?;
+        if status!="HTTP/1.1 200 OK\r\n"{
+            return Err(format!("pump worker rejected source frame: {}",
+                String::from_utf8_lossy(&response)));
+        }
+        const LENGTH:usize=CELLS+asolaria_pump::PHASES*4
+            +asolaria_pump::SPECTRAL_VALUES*8;
+        if response.len()!=LENGTH||response[..CELLS]!=task.trits{
+            return Err("pump source-trit frame changed in backend".into());
+        }
+        let mut shells=[0_u32;asolaria_pump::PHASES];
+        let mut spectra=[[0_u64;CELLS];asolaria_pump::PHASES];
+        let mut offset=CELLS;
+        for phase in 0..asolaria_pump::PHASES{
+            shells[phase]=u32::from_le_bytes(response[offset..offset+4]
+                .try_into().map_err(|_|"pump shell width")?);
+            offset+=4;
+            for value in &mut spectra[phase]{
+                *value=u64::from_le_bytes(response[offset..offset+8]
+                    .try_into().map_err(|_|"pump spectrum width")?);
+                offset+=8;
+                if *value>=asolaria_pump::P{
+                    return Err("pump spectral field value outside modulus".into());
+                }
+            }
+        }
+        let original=asolaria_pump::source_sweep(&task.trits)?;
+        if original.shells!=shells||original.spectra!=spectra{
+            return Err("pump external NTT did not match independently coded original source".into());
+        }
+        Ok(asolaria_pump::PumpFrame{shells,spectra})
+    }
+    pub fn pump_bad_address_rejected(&self,arity:usize,task:&Task)
+        ->Result<bool,String>{
+        let lane=usize::from(task.id)%arity;
+        let wrong=(fischer_address((lane%27)as u64,(lane/27)as u64)
+            .ok_or("source Fischer room missing")?+1)%PRIME;
+        let (status,_)=self.call(
+            &format!("/pump/{arity}/{lane}/{wrong}"),
+            &matrix_wire::encode(task,64,0)?)?;
+        Ok(status=="HTTP/1.1 422 Unprocessable Content\r\n")
     }
     pub fn execute_matrix(&self,mode:u8,arity:usize,lane:usize,
                           framed:&[u8])->Result<MatrixFrame,String>{
