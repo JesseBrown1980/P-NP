@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
-    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic,
+    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +94,56 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-omni40-attest") => {
+            let original=arguments.next().ok_or("missing original Git-pinned Omnibit source")?;
+            let prior=arguments.next().ok_or("missing original TLS and Omnibit acceptance archives")?;
+            let out=arguments.next().ok_or("missing temporal coder destination")?;
+            if arguments.next().is_some(){return_fail("too many temporal coder arguments");}
+            let (stats,elapsed)=tls_omnibit_gc::timing(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_OMNI40|original_operators=40|routes=BINARY64_TERNARY256_MIXED256_PLUS64|heldout_and_shuffle_streams={}|candidate_trials={}|hbi_rows={}|input_event_bytes={}|selected_archive_bytes={}|identity_baseline_bytes={}|restored_archive_bytes={}|selected_nonidentity={}|decoder_program_bytes={}|standalone_inverse=EXACT|source_pr43=VERIFIED|original_omega=VERIFIED|gc=OWNED_SCRATCH_ONLY|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.streams,stats.original_operator_trials,stats.rows,
+                stats.input_bytes,stats.archive_bytes,stats.baseline_identity_bytes,
+                stats.restored_bytes,stats.selected_nonidentity,stats.program_bytes
+            );
+            println!("PNP_TLS_OMNI40_TIMING|scope=ATTEST_AND_INDEPENDENT_REPLAY|elapsed_wall_ns={elapsed}|full_decoder_binary=CHARGED|source=HOSTED_RUNNER|json=0");
+            Ok(())
+        }
+        Some("tls-omni40-verify") => {
+            let original=arguments.next().ok_or("missing original Git-pinned Omnibit source")?;
+            let prior=arguments.next().ok_or("missing prior evidence archive")?;
+            let out=arguments.next().ok_or("missing temporal archive")?;
+            if arguments.next().is_some(){return_fail("too many temporal coder verifier arguments");}
+            let stats=tls_omnibit_gc::verify(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_OMNI40_VERIFY|candidate_trials={}|rows={}|archive_bytes={}|restored_bytes={}|standalone_inverse=PASS|source_event_bytes=UNCHANGED|protected_source=RETAINED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.original_operator_trials,stats.rows,stats.archive_bytes,stats.restored_bytes
+            );
+            Ok(())
+        }
+        Some("tls-omni40-decode") => {
+            let archive=arguments.next().ok_or("missing selected standalone coding payload")?;
+            let output=arguments.next().ok_or("missing restored event archive destination")?;
+            if arguments.next().is_some(){return_fail("too many standalone decoder arguments");}
+            let len=tls_omnibit_gc::decode_to_file(
+                Path::new(&archive),Path::new(&output)
+            )?;
+            println!("PNP_TLS_OMNI40_DECODE|restored_bytes={len}|source_generator=NOT_REQUIRED|model_state=NOT_REQUIRED|original_operator_catalog=IN_BINARY|source_event_replay=EXACT|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-omni40-gulp-discard") => {
+            let original=arguments.next().ok_or("missing source-pinned original Omnibit checkout")?;
+            let prior=arguments.next().ok_or("missing original temporal source receipts")?;
+            let out=arguments.next().ok_or("missing durable temporal coding destination")?;
+            if arguments.next().is_some(){return_fail("too many GULP discard arguments");}
+            let (deleted,retained)=tls_omnibit_gc::gulp_discard_owned(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_OMNI40_GULP|owned_scratch_deleted_bytes={deleted}|retained_selected_bytes={retained}|scratch_absent=PASS|original_source=PROTECTED|decoder_replay=PASS|durable_archive=SYNCED_BEFORE_DELETE|human_approval=NOT_REQUIRED|status=PASS|json=0");
             Ok(())
         }
         Some("tls-stochastic-attest") => {
@@ -461,7 +511,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | tls-stochastic-attest PRIOR OUT | tls-stochastic-verify PRIOR OUT | tls-memory-attest OUT | tls-memory-verify OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | tls-omni40-attest ORIGINAL PRIOR OUT | tls-omni40-verify ORIGINAL PRIOR OUT | tls-omni40-decode ARCHIVE RESTORED | tls-omni40-gulp-discard ORIGINAL PRIOR OUT | tls-stochastic-attest PRIOR OUT | tls-stochastic-verify PRIOR OUT | tls-memory-attest OUT | tls-memory-verify OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {

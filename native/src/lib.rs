@@ -27,6 +27,7 @@ pub mod solver;
 pub mod ternary;
 pub mod tls_memory;
 pub mod tls_stochastic;
+pub mod tls_omnibit_gc;
 pub mod triad;
 pub mod wave;
 

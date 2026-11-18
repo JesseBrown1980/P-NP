@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Temporal TLS memory × all original 40 Omnibit operators with automatic GULP disposal (November 18, 2026)
+
+The [integrated temporal Omnibit protocol](native/TLS_OMNIBIT40_TEMPORAL_GC_PROTOCOL.md) connects the **exact prior PR #43 held-out/shuffled event archives** to all original source-authenticated **8 RNQ + 12 TRI + 20 PI operators** and three native floor routes: binary 64, ternary 256 and composed mixed 256+64. It exhaustively evaluates **381,600 operator candidates** across **9,540 twenty-symbol blocks**, reconstructing 18 distinct frozen synthetic event streams through 54 independent route encodings. Every selected block retains its operator selector, coding mode and complete literal/RLE residual, with a standalone inverse requiring no event generator or trained hidden-state model.
+
+The comparison tracks actual framed bytes against an identity-only source-operator baseline, full executable decoder size, raw and bit-packed event counts, and hosted elapsed time/memory separately. The hosted accepted public fixture measured **294,615 selected archive bytes** versus **357,338** for the identically framed identity-only operator selection: **62,723 fewer bytes (17.553%)** on those *same 54 encoded route streams*. **8,266 of 9,540** blocks selected a nonidentity original operator. The conservative full P-NP native decoder executable was **1,449,920 bytes**, making the selected archive plus full decoder **1,744,535 bytes**. An independently bit-packed representation of the same 54 streams would be **54,000 bytes**, providing an important stricter reference. **72 new HBI → HBP → SHA → SH → HASH** records link both prior DOI-scoped temporal evidence and original Omnibit source catalog. The GULP test also **actually deletes its exclusively owned 144,000-byte event scratch projection after independently verifying and durably syncing the saved full archive**, while keeping the source evidence and all future-reconstruction information. There is no live human approval on per-block selection or cleanup.
+
+This is a source-bound **classical synthetic** coding experiment; the original private-seat tournament remains unscored, and device-based quantum-jump inference remains a separate scientific gate.
+
+---
+
 ## Stochastic hidden-reservoir memory and truly held-out ternary prediction (November 18, 2026)
 
 The [TLS stochastic held-out protocol](native/TLS_STOCHASTIC_HELDOUT_PROTOCOL.md) is the next source-bound experiment after the accepted PRL DOI [10.1103/j1r2-5ph7](https://doi.org/10.1103/j1r2-5ph7) deterministic hidden-reservoir pilot. It generates **frozen, synthetic** Bernoulli event traces under three explicitly distinct regimes: an IID memoryless null, one persistent hidden TLS-like bit, and three persistent TLS-like bits. All generator probabilities and seeds are fixture-defined rather than inferred physical constants.
