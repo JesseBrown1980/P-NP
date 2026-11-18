@@ -19,6 +19,13 @@ sys.path.insert(0,str(ROOT.joinpath("experiments","mtp_nnest")))
 import hybrid
 sys.path.insert(0,str(ROOT.joinpath("experiments","fourth")))
 import engine as hxf
+# Isolate both archived modules named "engine": keep HXF object bound while
+# replacing the module registry name with the original sat/engine source.
+# bitcoin.arm subsequently imports this original engine by its canonical name.
+sys.modules.pop("engine",None)
+sys.path.insert(0,str(ROOT.joinpath("sat")))
+import engine as original_sat_engine
+assert hasattr(original_sat_engine,"source_fingerprint")
 sys.path.insert(0,str(ROOT.joinpath("experiments","bitcoin")))
 import watched
 
