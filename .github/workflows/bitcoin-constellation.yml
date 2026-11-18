@@ -45,6 +45,72 @@ jobs:
             read -r name expected <<< "$entry"
             echo "$expected  build/bitcoin-rime/source/$name.cnf" | sha256sum -c
           done
+      - name: Generate isolated experimental Constellation adapter from byte-original Bitcoin script
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/arm.py)" = c130a41c31370062c317cc530ed5785cd3959dfb
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("experiments/bitcoin/arm.py").read_text(encoding="utf-8")
+          def replace_once(old, new):
+              global source
+              assert source.count(old) == 1, (old, source.count(old))
+              source = source.replace(old, new)
+          replace_once("import hashlib\nimport sys", "import hashlib\nimport os\nimport sys")
+          replace_once(
+              'ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original")',
+              'ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original", "constellation")')
+          guide = """
+              if arm == "constellation":
+                  lines = Path(os.environ["PNP_RIME_VALUES"]).read_text(encoding="ascii").splitlines()
+                  assert lines[0] == (
+                      "PNP_RIME_VALUES|schema=v1|tensors=24|glyphs=27|"
+                      "source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735"
+                  )
+                  assert len(lines) == 25
+                  tensors = []
+                  for index, line in enumerate(lines[1:]):
+                      parts = line.split("|")
+                      assert parts[:2] == ["TENSOR", str(index)] and len(parts) == 29
+                      tensor = tuple(map(int, parts[2:]))
+                      assert all(0 <= v < 1000081 for v in tensor)
+                      tensors.append(tensor)
+                  counts = {}
+                  for clause in subset:
+                      for lit in clause:
+                          if abs(lit) in touched:
+                              counts[abs(lit)] = counts.get(abs(lit), 0) + 1
+                  ranked = []
+                  for bit, index in enumerate(indices):
+                      var = index + 1
+                      glyph = (bit + len(subset)) % 27
+                      tensor = (bit + len(clauses)) % 24
+                      score = counts.get(var, 0) * 2048 + tensors[tensor][glyph]
+                      ranked.append((-score, bit, var))
+                      nav_ops += 1
+                  result = tuple(var - 1 for _, _, var in sorted(ranked))
+          """.strip("\n")
+          guide = "\n".join(row[10:] if row.startswith("          ") else row
+                            for row in guide.splitlines())
+          replace_once('    if arm == "ym_fischer":',
+                       guide + '\n    elif arm == "ym_fischer":')
+          replace_once(
+              '        actual = watched.solve(n, clauses, priority=order, limit=1024)',
+              '        node_cap = int(os.environ.get("PNP_BITCOIN_NODE_CAP", "1024"))\n'
+              '        assert 1024 <= node_cap <= 100000\n'
+              '        sys.setrecursionlimit(8192)\n'
+              '        actual = watched.solve(n, clauses, priority=order, limit=node_cap)')
+          replace_once(
+              '                   search_nodes=nodes, node_cap=1024,',
+              '                   search_nodes=nodes, '
+              'node_cap=(node_cap if arm != "hxf4" else 1024),')
+          Path("experiments/bitcoin/arm_constellation_runtime.py").write_text(
+              source, encoding="utf-8")
+          print("BTC_RIME_RUNTIME|original_historical_adapter=UNCHANGED|runtime=EXPERIMENTAL|status=PASS")
+          PY
+          python3 -m py_compile experiments/bitcoin/arm_constellation_runtime.py
+          git diff --exit-code -- experiments/bitcoin/arm.py
       - name: Run identical original Bitcoin circuits with Constellation and original Fischer comparator
         shell: bash
         run: |
@@ -60,7 +126,7 @@ jobs:
               echo "BTC_RIME_START|case=$case|arm=$arm|budget_seconds=$budget|node_cap=$PNP_BITCOIN_NODE_CAP"
               start=$(date +%s%N)
               set +e
-              timeout --kill-after=3s "${budget}s" python3 -s -B experiments/bitcoin/arm.py \
+              timeout --kill-after=3s "${budget}s" python3 -s -B experiments/bitcoin/arm_constellation_runtime.py \
                 "$arm" "$case" "build/bitcoin-rime/source/$case.cnf" \
                 "build/bitcoin-rime/source/$case.txt" \
                 > "build/bitcoin-rime/$case-$arm.log" 2>&1
