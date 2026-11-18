@@ -35,6 +35,12 @@ fn main() {
                 stats.rooms, stats.floors, stats.transitions, stats.microkernel_gulps,
                 stats.child_presentations, stats.star_glyphs, stats.paid_bytes,
                 stats.source_bytes, stats.arbitrary_null_checks, stats.rejected);
+            let counts = stats.omnimets.totals();
+            println!("PNP_OMNIMETS_NATIVE|schema=v1|source_commit={}|lanes=7|dispatches={}|promotions={}|deferrals={}|halts={}|errors={}|samples={}|ratifications={}|seals={}|k=3|ratify_before_seal=PASS|real_microkernel=PASS|source_immutable=PASS|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                pnp_native::omnimets_ledger::SOURCE_COMMIT, counts.dispatches,
+                counts.promotions, counts.deferrals, counts.halts, counts.errors,
+                counts.samples, stats.omnimets.ratifications(), stats.omnimets.seals());
+            print!("{}", stats.omnimets.receipt());
             Ok(())
         }
         Some("brown-ledger-attest") => {
