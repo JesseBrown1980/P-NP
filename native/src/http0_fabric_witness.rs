@@ -330,9 +330,9 @@ pub fn serve() -> Result<(), String> {
             }
             Ok((first, body)) => {
                 let path = first.strip_prefix("POST ")
-                    .and_then(|s|s.strip_suffix(" HTTP/1.1"));
-                let outcome = path.ok_or("only native POST is accepted")
-                    .and_then(|route|execute_request(route, &body, &mut states));
+                    .and_then(|s|s.strip_suffix(" HTTP/1.1"))
+                    .ok_or_else(|| "only native POST is accepted".to_owned());
+                let outcome = path.and_then(|route|execute_request(route, &body, &mut states));
                 match outcome {
                     Ok(recovered) => {
                         calls += 1;
