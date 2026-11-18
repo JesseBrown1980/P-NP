@@ -7,6 +7,8 @@ pub mod guidance;
 pub mod matrix;
 pub mod policy;
 pub mod relic;
+pub mod sha256;
+pub mod source;
 pub mod solver;
 pub mod ternary;
 pub mod triad;
