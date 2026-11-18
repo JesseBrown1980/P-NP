@@ -1040,9 +1040,13 @@ jobs:
           grep -Fq 'PNP_FULL_MATRIX|jobs=54|binary_floors=4|original_operators=40|direct_crossings=8640|independent_http0_requests=51840|exact_matrix_triads=18|gac60_metadata=54|gnn_forward_holds=54|' PNP_FULL_MATRIX_ATTEST.hbp
           grep -Fq 'PNP_FULL_MATRIX_VERIFY|jobs=54|network_calls=51840|operator_crossings=8640|source_seat=PASS|reflection=PASS|fabric_seat=PASS|authentic_gnn_signal=HOLD|archive=BYTE_IDENTICAL|' PNP_FULL_MATRIX_VERIFY.hbp
           grep -Fq 'PNP_FULL_MATRIX_INSPECT|jobs=54|integer_reconstruction=EXACT|source_witness=PASS|' PNP_FULL_MATRIX_INSPECT.hbp
-          test "$(grep -c '^HBI|' evidence/PNP_FULL_MATRIX.hbi)" -eq 16
+          test "$(grep -c '^HBI|' evidence/PNP_FULL_MATRIX.hbi)" -eq 18
           test "$(grep -c '^MATRIX_ARM|' evidence/PNP_FULL_MATRIX.hbp)" -eq 6
           test "$(grep -c '^MATRIX_GNN|' evidence/PNP_FULL_MATRIX.hbp)" -eq 1
+          grep -Fq 'doi=10.1103/j1r2-5ph7' evidence/PNP_TLS.hbp
+          grep -Fq 'doi=10.1103/j1r2-5ph7' evidence/PNP_TLS_STOCHASTIC.hbp
+          grep -Fq 'id=PNP_TLS_STOCHASTIC|sha256=' evidence/PNP_FULL_MATRIX.hbp
+          grep -Fq 'id=PNP_TLS|sha256=' evidence/PNP_FULL_MATRIX.hbp
           for arity in 3 27 81; do
             grep -Eq "PNP_FULL_MATRIX_ARM\\|mode=4\\|arity=$arity\\|calls=8640\\|hits=0\\|physical_calculations=8640\\|" PNP_FULL_MATRIX_ATTEST.hbp
             grep -Eq "PNP_FULL_MATRIX_ARM\\|mode=5\\|arity=$arity\\|calls=8640\\|hits=8586\\|physical_calculations=54\\|" PNP_FULL_MATRIX_ATTEST.hbp
@@ -1116,7 +1120,7 @@ jobs:
           sha256sum -c PNP_COMPUTE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_FULL_MATRIX_DIGESTS.sha256 >/dev/null
           grep -Fq 'PNP_FULL_MATRIX|jobs=54|binary_floors=4|original_operators=40|direct_crossings=8640|independent_http0_requests=51840|' PNP_FULL_MATRIX_ATTEST.hbp
-          test "$(grep -c '^HBI|' PNP_FULL_MATRIX.hbi)" -eq 16
+          test "$(grep -c '^HBI|' PNP_FULL_MATRIX.hbi)" -eq 18
           test "$(grep -c '^MATRIX_ARM|' PNP_FULL_MATRIX.hbp)" -eq 6
           grep -Fq 'PNP_COMPUTE_BASE|jobs=54|direct_calls=162|' PNP_COMPUTE_ATTEST.hbp
           test "$(grep -c '^HBI|' PNP_MICROKERNEL_COMPUTE.hbi)" -eq 13
