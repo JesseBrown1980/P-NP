@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave,
     guidance::{Guidance, Strategy},
-    policy, relic, source,
+    policy, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -54,6 +54,37 @@ fn main() {
                 return_fail("source HBI/HBP acceptance count differed");
             }
             println!("PNP_SOURCE_ATTEST|source_pins={count}|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("score-attest") => {
+            let input = arguments.next().ok_or("missing original scoring HBI input")?;
+            let sources = arguments.next().ok_or("missing authenticated source archive")?;
+            let output = arguments.next().ok_or("missing scoring HBI/HBP output directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many score attest arguments");
+            }
+            let count = scoring::attest(
+                Path::new(&input), Path::new(&sources), Path::new(&output),
+            )?;
+            if scoring::verify(Path::new(&input), Path::new(&sources), Path::new(&output))?
+                != count
+            {
+                return_fail("source score replay differed");
+            }
+            println!("PNP_SOURCE_SCORE|cases={count}|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|trained_gnn=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("score-verify") => {
+            let input = arguments.next().ok_or("missing original scoring HBI input")?;
+            let sources = arguments.next().ok_or("missing authenticated source archive")?;
+            let output = arguments.next().ok_or("missing scoring archive")?;
+            if arguments.next().is_some() {
+                return_fail("too many score verify arguments");
+            }
+            let count = scoring::verify(
+                Path::new(&input), Path::new(&sources), Path::new(&output),
+            )?;
+            println!("PNP_SCORE_VERIFY|cases={count}|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("source-verify") => {
@@ -111,7 +142,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
