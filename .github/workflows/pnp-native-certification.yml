@@ -92,7 +92,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -381,6 +381,59 @@ jobs:
           native/target/release/pnp-native prism-verify source-prism evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_PRISM_DIGESTS.sha256 )
           echo 'PNP_PRISM_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: Lossless Omni GC archival staging and restart HBI HBP proof
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native gc-archive-attest source-gac source-neural source-omni evidence | tee PNP_GC_ARCHIVE_ATTEST.hbp
+          native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence | tee PNP_GC_ARCHIVE_VERIFY.hbp
+          grep -Fq 'PNP_GC_ARCHIVE|original_bodies=2|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|operator=HELD|live_rotation=HOLD|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GC_ARCHIVE_ATTEST.hbp
+          grep -Fq 'PNP_GC_ARCHIVE_VERIFY|original_bodies=2|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GC_ARCHIVE_VERIFY.hbp
+          test "$(grep -c '^GC_ARCHIVE|' evidence/PNP_GC_ARCHIVE.hbp)" -eq 2
+          test "$(grep -c '^HBI|' evidence/PNP_GC_ARCHIVE.hbi)" -eq 2
+          cmp source-omni/packages/omni-gulp-gc/src/gc.ts evidence/PNP_GC_BODIES/original_gc.ts
+          cmp source-omni/packages/omni-gulp-gc/src/gulp.ts evidence/PNP_GC_BODIES/original_gulp.ts
+          grep -Fq '|source_intact=1|archive_intact=1|operator_approval=HELD|live_rotation=HOLD|gc=NEVER_DELETE|gulp_feedback=HELD|' evidence/PNP_GC_ARCHIVE.hbp
+          ( cd evidence && sha256sum PNP_GC_ARCHIVE.hbp PNP_GC_ARCHIVE.hbi PNP_GC_ARCHIVE.anchor PNP_GC_BODIES/original_gc.ts PNP_GC_BODIES/original_gulp.ts > PNP_GC_ARCHIVE_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 )
+      - name: GC archive source/target/HBI/HBP/journal failure controls
+        run: |
+          set -euo pipefail
+          if native/target/release/pnp-native gc-archive-attest source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gc-duplicate.log" 2>&1; then
+            echo 'PNP_GC_ARCHIVE_NEGATIVE_FAIL|overwrite=ACCEPTED'
+            exit 1
+          fi
+          for name in PNP_GC_ARCHIVE.hbp PNP_GC_ARCHIVE.hbi PNP_GC_ARCHIVE.anchor; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gc-rejected.log" 2>&1; then
+              echo "PNP_GC_ARCHIVE_NEGATIVE_FAIL|file=$name"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp evidence/PNP_GC_BODIES/original_gc.ts "$RUNNER_TEMP/original-gc-body.ts"
+          truncate -s 11 evidence/PNP_GC_BODIES/original_gc.ts
+          if native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gc-partial.log" 2>&1; then
+            echo 'PNP_GC_ARCHIVE_NEGATIVE_FAIL|partial_body=ACCEPTED'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/original-gc-body.ts" evidence/PNP_GC_BODIES/original_gc.ts
+          mv evidence/PNP_GC_ARCHIVE.hbp "$RUNNER_TEMP/held-gc-receipt.hbp"
+          if native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gc-missing-receipt.log" 2>&1; then
+            echo 'PNP_GC_ARCHIVE_NEGATIVE_FAIL|missing_journal=ACCEPTED'
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/held-gc-receipt.hbp" evidence/PNP_GC_ARCHIVE.hbp
+          cp source-omni/packages/omni-gulp-gc/src/gulp.ts "$RUNNER_TEMP/immutable-source-gulp.ts"
+          printf X >> source-omni/packages/omni-gulp-gc/src/gulp.ts
+          if native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gc-source-tamper.log" 2>&1; then
+            echo 'PNP_GC_ARCHIVE_NEGATIVE_FAIL|original_source=ACCEPTED'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/immutable-source-gulp.ts" source-omni/packages/omni-gulp-gc/src/gulp.ts
+          native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 )
+          echo 'PNP_GC_ARCHIVE_NEGATIVE|overwrite=REJECTED|archive_body=REJECTED|missing_journal=REJECTED|original_source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -453,7 +506,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi > evidence/SOURCE_PINS.sha256
@@ -487,6 +540,13 @@ jobs:
           sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_PRISM_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_GC_ARCHIVE|original_bodies=2|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|' PNP_GC_ARCHIVE_ATTEST.hbp
+          grep -Fq 'PNP_GC_ARCHIVE_VERIFY|original_bodies=2|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|' PNP_GC_ARCHIVE_VERIFY.hbp
+          test "$(grep -c '^GC_ARCHIVE|' PNP_GC_ARCHIVE.hbp)" -eq 2
+          test "$(grep -c '^HBI|' PNP_GC_ARCHIVE.hbi)" -eq 2
+          cmp PNP_GC_BODIES/original_gc.ts PNP_GC_BODIES/original_gc.ts
+          grep -Fq '|source_intact=1|archive_intact=1|operator_approval=HELD|live_rotation=HOLD|' PNP_GC_ARCHIVE.hbp
           grep -Fq 'PNP_PRISM|rung=256_1024|bits=40|bytes_per_block=5|glyphs_per_block=4|cube_bytes=3200|cube_glyphs=2560|cases=15|' PNP_PRISM_ATTEST.hbp
           grep -Fq 'PNP_PRISM_VERIFY|cases=15|original_source=VERIFIED|inverse=EXACT|' PNP_PRISM_VERIFY.hbp
           test "$(grep -c '^PRISM|' PNP_PRISM.hbp)" -eq 15
