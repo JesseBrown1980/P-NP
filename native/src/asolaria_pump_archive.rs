@@ -4,7 +4,7 @@
 //! is asserted here. The source-equivalent 3->9->27 kernel awaits import.
 //! Only integer parsing and native HBI/HBP/SHA/SH/HASH verification.
 #![forbid(unsafe_code)]
-use std::collections::{BTreeMap,BTreeSet};
+use std::collections::BTreeSet;
 use std::fs::{self,File};
 use std::io::Write;
 use std::path::Path;
