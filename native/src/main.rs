@@ -4,7 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
-    http0_compute, microkernel_compute, full_matrix_fabric, prl_temporal_fabric,
+    http0_compute, microkernel_compute, full_matrix_fabric, prl_temporal_fabric, asolaria_pump_archive,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -127,6 +127,30 @@ fn main() {
             if arguments.next().is_some(){return_fail("too many PRL causal inspection arguments");}
             let streams=prl_temporal_fabric::inspect(Path::new(&source))?;
             println!("PNP_PRL_CAUSAL_INSPECT|streams={streams}|forecasts_per_stream=8000|baseline_and_memory_probabilities=EXACT_Q10000|status=PASS|json=0");
+            Ok(())
+        }
+        Some("pump-source-attest") => {
+            let prior=arguments.next().ok_or("missing accepted prior matrix evidence")?;
+            let out=arguments.next().ok_or("missing pump evidence output")?;
+            if arguments.next().is_some(){return_fail("extra pump provenance arguments");}
+            let s=asolaria_pump_archive::attest(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_ASOLARIA_PUMP|origin=ORIGINAL_SIX_ARM_ARCHIVE|nodes={}|edges={}|macro_kernels={}|archived_arms={}|original_receipt_sha256={}|original_json_sha256={}|source_kernel=IMPORT_HOLD|native_pump=NOT_EXECUTED|negative_entropy=NOT_SUPPORTED|binary_superiority=NOT_ESTABLISHED|status=PASS_ARCHIVE|json=0",
+                s.graph_nodes,s.graph_edges,s.macro_kernels,s.arms.len(),
+                s.original_hbp_sha,s.original_json_sha);
+            for arm in s.arms {
+                println!("PNP_PUMP_ARM|name={}|nodes={}|edges={}|steps={}|energy_before_q9={}|energy_after_q9={}|status=ARCHIVED_REPORTED|json=0",
+                    arm.name,arm.nodes,arm.edges,arm.accepted_steps,
+                    arm.energy_initial_q9,arm.energy_final_q9);
+            }
+            Ok(())
+        }
+        Some("pump-source-verify") => {
+            let prior=arguments.next().ok_or("missing accepted original evidence")?;
+            let out=arguments.next().ok_or("missing original pump archive certificate")?;
+            if arguments.next().is_some(){return_fail("extra pump verifier arguments");}
+            let s=asolaria_pump_archive::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_ASOLARIA_PUMP_VERIFY|archived_arms={}|source_sha256=PASS|original_json_sha256=PASS|prior_evidence=PASS|hbi_hbp=BYTE_IDENTICAL|native_pump=SOURCE_IMPORT_HOLD|status=PASS_ARCHIVE|json=0",
+                s.arms.len());
             Ok(())
         }
         Some("full-matrix-attest") => {
