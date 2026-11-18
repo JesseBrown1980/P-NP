@@ -97,6 +97,12 @@ jobs:
           native/target/release/pnp-native audit . | tee PNP_AUDIT.hbp
           grep -Fq 'PNP_LEGACY_AUDIT|legacy_failed=54|python_scripts=44|old_workflows=10|' PNP_AUDIT.hbp
           grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
+      - name: Exact star-glyph prism language ladder with nested MCP microkernel disposal
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native layered-sphere-attest | tee PNP_LAYERED_SPHERE.hbp
+          grep -Fq 'PNP_LAYERED_SPHERE|schema=v1|rooms=120|floors=600|transitions=480|microkernel_gulps=600|nested_child_presentations=360|star_glyphs=5400|' PNP_LAYERED_SPHERE.hbp
+          grep -Fq '|fischer_arbitrary_null_checks=360|rejected=0|language_ladder=64_256_1024_4096_16384|symbol_not_bit=PASS|ternary_prism_inverse=PASS|qprism=PASS|omnibit40=PASS|post_gulp_clear=PASS|watcher=INDEPENDENT_INTEGER|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_LAYERED_SPHERE.hbp
       - name: Brown Ledger Shannon-paid forward/reverse frozen matrix and null-outward N-Nest gate
         run: |
           set -euo pipefail
