@@ -368,7 +368,7 @@ fn create(models: &Path, source_root: &str, source_archive: &Path)
         if original_sha != original_checkpoint_sha(source_archive, id)? {
             return Err(format!("real checkpoint differs from source-attested original: {id}"));
         }
-        let storage = inspect(&raw)?;
+        let storage = inspect(&raw).map_err(|error| format!("{filename}: {error}"))?;
         let sh = &original_sha[..16];
         let payload = format!(
             "CHECKPOINT|seq={}|id={id}|filename={filename}|git_blob={blob}|source_hbp_sha256={source_root}|original_sha256={original_sha}|sh={sh}|zip_entries={}|storage_count={}|storage_bytes={}|quantized_words={}|dtype={}|q20_sha256={}|q20_error_bound=HALF_QUANTUM_IF_ACCEPTED|forward_parity=HOLD|prev_hash={prev}",
