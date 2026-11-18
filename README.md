@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Neural-network fabric, GAC 60D tuples and Omni GC restoration (November 18, 2026)
+
+The original [Asolaria-as-a-neural-network law](https://github.com/JesseBrown1980/ASOLARIA-AS-NEURAL-NETWORK/blob/4cc7624fb51ff8a64051ace7a1ff62edaa51d422/canon/laws/LAW-ASOLARIA-NEURAL-NETWORK.md) identifies the network as the combined live matrix, rooms, agent/supervisor routing, GNN edges, nine-stage flywheel, reflective correction, cubes, stored evidence and frozen/borrowed neural slices. The neural-network architecture therefore includes more than the nine authenticated `.pt` checkpoints. Its [slice-engine law](https://github.com/JesseBrown1980/ASOLARIA-AS-NEURAL-NETWORK/blob/4cc7624fb51ff8a64051ace7a1ff62edaa51d422/canon/laws/LAW-SLICE-ENGINE.md) distinguishes an existing address from an executing worker.
+
+[The GAC/GC restoration protocol](native/FABRIC_GAC_GC_PROTOCOL.md) pins ten original files across [Asolaria GAC](https://github.com/JesseBrown1980/Asolaria-gac-working), the neural-network law repository and [Omni GULP/GC](https://github.com/JesseBrown1980/asolaria-behcs-256/tree/818cc235a6db815e3b2591339cf9b42aad3e85a0/packages/omni-gulp-gc). It implements a **read-only Rust 1.81 matrix/GC gate** with opaque 60-coordinate GAC tuples, exact 6×6 access-tier/scope mapping, and the original GC thresholds: archive candidacy at **50 MiB** or **100,000 lines**, and a HOLD above **500 MiB**. Its six policy cases retain `delete=0`, `execute=0` and `operator_approval=HELD`; archival execution and trained feedback remain separately gated.
+
+The source proof plane outputs **16 HBI/HBP receipts** (ten source records plus six GC-policy cases), each with SHA-256, compact SH and linked HASH verification. The hosted acceptance checks original Git blobs, byte-deterministic regeneration, original-source tampering and HBI/HBP/archive corruption. The native module neither starts Host-8 processes nor mutates event logs. Existing GNN/FNN forward-parity work remains a separate gate.
+
+---
+
 ## Original trained checkpoints: native integer storage import (November 18, 2026)
 
 [PR #33](https://github.com/JesseBrown1980/P-NP/pull/33) extends the full multi-GNN rebuild from original model identities to **the real published tensor-storage bytes**. Its Rust 1.81 implementation authenticates all nine `.pt` checkpoint SHA-256 values against the source-frozen Gate A HBI/HBP archive, parses PyTorch ZIP64 without executing serialized pickles, validates ZIP checksums and storage boundaries, and converts accepted IEEE binary32 tensor storage bits to exact, deterministic signed Q20 integers by integer arithmetic only.

@@ -35,6 +35,30 @@ jobs:
           path: source-stage
           persist-credentials: false
           fetch-depth: 1
+      - name: Checkout GAC authority and 60D tuple sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-gac-working
+          ref: 4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4
+          path: source-gac
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Checkout original Asolaria neural-fabric law
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/ASOLARIA-AS-NEURAL-NETWORK
+          ref: 4cc7624fb51ff8a64051ace7a1ff62edaa51d422
+          path: source-neural
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Checkout original Omni GC/Gulp source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-omni
+          persist-credentials: false
+          fetch-depth: 1
       - name: Pin exact Rust 1.81, offline sources and Clippy
         run: |
           set -euo pipefail
@@ -60,7 +84,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -262,6 +286,50 @@ jobs:
           native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 )
           echo 'PNP_CHECKPOINT_NEGATIVE|model=REJECTED|q20=REJECTED|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: Original GAC 60D tuple and Omni-GC archive-only proof receipts
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native fabric-gc-attest source-gac source-neural source-omni evidence | tee PNP_FABRIC_GC_ATTEST.hbp
+          native/target/release/pnp-native fabric-gc-verify source-gac source-neural source-omni evidence | tee PNP_FABRIC_GC_VERIFY.hbp
+          grep -Fq 'PNP_FABRIC_GC|sources=10|gac=3|neural=5|omni=2|tuple_dim=60|access_cells=36|gc_policy_cases=6|records=16|collection=PLAN_ONLY|archive=NEVER_DELETE|authority=HELD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_FABRIC_GC_ATTEST.hbp
+          grep -Fq 'PNP_FABRIC_GC_VERIFY|records=16|tuple_dim=60|access_cells=36|source_hashes=VERIFIED|gc_policy=VERIFIED|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0' PNP_FABRIC_GC_VERIFY.hbp
+          test "$(grep -c '^FABRIC_SOURCE|' evidence/PNP_FABRIC_GC.hbp)" -eq 10
+          test "$(grep -c '^GC_POLICY|' evidence/PNP_FABRIC_GC.hbp)" -eq 6
+          test "$(grep -c '^HBI|' evidence/PNP_FABRIC_GC.hbi)" -eq 16
+          grep -Fq '|decision=ARCHIVE_CANDIDATE_BYTES|delete=0|execute=0|operator_approval=HELD|' evidence/PNP_FABRIC_GC.hbp
+          grep -Fq '|decision=ARCHIVE_CANDIDATE_LINES|delete=0|execute=0|operator_approval=HELD|' evidence/PNP_FABRIC_GC.hbp
+          grep -Fq '|decision=HOLD_SANITY|delete=0|execute=0|operator_approval=HELD|' evidence/PNP_FABRIC_GC.hbp
+          cp evidence/PNP_FABRIC_GC.hbp "$RUNNER_TEMP/original-fabric-gc.hbp"
+          cp evidence/PNP_FABRIC_GC.hbi "$RUNNER_TEMP/original-fabric-gc.hbi"
+          cp evidence/PNP_FABRIC_GC.anchor "$RUNNER_TEMP/original-fabric-gc.anchor"
+          native/target/release/pnp-native fabric-gc-attest source-gac source-neural source-omni evidence >/dev/null
+          cmp evidence/PNP_FABRIC_GC.hbp "$RUNNER_TEMP/original-fabric-gc.hbp"
+          cmp evidence/PNP_FABRIC_GC.hbi "$RUNNER_TEMP/original-fabric-gc.hbi"
+          cmp evidence/PNP_FABRIC_GC.anchor "$RUNNER_TEMP/original-fabric-gc.anchor"
+          ( cd evidence && sha256sum PNP_FABRIC_GC.hbp PNP_FABRIC_GC.hbi PNP_FABRIC_GC.anchor > PNP_FABRIC_GC_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 )
+      - name: Fabric GC HBI HBP anchor and original-source negatives
+        run: |
+          set -euo pipefail
+          for name in PNP_FABRIC_GC.hbp PNP_FABRIC_GC.hbi PNP_FABRIC_GC.anchor; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native fabric-gc-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/fabric-tamper.hbp" 2>&1; then
+              echo "PNP_FABRIC_GC_TAMPER_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp source-neural/ROOT-FRAME-60D.md "$RUNNER_TEMP/frozen-neural.md"
+          printf X >> source-neural/ROOT-FRAME-60D.md
+          if native/target/release/pnp-native fabric-gc-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/neural-tamper.hbp" 2>&1; then
+            echo 'PNP_FABRIC_GC_TAMPER_FAIL|source=neural|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/frozen-neural.md" source-neural/ROOT-FRAME-60D.md
+          native/target/release/pnp-native fabric-gc-verify source-gac source-neural source-omni evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 )
+          echo 'PNP_FABRIC_GC_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -334,10 +402,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -366,6 +434,13 @@ jobs:
           sha256sum -c PNP_SCORE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_FABRIC_GC|sources=10|gac=3|neural=5|omni=2|tuple_dim=60|access_cells=36|gc_policy_cases=6|records=16|' PNP_FABRIC_GC_ATTEST.hbp
+          grep -Fq 'PNP_FABRIC_GC_VERIFY|records=16|tuple_dim=60|access_cells=36|source_hashes=VERIFIED|' PNP_FABRIC_GC_VERIFY.hbp
+          test "$(grep -c '^FABRIC_SOURCE|' PNP_FABRIC_GC.hbp)" -eq 10
+          test "$(grep -c '^GC_POLICY|' PNP_FABRIC_GC.hbp)" -eq 6
+          test "$(grep -c '^HBI|' PNP_FABRIC_GC.hbi)" -eq 16
+          grep -Fq '|decision=HOLD_SANITY|delete=0|execute=0|operator_approval=HELD|' PNP_FABRIC_GC.hbp
           grep -Fq 'PNP_CHECKPOINT_ATTEST|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|' PNP_CHECKPOINT_ATTEST.hbp
           grep -Fq 'PNP_CHECKPOINT_VERIFY|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|' PNP_CHECKPOINT_VERIFY.hbp
           test "$(grep -c '^CHECKPOINT|' PNP_CHECKPOINT.hbp)" -eq 9

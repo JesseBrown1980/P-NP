@@ -5,6 +5,7 @@
 pub mod checkpoint;
 pub mod ensemble;
 pub mod freeze;
+pub mod fabric_gc;
 pub mod guidance;
 pub mod matrix;
 pub mod policy;
