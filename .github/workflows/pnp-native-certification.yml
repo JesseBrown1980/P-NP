@@ -221,6 +221,7 @@ jobs:
           test "$(grep -c '^CHECKPOINT|' evidence/PNP_CHECKPOINT.hbp)" -eq 9
           grep '^CHECKPOINT|' evidence/PNP_CHECKPOINT.hbp
           test "$(grep -c '^HBI|' evidence/PNP_CHECKPOINT.hbi)" -eq 9
+          test "$(find evidence -maxdepth 1 -type f -name 'PNP_Q20_*.bin' | wc -l)" -eq 9
           grep -Fq '|forward_parity=HOLD|' evidence/PNP_CHECKPOINT.hbp
           cp evidence/PNP_CHECKPOINT.hbp "$RUNNER_TEMP/original-checkpoint.hbp"
           cp evidence/PNP_CHECKPOINT.hbi "$RUNNER_TEMP/original-checkpoint.hbi"
@@ -229,7 +230,7 @@ jobs:
           cmp evidence/PNP_CHECKPOINT.hbp "$RUNNER_TEMP/original-checkpoint.hbp"
           cmp evidence/PNP_CHECKPOINT.hbi "$RUNNER_TEMP/original-checkpoint.hbi"
           cmp evidence/PNP_CHECKPOINT.anchor "$RUNNER_TEMP/original-checkpoint.anchor"
-          ( cd evidence && sha256sum PNP_CHECKPOINT.hbp PNP_CHECKPOINT.hbi PNP_CHECKPOINT.anchor > PNP_CHECKPOINT_DIGESTS.sha256 )
+          ( cd evidence && sha256sum PNP_CHECKPOINT.hbp PNP_CHECKPOINT.hbi PNP_CHECKPOINT.anchor PNP_Q20_*.bin > PNP_CHECKPOINT_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 )
           echo 'PNP_CHECKPOINT_REPLAY|real_models=9|bytes_authenticated=PASS|zip_integrity=PASS|sha=PASS|json=0'
       - name: Original tensor and HBI HBP corruption rejection
@@ -244,6 +245,13 @@ jobs:
             fi
             cp "$RUNNER_TEMP/$name" "evidence/$name"
           done
+          cp evidence/PNP_Q20_model_base.bin "$RUNNER_TEMP/original-q20.bin"
+          printf 'X' >> evidence/PNP_Q20_model_base.bin
+          if native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence > "$RUNNER_TEMP/bad-q20.hbp" 2>&1; then
+            echo 'PNP_CHECKPOINT_NEGATIVE_FAIL|q20_converted_weights=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/original-q20.bin" evidence/PNP_Q20_model_base.bin
           cp source-train/models/baseline_model.pt "$RUNNER_TEMP/original-baseline.pt"
           printf 'X' >> source-train/models/baseline_model.pt
           if native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence > "$RUNNER_TEMP/bad-model.hbp" 2>&1; then
@@ -253,7 +261,7 @@ jobs:
           cp "$RUNNER_TEMP/original-baseline.pt" source-train/models/baseline_model.pt
           native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 )
-          echo 'PNP_CHECKPOINT_NEGATIVE|model=REJECTED|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+          echo 'PNP_CHECKPOINT_NEGATIVE|model=REJECTED|q20=REJECTED|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -362,6 +370,7 @@ jobs:
           grep -Fq 'PNP_CHECKPOINT_VERIFY|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|' PNP_CHECKPOINT_VERIFY.hbp
           test "$(grep -c '^CHECKPOINT|' PNP_CHECKPOINT.hbp)" -eq 9
           test "$(grep -c '^HBI|' PNP_CHECKPOINT.hbi)" -eq 9
+          test "$(find . -maxdepth 1 -type f -name 'PNP_Q20_*.bin' | wc -l)" -eq 9
           grep -Fq '|forward_parity=HOLD|' PNP_CHECKPOINT.hbp
           grep -Fq 'PNP_MULTIGNN|families=10|trained_architectures=4|checkpoints=9|scoring_signals=8|g4_cases=13|records=23|tier0=SOURCE_MATCHED|' PNP_MULTIGNN_ATTEST.hbp
           grep -Fq 'PNP_MULTIGNN_VERIFY|records=23|g4=SOURCE_MATCHED|' PNP_MULTIGNN_VERIFY.hbp
