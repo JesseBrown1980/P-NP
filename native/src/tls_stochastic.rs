@@ -90,10 +90,10 @@ fn traces(mode: &str, rep: usize) -> Result<ThreeTrace, String> {
     let validation = generate(mode, VALID, seed ^ VALID_XOR)?;
     let heldout = generate(mode, TEST, seed ^ TEST_XOR)?;
     let shuffled = shuffle_count_preserving(&heldout, seed ^ SHUFFLE_XOR);
-    if heldout.iter().sum::<u8>() != shuffled.iter().sum::<u8>() {
-        // The true check below uses the wide integer accumulator; this narrow
-        // accumulation never runs on long sequences.
-        return Err("unexpected count-preserving shuffle drift".to_owned());
+    if heldout.iter().map(|&v|usize::from(v)).sum::<usize>()
+        != shuffled.iter().map(|&v|usize::from(v)).sum::<usize>()
+    {
+        return Err("count-preserving shuffle changed the number of events".to_owned());
     }
     Ok(ThreeTrace { training, validation, heldout, shuffled })
 }
@@ -369,10 +369,10 @@ fn make_bundle(prior_hbp_sha:&str) -> Result<(Bundle,Stats),String>{
         "regimes=3|replicates={REPS}|trace_groups=9|candidate_models=45|lag_records={total_lags}|null_baseline={null_baseline}|coupled_heldout_gain={improved}|coupled_shuffle_reversal={reversed}|train_events={TRAIN}|validation_events={VALID}|heldout_events={TEST}|model_selection=VALIDATION_ONLY|predictive_metric=HELDOUT_BRIER|uncertainty=REPLICATE_DISPERSION_ONLY|trace_bytes={}|trace_sha256={}|source_hardware=NO|source_jump_data=NO|true_g2=NOT_MEASURED|gc_exact_replay=RETAIN_UNTIL_VERIFIED",
         trace.len(),hash_bytes(&trace)
     ));
-    if seq!=ROWS+1{return Err("TLS source-bound row census changed".to_owned());}
+    if seq!=ROWS{return Err("TLS source-bound row census changed".to_owned());}
     let root=format!(
         "TLS_STOCH_ANCHOR|rows={}|trace_groups=9|source_sha256={spec_sha}|prior_hbp_sha256={prior_hbp_sha}|trace_sha256={}|trace_bytes={}|hbp_sha256={}|hbi_sha256={}|terminal_hash={previous}|seal=HBI-HBP-SHA-SH-HASH",
-        ROWS+1,hash_bytes(&trace),trace.len(),hash_bytes(hbp.as_bytes()),hash_bytes(hbi.as_bytes())
+        ROWS,hash_bytes(&trace),trace.len(),hash_bytes(hbp.as_bytes()),hash_bytes(hbi.as_bytes())
     );
     let anchor=format!("{root}|checksum={}|json=0\n",hash_bytes(root.as_bytes()));
     Ok(((hbp,hbi,anchor,trace),Stats{
