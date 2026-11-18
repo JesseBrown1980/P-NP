@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave,
     guidance::{Guidance, Strategy},
     policy, relic, source,
     solver::{check_against_exhaustive, solve},
@@ -31,6 +31,9 @@ fn main() {
                 let (balanced, coordinated, triples) = certify_exact_witness()
                     .map_err(str::to_owned)?;
                 println!("PNP_NATIVE_WITNESS|ordered_triples={triples}|balanced_faults_rejected={balanced}|coordinated_reports_rejected={coordinated}|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0");
+                let (wave_rooms, path_decisions, children_verified) = certify_lazy_wave()
+                    .map_err(str::to_owned)?;
+                println!("PNP_NATIVE_WAVE|rooms={wave_rooms}|path_decisions={path_decisions}|signed_children={children_verified}|center=1|addressed_lazy=PASS|third_seat=PASS|altered_paths=REJECTED|status=PASS|json=0");
                 println!("PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|source_frozen=PASS|nodes_runtime=0|json_runtime=0|v8_runtime=0|status=PASS|json=0");
                 Ok(())
             }
@@ -94,11 +97,12 @@ fn main() {
             if formula.variables <= 16 && !check_against_exhaustive(&formula, &result) {
                 return_fail("independent exhaustive witness/refutation failed");
             }
-            println!("PNP_TERNARY_SAT|engine={}|variables={}|clauses={}|fanout={}|lanes_used={}|mtpfrozen_patterns={}|fischer_addresses={}|matrix_rooms={}|fabric_witnesses={}|nodes={}|propagations={}|literal_checks={}|status={}|json=0",
+            println!("PNP_TERNARY_SAT|engine={}|variables={}|clauses={}|fanout={}|lanes_used={}|mtpfrozen_patterns={}|fischer_addresses={}|matrix_rooms={}|fabric_witnesses={}|wave_reads={}|wave_children={}|nodes={}|propagations={}|literal_checks={}|status={}|json=0",
                 strategy.label(), formula.variables, formula.clauses.len(),
                 preparation.fanout, preparation.lanes_used,
                 preparation.frozen_mtp_patterns, preparation.fischer_addresses,
                 preparation.matrix_rooms, preparation.fabric_witnesses,
+                preparation.wave_reads, preparation.wave_choices_checked,
                 result.nodes, result.propagations, result.literal_checks,
                 result.status.label());
             if let Some(model) = result.model {
