@@ -129,8 +129,12 @@ jobs:
           python3 -s -B experiments/hardest/verify_hardest.py evidence build-drattrim/drat-trim | tee HARD_INDEPENDENT.hbp
           grep -Fq 'HARD_REFEREE_FINAL|arms=6|sources=4|runs=24|' HARD_INDEPENDENT.hbp
           grep -Fq '|100_flip_controls=PASS|status=PASS' HARD_INDEPENDENT.hbp
+          # Adversarial controls use the actual accepted receipts, original
+          # frozen CNF, and a real original-input DRAT proof from CaDiCaL.
+          python3 -s -B experiments/hardest/flip_100.py evidence build-drattrim/drat-trim | tee HARD_REAL_FLIPS.hbp
+          grep -Fq 'HARD_REAL_FLIPS|total=100|forged_original_CNF_SAT=75|cross_source_actual_DRAT=25|wrong_verdicts_rejected=100|' HARD_REAL_FLIPS.hbp
           mkdir -p evidence/research-referee
-          cp HARD_INDEPENDENT.hbp evidence/research-referee/
+          cp HARD_INDEPENDENT.hbp HARD_REAL_FLIPS.hbp evidence/research-referee/
           cp experiments/hardest/*.py evidence/research-referee/
           cp .github/workflows/hardest-sat-competition.yml evidence/research-referee/
           ( cd evidence && find . -type f ! -name EVIDENCE.sha256 -print0 | sort -z | xargs -0 sha256sum > EVIDENCE.sha256 )
@@ -156,6 +160,8 @@ jobs:
           cd checked
           test -s EVIDENCE.sha256
           test -s research-referee/HARD_INDEPENDENT.hbp
+          test -s research-referee/HARD_REAL_FLIPS.hbp
+          grep -Fq 'HARD_REAL_FLIPS|total=100|forged_original_CNF_SAT=75|cross_source_actual_DRAT=25|wrong_verdicts_rejected=100|' research-referee/HARD_REAL_FLIPS.hbp
           grep -Fq 'HARD_REFEREE_FINAL|arms=6|sources=4|runs=24|' research-referee/HARD_INDEPENDENT.hbp
           for arm in ym_fischer rime_new rime_original minisat cadical picosat; do
             test -s "pnp-hard-$arm/MANIFEST.sha256"
