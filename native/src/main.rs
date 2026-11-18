@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc,
     guidance::{Guidance, Strategy},
     policy, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -39,6 +39,42 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
+        Some("fabric-gc-attest") => {
+            let gac = arguments.next().ok_or("missing pinned GAC root")?;
+            let neural = arguments.next().ok_or("missing pinned neural fabric root")?;
+            let omni = arguments.next().ok_or("missing pinned Omni collector root")?;
+            let out = arguments.next().ok_or("missing HBI/HBP output root")?;
+            if arguments.next().is_some() {
+                return_fail("too many fabric GC attest arguments");
+            }
+            let n = fabric_gc::attest(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&out),
+            )?;
+            if n != fabric_gc::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&out),
+            )? {
+                return_fail("GAC neural GC repeat check differs");
+            }
+            println!("PNP_FABRIC_GC|sources=10|gac=3|neural=5|omni=2|tuple_dim=60|access_cells=36|gc_policy_cases=6|records={n}|collection=PLAN_ONLY|archive=NEVER_DELETE|authority=HELD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("fabric-gc-verify") => {
+            let gac = arguments.next().ok_or("missing pinned GAC root")?;
+            let neural = arguments.next().ok_or("missing pinned neural fabric root")?;
+            let omni = arguments.next().ok_or("missing pinned Omni collector root")?;
+            let out = arguments.next().ok_or("missing HBI/HBP output root")?;
+            if arguments.next().is_some() {
+                return_fail("too many fabric GC verify arguments");
+            }
+            let n = fabric_gc::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&out),
+            )?;
+            println!("PNP_FABRIC_GC_VERIFY|records={n}|tuple_dim=60|access_cells=36|source_hashes=VERIFIED|gc_policy=VERIFIED|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
         Some("source-attest") => {
             let trained = arguments.next().ok_or("missing trained source root")?;
             let stage = arguments.next().ok_or("missing stage source root")?;
@@ -196,7 +232,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
