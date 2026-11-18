@@ -121,8 +121,13 @@ def main(arm, case, cnf_file, description_file):
     assert n == manifest["variables"]
     assert len(clauses) == manifest["clauses"]
     nonce_bits = tuple(manifest["nonce_variables"])
+    merkle_bits = tuple(manifest["merkle_variables"])
+    free_bits = nonce_bits + tuple((32 + bit, var)
+                                   for bit, var in merkle_bits)
     assert len(nonce_bits) == manifest["nonce_free_bits"]
-    assert all(1 < v <= n for bit, v in nonce_bits)
+    assert len(merkle_bits) == manifest["merkle_free_bits"]
+    assert len(free_bits) == manifest["free_bits_total"]
+    assert all(1 < v <= n for bit, v in free_bits)
     preprocess_ns = monotonic_ns() - started
     native_nav_ops = native_nav_ns = 0
     t = monotonic_ns()
@@ -141,7 +146,7 @@ def main(arm, case, cnf_file, description_file):
                                if (model >> (v - 1)) & 1)
     else:
         order, native_nav_ops, native_nav_ns = get_order(
-            arm, clauses, n, nonce_bits)
+            arm, clauses, n, free_bits)
         actual = watched.solve(n, clauses, priority=order, limit=1024)
         status = actual["status"]
         nodes = actual["nodes"]
@@ -150,17 +155,22 @@ def main(arm, case, cnf_file, description_file):
         proof_kind = "COMMON_WATCHED_DPLL_ADAPTER"
     solve_ns = monotonic_ns() - t
     nonce = "NONE"
+    merkle_hex = "NONE"
     accepted_witness = "NONE"
     if status == "SAT":
         assert model_true is not None
         selected = set(model_true)
         nonce = nonce_from_assignment(selected, nonce_bits)
-        # Only nonce source bits were unknown. Fixed header bits come from
-        # the source CNF, so combine fixed original header with recovered bits.
         known = genesis.GENESIS_NONCE
         free_mask = (1 << manifest["nonce_free_bits"]) - 1
         nonce = (known & ~free_mask) | nonce
-        candidate = genesis.HEADER_PREFIX + nonce.to_bytes(4, "little")
+        candidate = bytearray(
+            genesis.HEADER_PREFIX + nonce.to_bytes(4, "little"))
+        if merkle_bits:
+            merkle = sum(1 << bit for bit, var in merkle_bits
+                         if var in selected)
+            candidate[36:68] = merkle.to_bytes(32, "little")
+        merkle_hex = bytes(candidate[36:68]).hex()
         computed = hashlib.sha256(hashlib.sha256(
             candidate).digest()).digest()[::-1].hex()
         assert computed == genesis.GENESIS_HASH
@@ -182,6 +192,7 @@ def main(arm, case, cnf_file, description_file):
                    source_parse_ns=preprocess_ns,
                    solve_ns=solve_ns, total_ns=monotonic_ns() - started,
                    recovered_nonce=nonce,
+                   recovered_merkle_raw_hex=merkle_hex,
                    header_witness_sha256=accepted_witness)
     print("BITCOIN_ARM|" + repr(receipt) + "|json=0", flush=True)
 
