@@ -4,3 +4,8 @@ GC_PIN|id=gac_readme|repo=gac|commit=4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4|pa
 GC_PIN|id=gac_host8|repo=gac|commit=4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4|path=HOST8-MIGRATION-MANIFEST-2026-06-24.hbp|git_blob=ed88c030947e36f8261d66b8c68799eb72a25282|json=0
 GC_PIN|id=omni_gc|repo=omni|commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|path=packages/omni-gulp-gc/src/gc.ts|git_blob=a0a5123a9eb35b985471d1787b15f6207048a561|json=0
 GC_PIN|id=omni_gulp|repo=omni|commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|path=packages/omni-gulp-gc/src/gulp.ts|git_blob=8275ab3249bb51210592d38844133eb07ac9ab69|json=0
+GC_PIN|id=neural_law|repo=neural|commit=4cc7624fb51ff8a64051ace7a1ff62edaa51d422|path=canon/laws/LAW-ASOLARIA-NEURAL-NETWORK.md|git_blob=d3218bdcf9be5c0a027eb1efdffebca60c98e9a0|json=0
+GC_PIN|id=slice_law|repo=neural|commit=4cc7624fb51ff8a64051ace7a1ff62edaa51d422|path=canon/laws/LAW-SLICE-ENGINE.md|git_blob=b7936cfe7a63a4d50a67ba3730ee5e99843e26bb|json=0
+GC_PIN|id=neural_frame|repo=neural|commit=4cc7624fb51ff8a64051ace7a1ff62edaa51d422|path=ROOT-FRAME-60D.md|git_blob=29b07a220dbb2aed3841eaf1c16ab767fcae5032|json=0
+GC_PIN|id=neural_parity|repo=neural|commit=4cc7624fb51ff8a64051ace7a1ff62edaa51d422|path=TRILATERAL-NEURAL-FABRIC-REALITY-2026-07-11.md|git_blob=4f0c2bbac7634d5d788c2db58368ea9153b8d3e3|json=0
+GC_PIN|id=neural_storage|repo=neural|commit=4cc7624fb51ff8a64051ace7a1ff62edaa51d422|path=PATH2-STORAGE-BACKED-NEURAL-FABRIC-2026-07-11.md|git_blob=a8377b3a860da313621ae87799239f2020fb37f4|json=0
