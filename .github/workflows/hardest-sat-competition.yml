@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'experiments/hardest/**'
+      - 'tools/exact_policy.py'
       - '.github/workflows/hardest-sat-competition.yml'
   workflow_dispatch:
 permissions:
