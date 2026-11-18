@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_matrix_fabric,
+    certify_exact_witness, certify_matrix_fabric,
     guidance::{Guidance, Strategy},
     policy, relic,
     solver::{check_against_exhaustive, solve},
@@ -28,6 +28,9 @@ fn main() {
             Ok((rooms, cells, faults)) => {
                 println!("PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms={rooms}|played_cells={cells}|omega_centers=120|geometry=1_6_12_8|shadow=EXACT|fischer_play=EXACT|json=0");
                 println!("PNP_NATIVE_TRIAD|worker=PASS|reflection=PASS|matrix_fabric=PASS|nest=3_9_27_81|planted_faults_rejected={faults}|operator_approval=HELD|json=0");
+                let (balanced, coordinated, triples) = certify_exact_witness()
+                    .map_err(str::to_owned)?;
+                println!("PNP_NATIVE_WITNESS|ordered_triples={triples}|balanced_faults_rejected={balanced}|coordinated_reports_rejected={coordinated}|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0");
                 println!("PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|source_frozen=PASS|nodes_runtime=0|json_runtime=0|v8_runtime=0|status=PASS|json=0");
                 Ok(())
             }
