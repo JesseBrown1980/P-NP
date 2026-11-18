@@ -1,0 +1,76 @@
+name: "P-NP fourth structural engine — 61 blind tests and 42 baseline replays"
+on:
+  pull_request:
+    paths:
+      - "experiments/fourth/**"
+      - ".github/workflows/fourth-engine.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  run-fourth-and-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Pin unmodified three incumbent source implementations
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/fourth/engine.py experiments/fourth/fixtures.py
+          python3 -m py_compile experiments/fourth/*.py
+          echo 'FOURTH_PROVENANCE|original_yangmills=PASS|historical_fischer=PASS|source_ast=PASS'
+      - name: Run 61 fourth-engine inputs and replay all 42 incumbent cases
+        run: |
+          set -euo pipefail
+          mkdir -p build/fourth
+          python3 -s -B experiments/fourth/sweep.py build/fourth | tee build/fourth/EXECUTION.hbp
+          grep -Fq 'FOURTH_CONTEST_FINAL|new_engine_fixtures=61|replayed_originals_per_arm=14|old_arms=3|baseline_replays=42|total_executions=103|status=PASS' build/fourth/EXECUTION.hbp
+          test "$(find build/fourth/receipts -name '*.txt' -type f | wc -l)" -eq 61
+          test "$(find build/fourth/baseline -name '*.txt' -type f | wc -l)" -eq 42
+      - name: Independently verify all 61 source-blind Hall/XOR/fallback receipts
+        run: |
+          set -euo pipefail
+          python3 -I -B experiments/fourth/verify.py build/fourth | tee build/fourth/INDEPENDENT.hbp
+          grep -Fq 'FOURTH_REFEREE_FINAL|original=14|permuted=42|adversarial=5|total=61|original_exact=14|metamorphic_exact=42|independent_proofs=56|fallback_controls=5|status=PASS' build/fourth/INDEPENDENT.hbp
+      - name: Check exact same original CNFs against all three old competitors
+        run: |
+          set -euo pipefail
+          python3 -I -B experiments/fourth/compare.py build/fourth | tee build/fourth/COMPARISON.hbp
+          grep -Fq 'FOURTH_COMPARISON_FINAL|baseline_arms=3|original_cases=14|same_input_replays=42|baseline_complete_per_arm=11|new_complete=14|new_search_nodes=0|' build/fourth/COMPARISON.hbp
+          mkdir -p build/fourth/source
+          cp experiments/fourth/*.py build/fourth/source/
+          cp .github/workflows/fourth-engine.yml build/fourth/source/
+          ( cd build/fourth && find fixtures receipts baseline source -type f -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256 )
+          ( cd build/fourth && sha256sum EXECUTION.hbp INDEPENDENT.hbp COMPARISON.hbp >> MANIFEST.sha256 )
+          ( cd build/fourth && sha256sum -c MANIFEST.sha256 > /dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pnp-fourth-structural-61-blind-42-incumbents
+          path: build/fourth/
+          retention-days: 90
+          if-no-files-found: error
+  published-independent-evidence:
+    needs: run-fourth-and-compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-fourth-structural-61-blind-42-incumbents
+          path: evidence
+      - name: Verify actual published source and receipt checksums
+        run: |
+          set -euo pipefail
+          cd evidence
+          test -s MANIFEST.sha256
+          test -s INDEPENDENT.hbp
+          test -s COMPARISON.hbp
+          test "$(find receipts -name '*.txt' | wc -l)" -eq 61
+          test "$(find baseline -name '*.txt' | wc -l)" -eq 42
+          grep -Fq 'FOURTH_REFEREE_FINAL|original=14|permuted=42|adversarial=5|total=61|' INDEPENDENT.hbp
+          grep -Fq 'FOURTH_COMPARISON_FINAL|baseline_arms=3|original_cases=14|same_input_replays=42|' COMPARISON.hbp
+          sha256sum -c MANIFEST.sha256 > /dev/null
+          echo 'FOURTH_ARCHIVE|original_blind=14|permuted=42|adversarial=5|baselines=42|sha=PASS|status=PASS'

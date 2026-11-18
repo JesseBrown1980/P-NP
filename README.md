@@ -69,3 +69,9 @@ The [source-frozen six-contender hard SAT benchmark](docs/HARD_SAT_SIX_WAY_20261
 ## 84-case six-competitor SAT array
 
 The [accepted 14-input × six-arm research array](docs/SAT_ARRAY_84_RESULTS_20261117.md) reproduces 84 source-identical SAT runs across original Yang–Mills Fischer, new Pohlig–Hellman-guided Rime, byte-original historical ASOLARIA Rime, MiniSat, CaDiCaL and PicoSAT. All six arms completed 11/14 decisions, with three declared HOLDs each. The modern and historical PH variants used fewer search nodes on medium UNSAT pigeonhole tests; Yang–Mills used fewer on larger satisfiable controls. The parity-aware research engines certified four Tseitin contradictions at zero search nodes. Independent acceptance verified all 84 original sources, SAT witnesses, eight CaDiCaL DRAT proofs and 20 corrupted-witness controls. [Hosted final run #44208774230](https://github.com/JesseBrown1980/P-NP/actions/runs/44208774230).
+
+## Fourth engine: structure-aware Hall + XOR + fallback
+
+A [new fourth SAT research contender (HXF-1)](experiments/fourth/README.md) now independently recognizes mutually-exclusive slot/requirement structures and certifies Hall UNSAT or constructs SAT matching witnesses, recognizes parity groups and produces exact source-row XOR contradiction certificates, and falls back to bounded general-CNF DPLL.
+
+In a source-identical 14-case head-to-head with all three previously archived Fischer research engines, HXF-1 completed **14/14** with zero search nodes; each original engine completed **11/14** at its 2,000-node ceiling. Independent tests accepted 42 blind variable-and-clause-reordered variants and five near-miss fallback controls. The three original research engines and historical code are unchanged. [Hosted accepted run #44210600049](https://github.com/JesseBrown1980/P-NP/actions/runs/44210600049). General P versus NP remains open.
