@@ -10,6 +10,14 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Historical GNN/FNN source authentication — HBI/HBP/SHA/SH/HASH (November 18, 2026)
+
+The next native phase [PR #30](https://github.com/JesseBrown1980/P-NP/pull/30) establishes the original trained-model provenance gate using the Asolaria seal **HBI → HBP → SHA → SH → HASH**. The [source-pin HBI](policy/TRAINED_SOURCE_PINS.hbi) identifies **23 pinned original files** in the trained-GNN and Shannon-stage repositories, including all **nine published .pt checkpoints**. The Rust 1.81 [native source protocol](native/TRAINED_SOURCE_PROTOCOL.md) builds reproducible HBI/HBP receipt bundles, computes SHA-256 over the actual original bytes, validates Git blob/source identities, carries compact SH fingerprints and links every row into a verifiable HASH chain.
+
+The initial hosted test, [run #44279556309](https://github.com/JesseBrown1980/P-NP/actions/runs/44279556309), passed native Rust tests, zero-warning Clippy, the original v1/v2 GSLGNN checkpoint SHA-256 checks, repeated byte-identical HBI/HBP receipts, four adversarial corruption controls, and independent archive verification. The native inference equivalence and unavailable private training material retain their source-defined HOLD statuses until separately verified; raw checkpoints are never executed in the accepted runtime.
+
+---
+
 ## Exact ternary matrix witness (November 18, 2026)
 
 [Phase-2 PR #29](https://github.com/JesseBrown1980/P-NP/pull/29) extends the native matrix third seat from aggregate comparison to **ordered, exact per-address reconstruction** using nine reversible `(S,d0,d1)` witness triples per 27-cell room. It preserves the 3/9/27/81 nested cascade and validates **1,080 triples** across 120 rooms. The new negative controls reject **42 balanced, sum-preserving ±1 faults** and **14 coordinated worker/reflection report faults**, alongside the original **42 single-report tests**. This redundancy is intentional verification storage, with original-source hashes and archived receipts supplying provenance.
