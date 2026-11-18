@@ -28,6 +28,7 @@ pub mod ternary;
 pub mod tls_memory;
 pub mod tls_stochastic;
 pub mod tls_omnibit_gc;
+pub mod tls_entropy_omnibit;
 pub mod triad;
 pub mod wave;
 
