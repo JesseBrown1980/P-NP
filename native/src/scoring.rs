@@ -100,9 +100,13 @@ fn cases(source: &str) -> Result<Vec<Case>, String> {
         let pid = decode_hex(field(&f, "pid_hex")?)?;
         let content = decode_hex(field(&f, "content_hex")?)?;
         let out = sha_baseline(&pid, &content);
-        if field(&f, "baseline_q")? != out.score_q10000.to_string()
-            || field(&f, "reverse_q")? != out.reverse_risk_q10000.to_string()
-            || field(&f, "mark")? != if out.promoted { "GENIUS" } else { "MISTAKE" }
+        let expected_baseline = field(&f, "baseline_q")?;
+        let expected_reverse = field(&f, "reverse_q")?;
+        let expected_mark = field(&f, "mark")?;
+        if (expected_baseline != "none" && expected_baseline != out.score_q10000.to_string())
+            || (expected_reverse != "none" && expected_reverse != out.reverse_risk_q10000.to_string())
+            || (expected_mark != "none"
+                && expected_mark != if out.promoted { "GENIUS" } else { "MISTAKE" })
         {
             return Err(format!("golden reference comparison failed at {id}"));
         }
@@ -236,6 +240,19 @@ mod tests {
         assert!(cases(&source.replace("mark=GENIUS", "mark=MISTAKE")).is_err());
         assert!(cases(&(source.to_owned() + &source[HEADER_INPUT.len()..])).is_err());
         assert!(cases(&source.replace("pid_hex=6167", "pid_hex=xx67")).is_err());
+    }
+
+    #[test]
+    fn new_unseen_source_inputs_are_scored_without_oracle_outputs() {
+        let source = format!(
+            "{HEADER_INPUT}CASE|id=unseen|pid_hex=6162|content_hex=630a|baseline_q=none|reverse_q=none|mark=none|json=0\\n"
+        ).replace("\\n", "\n");
+        let records = cases(&source).expect("unseen input");
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].pid, "ab");
+        assert_eq!(records[0].content, "c\n");
+        let calculated = sha_baseline(&records[0].pid, &records[0].content);
+        assert!(calculated.score_q10000 <= 9990);
     }
 
     #[test]
