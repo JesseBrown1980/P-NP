@@ -139,6 +139,25 @@ jobs:
           xz -dc "$root/master-key/masterkey.xz" > "$root/master-key/key.raw"
           test "$(wc -c < "$root/master-key/key.raw")" -eq 33554432
           echo 'CONSTELLATION_SOURCE|kernels=2_DISTINCT|constellation_key=3174|master_xz=549112|master_raw=33554432|small_gguf=4908|original_source=GIT_PINNED|sha256=PASS|json=0'
+      - name: Play published four-axes Rime GGUF from disk with three exact CPU paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/constellation"
+          native/target/release/pnp-native rime-disk-attest "$root/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf" | tee "$root/RIME_DISK.hbp"
+          grep -Fq 'PNP_RIME_DISK|source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735|' "$root/RIME_DISK.hbp"
+          grep -Fq '|tensors=24|glyphs=27|rime_pairs=12|compared=324|shadow_cubes=24|anchors_per_cube=8|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0' "$root/RIME_DISK.hbp"
+      - name: Benchmark direct CPU, Fischer, GGUF disk, and Pump-Funnel HTTP-0 on identical verified SAT instances
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/constellation"
+          native/target/release/pnp-native rime-sat-bench "$root/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf" 5 | tee "$root/RIME_SAT_BENCH.hbp"
+          grep -Fq 'PNP_RIME_SAT_BENCH|schema=v1|source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735|cases=24|sat=11|unsat=13|rounds=5|rime_pairs=324|shadow_cubes=24|' "$root/RIME_SAT_BENCH.hbp"
+          for arm in DIRECT_BASE FISCHER FROZEN_DISK PUMP_FUNNEL_HTTP0 PUMP_FUNNEL_BATCHED_HTTP0; do
+            grep -Fq "PNP_RIME_SAT_ARM|arm=$arm|" "$root/RIME_SAT_BENCH.hbp"
+          done
+          grep -Fq 'PNP_RIME_SAT_ACCEPT|same_cases=PASS|sat_model=PASS|unsat_exhaustive=PASS|three_path_consensus=PASS|source_after=PASS|speed_status=MEASURED|p_np_status=OPEN|json=0' "$root/RIME_SAT_BENCH.hbp"
       - name: Use original 256-outcome Rust decoder with real master table
         shell: bash
         run: |

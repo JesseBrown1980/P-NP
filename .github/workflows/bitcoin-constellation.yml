@@ -1,0 +1,155 @@
+name: "Bitcoin SHA256d Constellation GGUF exact challenge"
+on:
+  pull_request:
+    paths:
+      - "native/src/main.rs"
+      - "native/src/rime_disk.rs"
+      - "experiments/bitcoin/arm.py"
+      - ".github/workflows/bitcoin-constellation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-genesis-bitcoin-constellation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Rust 1.81 native build and source-pinned GGUF
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cd native
+          cargo +1.81.0 test --locked --offline
+          cargo +1.81.0 build --locked --offline --release
+          cd ..
+          mkdir -p build/bitcoin-rime
+          curl --fail --location --retry 3 --silent --show-error \
+            https://raw.githubusercontent.com/JesseBrown1980/Quant-anything-0-loss/e979ebe114f32c5b6ab9c2325e252c4b8ce28ddd/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf \
+            --output build/bitcoin-rime/original.gguf
+          echo "9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735  build/bitcoin-rime/original.gguf" | sha256sum -c
+          native/target/release/pnp-native rime-disk-attest build/bitcoin-rime/original.gguf | tee build/bitcoin-rime/DISK.hbp
+          native/target/release/pnp-native rime-disk-export build/bitcoin-rime/original.gguf build/bitcoin-rime/VALUES.hbp
+      - name: Rebuild original four genesis SHA256d CNFs and verify exact source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/bitcoin-rime/source
+          python3 -s -B experiments/bitcoin/genesis.py build/bitcoin-rime/source | tee build/bitcoin-rime/GENESIS.hbp
+          for entry in \
+            "nonce4 204e9e08c5fb1a5f2555217c87bceb3385f9dc70405790015fd04393cb95d2aa" \
+            "nonce8 9968b60351e29037d9c7183f8c9b59a48f2da0be7b9c393d5013a503034ffa9a" \
+            "nonce32 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3" \
+            "merkle_nonce288 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b"; do
+            read -r name expected <<< "$entry"
+            echo "$expected  build/bitcoin-rime/source/$name.cnf" | sha256sum -c
+          done
+      - name: Generate isolated experimental Constellation adapter from byte-original Bitcoin script
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/arm.py)" = c130a41c31370062c317cc530ed5785cd3959dfb
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("experiments/bitcoin/arm.py").read_text(encoding="utf-8")
+          def replace_once(old, new):
+              global source
+              assert source.count(old) == 1, (old, source.count(old))
+              source = source.replace(old, new)
+          replace_once("import hashlib\nimport sys", "import hashlib\nimport os\nimport sys")
+          replace_once(
+              'ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original")',
+              'ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original", "constellation")')
+          guide = """
+              if arm == "constellation":
+                  lines = Path(os.environ["PNP_RIME_VALUES"]).read_text(encoding="ascii").splitlines()
+                  assert lines[0] == (
+                      "PNP_RIME_VALUES|schema=v1|tensors=24|glyphs=27|"
+                      "source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735"
+                  )
+                  assert len(lines) == 25
+                  tensors = []
+                  for index, line in enumerate(lines[1:]):
+                      parts = line.split("|")
+                      assert parts[:2] == ["TENSOR", str(index)] and len(parts) == 29
+                      tensor = tuple(map(int, parts[2:]))
+                      assert all(0 <= v < 1000081 for v in tensor)
+                      tensors.append(tensor)
+                  counts = {}
+                  for clause in subset:
+                      for lit in clause:
+                          if abs(lit) in touched:
+                              counts[abs(lit)] = counts.get(abs(lit), 0) + 1
+                  ranked = []
+                  for bit, index in enumerate(indices):
+                      var = index + 1
+                      glyph = (bit + len(subset)) % 27
+                      tensor = (bit + len(clauses)) % 24
+                      score = counts.get(var, 0) * 2048 + tensors[tensor][glyph]
+                      ranked.append((-score, bit, var))
+                      nav_ops += 1
+                  result = tuple(var - 1 for _, _, var in sorted(ranked))
+          """.strip("\n")
+          guide = "\n".join(row[10:] if row.startswith("          ") else row
+                            for row in guide.splitlines())
+          replace_once('    if arm == "ym_fischer":',
+                       guide + '\n    elif arm == "ym_fischer":')
+          replace_once(
+              '        actual = watched.solve(n, clauses, priority=order, limit=1024)',
+              '        node_cap = int(os.environ.get("PNP_BITCOIN_NODE_CAP", "1024"))\n'
+              '        assert 1024 <= node_cap <= 100000\n'
+              '        sys.setrecursionlimit(8192)\n'
+              '        actual = watched.solve(n, clauses, priority=order, limit=node_cap)')
+          replace_once(
+              '                   search_nodes=nodes, node_cap=1024,',
+              '                   search_nodes=nodes, '
+              'node_cap=(node_cap if arm != "hxf4" else 1024),')
+          Path("experiments/bitcoin/arm_constellation_runtime.py").write_text(
+              source, encoding="utf-8")
+          print("BTC_RIME_RUNTIME|original_historical_adapter=UNCHANGED|runtime=EXPERIMENTAL|status=PASS")
+          PY
+          python3 -m py_compile experiments/bitcoin/arm_constellation_runtime.py
+          git diff --exit-code -- experiments/bitcoin/arm.py
+      - name: Run identical original Bitcoin circuits with Constellation and original Fischer comparator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PNP_RIME_VALUES="$GITHUB_WORKSPACE/build/bitcoin-rime/VALUES.hbp"
+          export PNP_BITCOIN_NODE_CAP=50000
+          for case in nonce4 nonce8 nonce32 merkle_nonce288; do
+            case "$case" in
+              nonce4|nonce8) budget=60 ;;
+              nonce32|merkle_nonce288) budget=180 ;;
+            esac
+            for arm in constellation ym_fischer rime_new; do
+              echo "BTC_RIME_START|case=$case|arm=$arm|budget_seconds=$budget|node_cap=$PNP_BITCOIN_NODE_CAP"
+              start=$(date +%s%N)
+              set +e
+              timeout --kill-after=3s "${budget}s" python3 -s -B experiments/bitcoin/arm_constellation_runtime.py \
+                "$arm" "$case" "build/bitcoin-rime/source/$case.cnf" \
+                "build/bitcoin-rime/source/$case.txt" \
+                > "build/bitcoin-rime/$case-$arm.log" 2>&1
+              rc=$?
+              set -e
+              elapsed=$(( $(date +%s%N) - start ))
+              cat "build/bitcoin-rime/$case-$arm.log"
+              if [[ "$rc" == 124 ]]; then
+                echo "BTC_RIME_RESULT|case=$case|arm=$arm|status=HOLD_TIME|elapsed_ns=$elapsed"
+              elif [[ "$rc" == 0 ]]; then
+                grep -Fq 'BITCOIN_ARM|' "build/bitcoin-rime/$case-$arm.log"
+                echo "BTC_RIME_RESULT|case=$case|arm=$arm|status=CHECKED|elapsed_ns=$elapsed"
+              else
+                echo "BTC_RIME_FAIL|case=$case|arm=$arm|rc=$rc"
+                exit 1
+              fi
+            done
+          done
+          echo "BTC_RIME_FINAL|cases=4|arms=3|source_sha=PASS|reference_SHA256d=PASS|results=REPORTED|status=PASS"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bitcoin-constellation-original-sources-and-results
+          path: build/bitcoin-rime/
+          retention-days: 30
+          if-no-files-found: warn

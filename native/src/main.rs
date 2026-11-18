@@ -14,6 +14,63 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let result: Result<(), String> = (|| {
         match arguments.next().as_deref() {
+        Some("rime-disk-export") => {
+            let path = arguments.next().ok_or("missing source GGUF")?;
+            let output = arguments.next().ok_or("missing export path")?;
+            if arguments.next().is_some() {
+                return_fail("too many Rime export arguments");
+            }
+            let disk = pnp_native::rime_disk::DiskRime::open_four_axes(Path::new(&path))?;
+            let mut content = String::from("PNP_RIME_VALUES|schema=v1|tensors=24|glyphs=27|source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735\n");
+            for tensor in 0..disk.tensor_count() {
+                let mut row = format!("TENSOR|{tensor}");
+                for glyph in 0..27 {
+                    let address = pnp_native::rime_disk::request(tensor as u8, glyph as u8)?;
+                    let point = u64::from_le_bytes(address[3..11].try_into()
+                        .map_err(|_| "address width")?);
+                    let value = disk.read(tensor, glyph, point)?;
+                    row.push_str(&format!("|{value}"));
+                }
+                content.push_str(&row);
+                content.push('\n');
+            }
+            disk.verify_source()?;
+            std::fs::write(output, content).map_err(|e| e.to_string())?;
+            println!("PNP_RIME_EXPORT|tensors=24|glyphs=27|values=648|source=PASS|status=PASS|json=0");
+            Ok(())
+        },
+        Some("rime-sat-bench") => {
+            let path = arguments.next().ok_or("missing source-pinned four-axes GGUF")?;
+            let rounds = arguments.next().unwrap_or_else(|| "5".to_owned())
+                .parse::<usize>().map_err(|_| "invalid benchmark rounds")?;
+            if arguments.next().is_some() {
+                return_fail("too many SAT benchmark arguments");
+            }
+            for line in pnp_native::rime_sat_bench::run(Path::new(&path), rounds)? {
+                println!("{line}");
+            }
+            Ok(())
+        },
+        Some("rime-disk-attest") => {
+            let path = arguments.next().ok_or("missing original four-axes GGUF path")?;
+            if arguments.next().is_some() {
+                return_fail("too many disk-play arguments");
+            }
+            let store = pnp_native::rime_disk::DiskRime::open_four_axes(Path::new(&path))?;
+            let comparisons = store.verify_three_paths()?;
+            let shadow_cubes = store.verify_cube_shadows()?;
+            let address = pnp_native::freeze::fischer_address(0, 0)
+                .ok_or("Fischer zero address missing")?;
+            let direct = store.read(0, 0, address)?;
+            let remote = pnp_native::rime_disk::loopback_once(&store, 0, 0)?;
+            if direct != remote { return_fail("HTTP-0 loopback differs from direct disk read"); }
+            store.verify_source()?;
+            println!("PNP_RIME_DISK|source_sha256={}|bytes={}|tensors={}|glyphs=27|rime_pairs={}|compared={}|shadow_cubes={}|anchors_per_cube=8|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0",
+                pnp_native::rime_disk::FOUR_AXES_SHA256,
+                pnp_native::rime_disk::FOUR_AXES_BYTES,
+                store.tensor_count(), comparisons / 27, comparisons, shadow_cubes);
+            Ok(())
+        },
         Some("audit") => {
             let directory = arguments.next().unwrap_or_else(|| ".".to_owned());
             match policy::check_repository(Path::new(&directory)) {
