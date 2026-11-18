@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc, gc_archive,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -39,6 +39,34 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
+        Some("gulp-discard") => {
+            let gac = arguments.next().ok_or("missing frozen GAC source")?;
+            let neural = arguments.next().ok_or("missing frozen neural source")?;
+            let omni = arguments.next().ok_or("missing frozen GULP source")?;
+            let out = arguments.next().ok_or("missing owned GULP receipt directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many GULP discard arguments");
+            }
+            let count = gulp_gc::run(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out),
+            )?;
+            println!("PNP_GULP_GC|events={count}|grouping=KIND_GLYPH|summary=COMMITTED|raw_owned=DELETED|source_archive=PRESERVED|manual_approval=NOT_REQUIRED|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("gulp-discard-verify") => {
+            let gac = arguments.next().ok_or("missing frozen GAC source")?;
+            let neural = arguments.next().ok_or("missing frozen neural source")?;
+            let omni = arguments.next().ok_or("missing frozen GULP source")?;
+            let out = arguments.next().ok_or("missing GULP commitment archive")?;
+            if arguments.next().is_some() {
+                return_fail("too many GULP verifier arguments");
+            }
+            let count = gulp_gc::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out),
+            )?;
+            println!("PNP_GULP_GC_VERIFY|events={count}|raw_owned=ABSENT|patterns=RETAINED|source_archive=PRESERVED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
         Some("gc-archive-attest") => {
             let gac = arguments.next().ok_or("missing original GAC source")?;
             let neural = arguments.next().ok_or("missing original neural fabric source")?;
@@ -280,7 +308,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
