@@ -709,6 +709,19 @@ mod tests {
 }
 
 
+/// Expose the four exact frozen segments with their original train/validation
+/// boundary. The full-fabric temporal gate must never fit or select on heldout
+/// or shuffled labels, and never regenerate the source event streams.
+pub(crate) type TemporalSourceCase=(u8,u8,Vec<u8>,Vec<u8>,Vec<u8>,Vec<u8>);
+
+pub(crate) fn source_temporal_cases(source:&[u8])
+    ->Result<Vec<TemporalSourceCase>,String>
+{
+    cases(source).map(|cases|cases.into_iter()
+        .map(|case|(case.mode,case.rep,case.train,case.valid,case.held,case.shuffle))
+        .collect())
+}
+
 /// Historical PR45 source format, ordered canonically; used to give the new
 /// frame benchmark the exact same 18 streams without a second generator.
 pub(crate) type SourceEventFrame = (u8, u8, u8, Vec<u8>);
