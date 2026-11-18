@@ -10,6 +10,7 @@ pub mod guidance;
 pub mod matrix;
 pub mod policy;
 pub mod relic;
+pub mod prism;
 pub mod scoring;
 pub mod sha256;
 pub mod source;
