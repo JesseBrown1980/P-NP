@@ -1,0 +1,8 @@
+HBIHEADER|schema=pnp.tls.stochastic.corpus.v1|source_doi=10.1103/j1r2-5ph7|scope=SYNTHETIC_PRECOMMITTED|json=0
+TLS_RANDOM|prng=XORSHIFT32|seed_base=0x7251AB19|seed_step=0x9E3779B9|train_xor=0x00000000|validation_xor=0xABCDEF33|test_xor=0xDEADBEEF|shuffle_xor=0xABC13579|json=0
+TLS_SAMPLE|train=8000|validation=4000|heldout=8000|repetitions=3|scenarios=IID_NULL,ONE_TLS,THREE_TLS|json=0
+TLS_GENERATOR|mode=IID_NULL|probability_q10000=4500|hidden_cells=0|json=0
+TLS_GENERATOR|mode=ONE_TLS|probability_low=800|probability_high=8300|flip_q10000=800|hidden_cells=1|json=0
+TLS_GENERATOR|mode=THREE_TLS|probability_base=1000|probability_per_active_cell=2500|flip_rates_q10000=200,500,900|hidden_cells=3|json=0
+TLS_PREDICTOR|capacities=0,1,3,27,81|zero=CONSTANT_TRAINED_RATE|one=TRAINED_EMA_ONE_SCALAR|three=LAST_TWO_EVENTS_TERNARY|twentyseven=THREE_OVERLAPPING_PAIR_TRITS|eightyone=FOUR_OVERLAPPING_PAIR_TRITS|unseen_smoothing=TRAINED_GLOBAL_PRIOR|json=0
+TLS_SELECTION|criterion=MIN_VALIDATION_BRIER_PLUS_FIXED_COMPLEXITY_PENALTY|penalty_per_model_index=500000000|heldout_labels=NEVER_TRAINED|shuffled_heldout=FISHER_YATES_COUNT_PRESERVING|json=0
