@@ -25,6 +25,7 @@ pub mod sha256;
 pub mod source;
 pub mod solver;
 pub mod ternary;
+pub mod tls_memory;
 pub mod triad;
 pub mod wave;
 
