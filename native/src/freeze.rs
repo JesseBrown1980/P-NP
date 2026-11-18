@@ -127,7 +127,7 @@ mod tests {
                 for cell in 0..CELLS {
                     let played = snapshot.play(room, cell).expect("addressed");
                     assert_eq!(played.value, source.room(room).expect("room")[cell]);
-                    assert_eq!(played.address,
+                    assert_eq!(Some(played.address),
                         fischer_address(u64::try_from(cell).expect("cell"),
                                         u64::try_from(room).expect("room")));
                 }
