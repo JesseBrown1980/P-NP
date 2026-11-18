@@ -55,10 +55,8 @@ fn fabric(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<i128> {
     for room in start..stop {
         let projection = frozen.projection(room)?;
         // The third seat consults the matrix's frozen 2D shadow.
-        for x in 0..3 {
-            for y in 0..3 {
-                total += projection[x + 3 * y];
-            }
+        for value in projection {
+            total += *value;
         }
     }
     Some(total)
@@ -71,7 +69,7 @@ fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
     }
     let mut children = Vec::new();
     if stop - start > 1 {
-        if !(stop - start) % 3 == 0 {
+        if (stop - start) % 3 != 0 {
             return None;
         }
         let stride = (stop - start) / 3;
