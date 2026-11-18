@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use crate::freeze::fischer_address;
+use crate::matrix_floor_wire;
 
 const PRIME: u64 = 1_000_081;
 const GENERATOR: u64 = 7;
@@ -95,6 +96,23 @@ struct Service{
     memo:Memo,
 }
 impl Service{
+    fn calculate_floor(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        let parts:Vec<&str>=route.split('/').collect();
+        if parts.len()!=5 || parts[0]!="" || parts[1]!="matrix"{
+            return Err("invalid integrated matrix route".into());
+        }
+        let arity=parts[2].parse::<usize>().map_err(|_|"matrix arity malformed")?;
+        let lane=parts[3].parse::<usize>().map_err(|_|"matrix lane malformed")?;
+        let address=parts[4].parse::<u64>().map_err(|_|"matrix address malformed")?;
+        if !matches!(arity,3|27|81) || lane>=arity || address!=address_for(lane){
+            return Err("matrix Fischer address invalid".into());
+        }
+        let (task,_,_)=matrix_floor_wire::decode(body)?;
+        if lane!=usize::from(task.id)%arity{
+            return Err("matrix/source room route drift".into());
+        }
+        self.calculate(&format!("/compute/2/{arity}/{lane}/{address}"),&task.encode())
+    }
     fn calculate(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
         let parts:Vec<&str>=route.split('/').collect();
         if parts.len()!=6 || !parts[0].is_empty() || parts[1]!="compute"{
@@ -162,7 +180,7 @@ fn receive(socket:&mut TcpStream)->Result<(String,Vec<u8>),String>{
     }
     if !ended{return Err("unterminated HTTP-0 headers".into());}
     let length=content_length.ok_or("missing content length")?;
-    if length>WIRE_SIZE{return Err("compute request size exceeded".into());}
+    if length>matrix_floor_wire::BYTES.max(WIRE_SIZE){return Err("compute request size exceeded".into());}
     let mut message=vec![0_u8;length];
     reader.read_exact(&mut message).map_err(|e|e.to_string())?;
     Ok((route,message))
@@ -189,7 +207,10 @@ pub fn serve()->Result<(),String>{
                 break;
             }
             Ok((route,body))=>{
-                match service.calculate(&route,&body){
+                let calculation=if route.starts_with("/matrix/"){
+                    service.calculate_floor(&route,&body)
+                }else{service.calculate(&route,&body)};
+                match calculation{
                     Ok(out)=>reply(&mut socket,"200 OK",&out)?,
                     Err(message)=>reply(&mut socket,"422 Unprocessable Content",message.as_bytes())?,
                 }
@@ -245,6 +266,56 @@ impl Client{
         reader.read_to_end(&mut extra).map_err(|e|e.to_string())?;
         if !extra.is_empty(){return Err("compute extra response body".into());}
         Ok((status,data))
+    }
+    pub fn execute_floor(&self,arity:usize,task:&Task,floor:u8,operator:u8)
+        ->Result<ResultFrame,String>{
+        let lane=usize::from(task.id)%arity;
+        let address=fischer_address((lane%27) as u64,(lane/27) as u64)
+            .ok_or("integrated source Fischer address invalid")?;
+        let frame=matrix_floor_wire::encode(task,floor,operator)?;
+        let (status,bytes)=self.call(&format!("/matrix/{arity}/{lane}/{address}"),&frame)?;
+        if status!="HTTP/1.1 200 OK\r\n"{
+            return Err(format!("matrix floor rejected: {}",String::from_utf8_lossy(&bytes)));
+        }
+        if bytes.len()!=1+OUTPUT_SIZE || bytes[0]>1{
+            return Err("matrix floor worker response invalid".into());
+        }
+        let mut values=[0_u64;CELLS];
+        for (i,v) in values.iter_mut().enumerate(){
+            *v=u64::from_le_bytes(bytes[i*8+1..i*8+9]
+                .try_into().map_err(|_|"matrix response width")?);
+            if *v>=PRIME{return Err("matrix output outside source prime".into());}
+        }
+        Ok(ResultFrame{values,hit:bytes[0]!=0})
+    }
+    pub fn floor_negatives(&self,arity:usize,task:&Task)->Result<usize,String>{
+        let lane=usize::from(task.id)%arity;
+        let address=fischer_address((lane%27) as u64,(lane/27) as u64)
+            .ok_or("negative matrix address")?;
+        let route=format!("/matrix/{arity}/{lane}/{address}");
+        let mut count=0;
+        let mut cases=Vec::new();
+        let mut reserved=matrix_floor_wire::encode(task,0,0)?;
+        reserved[13..15].copy_from_slice(&63_u16.to_le_bytes());
+        cases.push((route.clone(),reserved));
+        let mut bad_op=matrix_floor_wire::encode(task,1,0)?;
+        bad_op[11]=40;cases.push((route.clone(),bad_op));
+        let mut wrong_floor=matrix_floor_wire::encode(task,2,0)?;
+        wrong_floor[10]=4;cases.push((route.clone(),wrong_floor));
+        let mut suffix=matrix_floor_wire::encode(task,3,0)?;
+        suffix[51]^=1;cases.push((route.clone(),suffix));
+        let different=fischer_address(((lane+1)%arity%27)as u64,
+            (((lane+1)%arity)/27)as u64).ok_or("alternate Fischer address")?;
+        cases.push((format!("/matrix/{arity}/{lane}/{different}"),
+            matrix_floor_wire::encode(task,1,8)?));
+        for (path,body) in cases{
+            let (status,_)=self.call(&path,&body)?;
+            if status!="HTTP/1.1 422 Unprocessable Content\r\n"{
+                return Err("integrated false source/address/operator accepted".into());
+            }
+            count+=1;
+        }
+        Ok(count)
     }
     pub fn execute(&self,mode:u8,arity:usize,task:&Task,lane:usize)
         ->Result<ResultFrame,String>
