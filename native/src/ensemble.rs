@@ -28,7 +28,7 @@ fn fields(line: &str) -> Result<BTreeMap<&str, &str>, String> {
     }
     Ok(map)
 }
-fn field<'a>(map: &'a BTreeMap<&str, &str>, key: &str) -> Result<&'a str, String> {
+fn field<'a>(map: &BTreeMap<&'a str, &'a str>, key: &str) -> Result<&'a str, String> {
     map.get(key).copied().ok_or_else(|| format!("missing {key}"))
 }
 fn pin(id: &str, blob: &str) -> bool {
