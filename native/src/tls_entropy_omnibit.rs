@@ -711,8 +711,10 @@ mod tests {
 
 /// Historical PR45 source format, ordered canonically; used to give the new
 /// frame benchmark the exact same 18 streams without a second generator.
+pub(crate) type SourceEventFrame = (u8, u8, u8, Vec<u8>);
+
 pub(crate) fn source_event_frames(source: &[u8])
-    -> Result<Vec<(u8, u8, u8, Vec<u8>)>, String>
+    -> Result<Vec<SourceEventFrame>, String>
 {
     let mut out = Vec::with_capacity(18);
     for case in cases(source)? {
