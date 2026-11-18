@@ -26,6 +26,17 @@ fn main() {
                 Err(error) => Err(error),
             }
         }
+        Some("brown-ledger-attest") => {
+            if arguments.next().is_some() {
+                return_fail("Brown Ledger acceptance takes no arguments");
+            }
+            let result = pnp_native::brown_ledger::certify().map_err(str::to_owned)?;
+            println!("PNP_BROWN_LEDGER|schema=v1|rooms={}|verified_cells={}|raw_bytes={}|paid_slice_bytes={}|paid_delta_bytes={}|tamper_rejections={}|prism_floor_roundtrips={}|fischer_null_outward=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                result.rooms, result.checked_cells, result.source_bytes,
+                result.slice_bytes, result.delta_bytes, result.corruptions_rejected,
+                result.floor_roundtrips);
+            Ok(())
+        }
         Some("certify") => match certify_matrix_fabric() {
             Ok((rooms, cells, faults)) => {
                 println!("PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms={rooms}|played_cells={cells}|omega_centers=120|geometry=1_6_12_8|shadow=EXACT|fischer_play=EXACT|json=0");
