@@ -1,0 +1,11 @@
+HBIHEADER|schema=pnp.multignn.families.v1|seal=HBI-HBP-SHA-SH-HASH|source_bundle=23|json=0
+FAMILY|id=L0|name=EdgeLevelGNN|kind=trained_neural|origin_blob=510f78890ec94b113f0610afbade8bafe6ca20e0|model=baseline_model.pt|checkpoint_pin=model_base|status=HOLD_FORWARD|json=0
+FAMILY|id=L1|name=PrototypeGNN|kind=trained_neural|origin_blob=99e3087a10ee58e90c0935f5ab63b72fd3cdd07e|model=prototype_model.pt,prototype_model_run2.pt,prototype_model_run3.pt|checkpoint_pin=model_proto,model_proto_r2,model_proto_r3|status=HOLD_FORWARD|json=0
+FAMILY|id=L2|name=ContrastiveGNN|kind=trained_neural|origin_blob=56329e61eb3e6ddb3ee97b46f997dd8dd8c6b39f|model=contrastive_model.pt,contrastive_model_run2.pt,contrastive_model_run3.pt|checkpoint_pin=model_contrastive,model_contrastive_r2,model_contrastive_r3|status=HOLD_FORWARD|json=0
+FAMILY|id=L4|name=GSLGNN|kind=trained_neural|origin_blob=886b3b0c0cdbddba983fa8c3ae083c4520d38f0e|model=gslgnn_w9_3_seq47.pt,gslgnn_w9_3_seq47_v2.pt|checkpoint_pin=model_gsl_v1,model_gsl_v2|status=HOLD_FORWARD|json=0
+FAMILY|id=G1|name=EdgeMining|kind=deterministic_plane|origin_blob=482c6a9ebd21935ee2585820a97ecae57b42b4b8|model=none|checkpoint_pin=plane_edge|status=HOLD_JL_PARITY|json=0
+FAMILY|id=G2|name=ForwardGenius|kind=deterministic_plane|origin_blob=0b1673c52048c4c7212e8e9a0e2cabb33429b1bb|model=none|checkpoint_pin=plane_forward|status=HOLD_JL_PARITY|json=0
+FAMILY|id=G3|name=ReverseGain|kind=withheld_plane|origin_blob=none|model=none|checkpoint_pin=none|status=HOLD_SOURCE|json=0
+FAMILY|id=G4|name=GLSM|kind=deterministic_plane|origin_blob=9006f5cca08fab56c906bb67237e17974090cfe8|model=none|checkpoint_pin=plane_glsm|status=SOURCE_PORT_TEST|json=0
+FAMILY|id=SHANNON|name=OmniShannon|kind=deterministic_score|origin_blob=b101c0989de3af0ca41db0eac1293c758d7e5296|model=none|checkpoint_pin=stage_score|status=HOLD_ENTROPY_PARITY|json=0
+FAMILY|id=SHA|name=SHA_Baseline|kind=deterministic_score|origin_blob=b101c0989de3af0ca41db0eac1293c758d7e5296|model=none|checkpoint_pin=stage_score|status=ACCEPTED_PR31|json=0
