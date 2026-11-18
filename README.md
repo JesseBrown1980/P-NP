@@ -10,6 +10,14 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Exact COMB/PRISM matrix translation — BEHCS-256 ⇄ BEHCS-1024 (November 18, 2026)
+
+The next native [Q-PRISM source gate](native/PRISM_256_1024_PROTOCOL.md) restores the historical lossless, 40-bit matrix translation from [Q-PRISM Host-8](https://github.com/JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control/blob/b4a21a25381d6920b7aab92c94c3c3e1420fc9e4/host8/qprism_cube_host8.rs). Every five BEHCS-256 bytes correspond to four 10-bit BEHCS-1024 glyph indices. For a 3,200-byte source cube the native result is exactly 2,560 symbols, with the **full original SHA-256 identical after inversion**.
+
+The Rust 1.81 implementation checks canonical padding, rejects unsupported glyphs, preserves the exact original byte count, exhaustively exercises all 65,536 two-byte values and tests the original 3,200-byte Q-PRISM cube with independently frozen source/glyph digests. It independently compiles the Git-pinned original Rust source as a research reference, and emits **HBI → HBP → SHA → SH → HASH** source-identified receipts and an anchored reverse witness. Representation-equivalence, GAC authority and neural forward-inference are recorded as separate gates; the translator never starts an engine or rewrites a protected archive.
+
+---
+
 ## Neural-network fabric, GAC 60D tuples and Omni GC restoration (November 18, 2026)
 
 The original [Asolaria-as-a-neural-network law](https://github.com/JesseBrown1980/ASOLARIA-AS-NEURAL-NETWORK/blob/4cc7624fb51ff8a64051ace7a1ff62edaa51d422/canon/laws/LAW-ASOLARIA-NEURAL-NETWORK.md) identifies the network as the combined live matrix, rooms, agent/supervisor routing, GNN edges, nine-stage flywheel, reflective correction, cubes, stored evidence and frozen/borrowed neural slices. The neural-network architecture therefore includes more than the nine authenticated `.pt` checkpoints. Its [slice-engine law](https://github.com/JesseBrown1980/ASOLARIA-AS-NEURAL-NETWORK/blob/4cc7624fb51ff8a64051ace7a1ff62edaa51d422/canon/laws/LAW-SLICE-ENGINE.md) distinguishes an existing address from an executing worker.
