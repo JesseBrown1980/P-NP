@@ -106,7 +106,7 @@ def get_order(arm, clauses, n, nonce_bits):
             ranked.append((-score, bit, var))
             nav_ops += 1
         result = tuple(var - 1 for _, _, var in sorted(ranked))
-    if arm == "ym_fischer":
+    elif arm == "ym_fischer":
         meter = {"fischer_literal_scores": 0}
         result = original_engine.branch_order(
             indices, subset, expr, meter, "fischer")
@@ -181,7 +181,12 @@ def main(arm, case, cnf_file, description_file):
     else:
         order, native_nav_ops, native_nav_ns = get_order(
             arm, clauses, n, free_bits)
-        actual = watched.solve(n, clauses, priority=order, limit=1024)
+        node_cap = int(os.getenv("PNP_BITCOIN_NODE_CAP", "1024"))
+        assert 1024 <= node_cap <= 100000
+        # Permit a larger but still bounded source-blind Boolean search.
+        # All comparisons use the same node budget and exact kernel.
+        sys.setrecursionlimit(8192)
+        actual = watched.solve(n, clauses, priority=order, limit=node_cap)
         status = actual["status"]
         nodes = actual["nodes"]
         checks = actual["literal_checks"]
@@ -220,7 +225,7 @@ def main(arm, case, cnf_file, description_file):
                    variables=n, clauses=len(clauses),
                    nonce_free_bits=manifest["nonce_free_bits"],
                    status=status, proof_kind=proof_kind,
-                   search_nodes=nodes, node_cap=1024,
+                   search_nodes=nodes, node_cap=(node_cap if arm != "hxf4" else 1024),
                    literal_checks=checks, phi_operations=native_nav_ops,
                    navigation_ns=native_nav_ns,
                    source_parse_ns=preprocess_ns,
