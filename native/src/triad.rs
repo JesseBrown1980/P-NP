@@ -3,6 +3,7 @@
 //! exact 2D projection. No trained GNN/FNN, live hotels, or solver is claimed.
 
 use crate::freeze::FrozenMatrix;
+use crate::matrix::CELLS;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Seat {
@@ -29,41 +30,72 @@ pub struct Verdict {
     pub held_for_operator: bool,
 }
 
-fn worker(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<i128> {
-    let mut total = 0_i128;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FaultMode {
+    Unit,
+    Balanced,
+    Coordinated,
+}
+
+// Each seat produces an ordered report over every original (room, cell)
+// address. Aggregates remain evidence metadata, not the acceptance criterion.
+fn worker(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<Vec<i128>> {
+    let mut values = Vec::with_capacity((stop - start).checked_mul(CELLS)?);
     for room in start..stop {
         for value in frozen.room(room)? {
-            total += i128::from(*value);
+            values.push(i128::from(*value));
         }
     }
-    Some(total)
+    Some(values)
 }
 
-fn reflection(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<i128> {
-    let mut total = 0_i128;
+fn reflection(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<Vec<i128>> {
+    let mut values = vec![0_i128; (stop - start).checked_mul(CELLS)?];
     for room in (start..stop).rev() {
-        let source = frozen.room(room)?;
-        for index in (0..source.len()).rev() {
-            total += i128::from(source[index]);
+        let original = frozen.room(room)?;
+        for cell in (0..CELLS).rev() {
+            values[(room - start) * CELLS + cell] = i128::from(original[cell]);
         }
     }
-    Some(total)
+    Some(values)
 }
 
-fn fabric(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<i128> {
-    let mut total = 0_i128;
+fn fabric(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<Vec<i128>> {
+    let mut values = vec![0_i128; (stop - start).checked_mul(CELLS)?];
     for room in start..stop {
-        let projection = frozen.projection(room)?;
-        // The third seat consults the matrix's frozen 2D shadow.
-        for value in projection {
-            total += *value;
+        for column in 0..9 {
+            // The matrix seat reads its separately frozen reversible
+            // center-and-signed-difference witness, not source raw cells.
+            let triple = frozen.reconstruct_triple(room, column)?;
+            for (depth, value) in triple.iter().enumerate() {
+                values[(room - start) * CELLS + column + 9 * depth] =
+                    i128::from(*value);
+            }
         }
     }
-    Some(total)
+    Some(values)
 }
 
-fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
-           level: usize, fault: Option<Fault>) -> Option<Verdict> {
+fn distort(values: &mut [i128], mode: FaultMode) -> Option<()> {
+    let first = values.get_mut(0)?;
+    *first = first.checked_add(1)?;
+    if mode == FaultMode::Balanced {
+        // The same (x,y) shadow column, opposite z layer: both the
+        // overall total and 2D projection sum remain identical.
+        let second = values.get_mut(9)?;
+        *second = second.checked_sub(1)?;
+    }
+    Some(())
+}
+
+fn inspect(
+    frozen: &FrozenMatrix,
+    start: usize,
+    stop: usize,
+    level: usize,
+    fault: Option<Fault>,
+    mode: FaultMode,
+) -> Option<Verdict> {
     if start >= stop || (level == 0 && !frozen.verify()) {
         return None;
     }
@@ -73,10 +105,11 @@ fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
             return None;
         }
         let stride = (stop - start) / 3;
-        for seat in 0..3 {
-            children.push(inspect(frozen, start + stride * seat,
-                                  start + stride * (seat + 1), level + 1,
-                                  fault)?);
+        for child in 0..3 {
+            children.push(inspect(
+                frozen, start + stride * child, start + stride * (child + 1),
+                level + 1, fault, mode,
+            )?);
         }
     }
     let mut work = worker(frozen, start, stop)?;
@@ -85,32 +118,53 @@ fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
     if start == 0 {
         if let Some(fault) = fault {
             if fault.level == level {
-                match fault.seat {
-                    Seat::Worker => work += 1,
-                    Seat::Reflection => reflected += 1,
-                    Seat::MatrixFabric => witnessed += 1,
+                match mode {
+                    FaultMode::Coordinated => {
+                        // Worker and reflection collude, but independent
+                        // matrix reconstruction still rejects their report.
+                        distort(&mut work, FaultMode::Unit)?;
+                        distort(&mut reflected, FaultMode::Unit)?;
+                    }
+                    _ => {
+                        let chosen = match fault.seat {
+                            Seat::Worker => &mut work,
+                            Seat::Reflection => &mut reflected,
+                            Seat::MatrixFabric => &mut witnessed,
+                        };
+                        distort(chosen, mode)?;
+                    }
                 }
             }
         }
     }
-    let locally_agreed = work == reflected && work == witnessed;
-    let child_agreed = children.iter().all(|child| child.accepted);
+    if work.len() != reflected.len() || work.len() != witnessed.len() {
+        return None;
+    }
+    let local_mismatches = (0..work.len())
+        .filter(|&index| {
+            work[index] != reflected[index] || work[index] != witnessed[index]
+        })
+        .count();
+    let work_total: i128 = work.iter().sum();
+    let reflection_total: i128 = reflected.iter().sum();
+    let fabric_total: i128 = witnessed.iter().sum();
     let consistent_children = children.is_empty()
-        || (children.iter().map(|child| child.worker_total).sum::<i128>() == work
+        || (children.iter().map(|child| child.worker_total).sum::<i128>() == work_total
             && children.iter().map(|child| child.reflection_total).sum::<i128>()
-                == reflected
+                == reflection_total
             && children.iter().map(|child| child.fabric_total).sum::<i128>()
-                == witnessed);
-    let mismatches = usize::from(!locally_agreed || !consistent_children)
+                == fabric_total);
+    let child_agreed = children.iter().all(|child| child.accepted);
+    let mismatches = local_mismatches + usize::from(!consistent_children)
         + children.iter().map(|child| child.mismatches).sum::<usize>();
     Some(Verdict {
-        accepted: locally_agreed && child_agreed && consistent_children,
+        accepted: local_mismatches == 0 && child_agreed && consistent_children,
         nodes: 1 + children.iter().map(|child| child.nodes).sum::<usize>(),
         fabric_reads: 1 + children.iter().map(|child| child.fabric_reads)
             .sum::<usize>(),
-        worker_total: work,
-        reflection_total: reflected,
-        fabric_total: witnessed,
+        worker_total: work_total,
+        reflection_total,
+        fabric_total,
         mismatches,
         held_for_operator: true,
     })
@@ -122,7 +176,32 @@ pub fn wave_cascade(frozen: &FrozenMatrix, fault: Option<Fault>)
     if !matches!(frozen.room_count(), 3 | 9 | 27 | 81) {
         return None;
     }
-    inspect(frozen, 0, frozen.room_count(), 0, fault)
+    inspect(frozen, 0, frozen.room_count(), 0, fault, FaultMode::Unit)
+}
+
+/// Report a cancelling +1/-1 edit within the same shadow column.
+/// Aggregate-only comparators cannot detect this fault.
+pub fn wave_cascade_balanced(
+    frozen: &FrozenMatrix, fault: Fault,
+) -> Option<Verdict> {
+    if !matches!(frozen.room_count(), 3 | 9 | 27 | 81) {
+        return None;
+    }
+    inspect(frozen, 0, frozen.room_count(), 0, Some(fault), FaultMode::Balanced)
+}
+
+/// Both source-reading seats agree on a false cell; the independently
+/// reconstructed third seat must reject the coordinated report.
+pub fn wave_cascade_coordinated(
+    frozen: &FrozenMatrix, level: usize,
+) -> Option<Verdict> {
+    if !matches!(frozen.room_count(), 3 | 9 | 27 | 81) {
+        return None;
+    }
+    inspect(
+        frozen, 0, frozen.room_count(), 0,
+        Some(Fault { level, seat: Seat::Worker }), FaultMode::Coordinated,
+    )
 }
 
 #[cfg(test)]
@@ -170,5 +249,44 @@ mod tests {
             }
         }
         assert_eq!(planted, 42);
+    }
+
+    #[test]
+    fn balanced_faults_rejected_with_unchanged_total_and_shadow() {
+        let mut planted = 0;
+        for (rooms, height) in [(3, 1), (9, 2), (27, 3), (81, 4)] {
+            let source = Matrix::generated(rooms).expect("matrix");
+            let frozen = FrozenMatrix::freeze(&source);
+            for level in 0..=height {
+                for seat in [Seat::Worker, Seat::Reflection, Seat::MatrixFabric] {
+                    let bad = wave_cascade_balanced(&frozen, Fault { level, seat })
+                        .expect("balanced tamper verdict");
+                    assert!(!bad.accepted);
+                    assert!(bad.mismatches >= 2);
+                    // All three reported aggregate sums still agree.
+                    assert_eq!(bad.worker_total, bad.reflection_total);
+                    assert_eq!(bad.worker_total, bad.fabric_total);
+                    planted += 1;
+                }
+            }
+        }
+        assert_eq!(planted, 42);
+    }
+
+    #[test]
+    fn coordinated_worker_reflection_reports_rejected_by_fabric() {
+        let mut planted = 0;
+        for (rooms, height) in [(3, 1), (9, 2), (27, 3), (81, 4)] {
+            let source = Matrix::generated(rooms).expect("matrix");
+            let frozen = FrozenMatrix::freeze(&source);
+            for level in 0..=height {
+                let bad = wave_cascade_coordinated(&frozen, level)
+                    .expect("coordinated tamper verdict");
+                assert!(!bad.accepted);
+                assert!(bad.mismatches >= 1);
+                planted += 1;
+            }
+        }
+        assert_eq!(planted, 14);
     }
 }
