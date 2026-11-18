@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric,temporal_full_fabric}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -1069,11 +1069,42 @@ jobs:
           ( cd evidence && sha256sum PNP_FULL_MATRIX_RESULTS.bin PNP_FULL_MATRIX.hbp PNP_FULL_MATRIX.hbi PNP_FULL_MATRIX.anchor > PNP_FULL_MATRIX_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_FULL_MATRIX_DIGESTS.sha256 )
           echo 'PNP_FULL_MATRIX_NEGATIVE|fischer_address=REJECTED|operator_id=REJECTED|wire_version=REJECTED|binary_reserved_code=REJECTED|noncanonical_trit_padding=REJECTED|gnn_missing_signals=HOLD|binary_tamper=REJECTED|hbi_tamper=REJECTED|status=PASS|json=0'
+      - name: Ordered versus shuffled PRL-inspired prediction through actual full binary ternary matrix
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f 'PNP_TEMPORAL_RESOURCE|wall_elapsed_seconds=%e|max_rss_kib=%M|scope=ATTEST_THREE_FABRIC_PASSES|json=0' -o PNP_TEMPORAL_RESOURCE.hbp native/target/release/pnp-native temporal-fabric-attest evidence evidence | tee PNP_TEMPORAL_FABRIC_ATTEST.hbp
+          native/target/release/pnp-native temporal-fabric-verify evidence evidence | tee PNP_TEMPORAL_FABRIC_VERIFY.hbp
+          native/target/release/pnp-native temporal-fabric-inspect evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin | tee PNP_TEMPORAL_FABRIC_INSPECT.hbp
+          grep -Fq 'PNP_TEMPORAL_FABRIC|case_pairs=9|source_events=144000|crossings_per_pass=21384|uncached_calls=21384|cached_calls=42768|cache_hits=37422|coupled_ordered_gains=6|coupled_shuffle_reversals=6|iid_baseline_controls=3|' PNP_TEMPORAL_FABRIC_ATTEST.hbp
+          grep -Fq 'PNP_TEMPORAL_FABRIC_VERIFY|pairs=9|source_events=144000|full_replay=EXACT|ordered_vs_shuffled=VERIFIED|cache_hits=37422|' PNP_TEMPORAL_FABRIC_VERIFY.hbp
+          grep -Fq 'PNP_TEMPORAL_FABRIC_INSPECT|streams=18|archive=CANONICAL|checksum=PASS|' PNP_TEMPORAL_FABRIC_INSPECT.hbp
+          test "$(grep -c '^HBI|' evidence/PNP_TEMPORAL_FABRIC.hbi)" -eq 16
+          test "$(grep -c '^TEMPORAL_RESULT|' evidence/PNP_TEMPORAL_FABRIC.hbp)" -eq 9
+          grep -Fq 'doi=10.1103/j1r2-5ph7' evidence/PNP_TEMPORAL_FABRIC.hbp
+          grep -Fq '|gnn_trained_forward=HOLD|status=PASS' evidence/PNP_TEMPORAL_FABRIC.hbp
+          cp evidence/PNP_TEMPORAL_FABRIC.hbp "$RUNNER_TEMP/temporal-original.hbp"
+          cp evidence/PNP_TEMPORAL_FABRIC.hbi "$RUNNER_TEMP/temporal-original.hbi"
+          cp evidence/PNP_TEMPORAL_FABRIC.anchor "$RUNNER_TEMP/temporal-original.anchor"
+          cp evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin "$RUNNER_TEMP/temporal-original.bin"
+          native/target/release/pnp-native temporal-fabric-attest evidence evidence > "$RUNNER_TEMP/temporal-repeat.hbp"
+          cmp evidence/PNP_TEMPORAL_FABRIC.hbp "$RUNNER_TEMP/temporal-original.hbp"
+          cmp evidence/PNP_TEMPORAL_FABRIC.hbi "$RUNNER_TEMP/temporal-original.hbi"
+          cmp evidence/PNP_TEMPORAL_FABRIC.anchor "$RUNNER_TEMP/temporal-original.anchor"
+          cmp evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin "$RUNNER_TEMP/temporal-original.bin"
+          printf X >> evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin
+          if native/target/release/pnp-native temporal-fabric-inspect evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin > "$RUNNER_TEMP/temporal-negative.hbp" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/temporal-original.bin" evidence/PNP_TEMPORAL_FABRIC_RESULTS.bin
+          printf X >> evidence/PNP_TEMPORAL_FABRIC.hbi
+          if native/target/release/pnp-native temporal-fabric-verify evidence evidence > "$RUNNER_TEMP/temporal-negative.hbp" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/temporal-original.hbi" evidence/PNP_TEMPORAL_FABRIC.hbi
+          ( cd evidence && sha256sum PNP_TEMPORAL_FABRIC.hbp PNP_TEMPORAL_FABRIC.hbi PNP_TEMPORAL_FABRIC.anchor PNP_TEMPORAL_FABRIC_RESULTS.bin > PNP_TEMPORAL_FABRIC_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_TEMPORAL_FABRIC_DIGESTS.sha256 )
+          echo 'PNP_TEMPORAL_FABRIC_NEGATIVE|iid_false_memory=REJECTED|count_preserving_shuffle=RETAINED|cross_floor_trit_corruption=REJECTED|source_key_cache=PASS|archive_tamper=REJECTED|hbi_tamper=REJECTED|source=PROTECTED|status=PASS|json=0'
       - name: Source-provenance and immutable HBP evidence archive
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp PNP_TLS_STREAM_ATTEST.hbp PNP_TLS_STREAM_VERIFY.hbp PNP_TLS_STREAM_BITPACK_CHECK.hbp PNP_TLS_STREAM_RANGE_CHECK.hbp PNP_TLS_STREAM_RESOURCE.hbp PNP_COMPUTE_ATTEST.hbp PNP_COMPUTE_VERIFY.hbp PNP_COMPUTE_INSPECT.hbp PNP_COMPUTE_RESOURCE.hbp PNP_FULL_MATRIX_ATTEST.hbp PNP_FULL_MATRIX_VERIFY.hbp PNP_FULL_MATRIX_INSPECT.hbp PNP_FULL_MATRIX_RESOURCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp PNP_TLS_STREAM_ATTEST.hbp PNP_TLS_STREAM_VERIFY.hbp PNP_TLS_STREAM_BITPACK_CHECK.hbp PNP_TLS_STREAM_RANGE_CHECK.hbp PNP_TLS_STREAM_RESOURCE.hbp PNP_COMPUTE_ATTEST.hbp PNP_COMPUTE_VERIFY.hbp PNP_COMPUTE_INSPECT.hbp PNP_COMPUTE_RESOURCE.hbp PNP_FULL_MATRIX_ATTEST.hbp PNP_FULL_MATRIX_VERIFY.hbp PNP_FULL_MATRIX_INSPECT.hbp PNP_FULL_MATRIX_RESOURCE.hbp PNP_TEMPORAL_FABRIC_ATTEST.hbp PNP_TEMPORAL_FABRIC_VERIFY.hbp PNP_TEMPORAL_FABRIC_INSPECT.hbp PNP_TEMPORAL_RESOURCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi native/fixtures/TLS_STOCHASTIC_CORPUS.hbi > evidence/SOURCE_PINS.sha256
@@ -1119,6 +1150,9 @@ jobs:
           sha256sum -c PNP_TLS_STREAM_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_COMPUTE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_FULL_MATRIX_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_TEMPORAL_FABRIC_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_TEMPORAL_FABRIC|case_pairs=9|source_events=144000|crossings_per_pass=21384|' PNP_TEMPORAL_FABRIC_ATTEST.hbp
+          test "$(grep -c '^HBI|' PNP_TEMPORAL_FABRIC.hbi)" -eq 16
           grep -Fq 'PNP_FULL_MATRIX|jobs=54|binary_floors=4|original_operators=40|direct_crossings=8640|independent_http0_requests=51840|' PNP_FULL_MATRIX_ATTEST.hbp
           test "$(grep -c '^HBI|' PNP_FULL_MATRIX.hbi)" -eq 18
           test "$(grep -c '^MATRIX_ARM|' PNP_FULL_MATRIX.hbp)" -eq 6
