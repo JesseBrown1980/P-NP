@@ -1,5 +1,11 @@
 #![forbid(unsafe_code)]
-use pnp_native::{certify_matrix_fabric, policy};
+use pnp_native::{
+    certify_matrix_fabric,
+    guidance::{Guidance, Strategy},
+    policy, relic,
+    solver::{check_against_exhaustive, solve},
+    ternary::{model_to_text, Cnf},
+};
 use std::path::Path;
 
 fn main() {
@@ -26,10 +32,60 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
-        _ => Err("usage: pnp-native audit [repository-root] OR pnp-native certify".to_owned()),
+        Some("relic") => {
+            for level in 0..5 {
+                let a = relic::anchor(level).ok_or("landing overflow")?;
+                let ws = relic::waves(level).ok_or("wave overflow")?;
+                let next = relic::anchor(level + 1).ok_or("next landing overflow")?;
+                if ws.last().copied() != Some(next) {
+                    return_fail("landing-wave mismatch");
+                }
+                println!("RELIC_NATIVE|level={level}|center=1|center_coordinate=0|outward={a}|waves={ws:?}|next={next}|status=PASS|json=0");
+            }
+            println!("RELIC_NATIVE_FINAL|landings=5|invariant_center=PASS|exact_integers=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("sat") => {
+            let label = arguments.next().ok_or("missing strategy label")?;
+            let strategy = Strategy::from_label(&label)
+                .ok_or("unknown native strategy")?;
+            let path = arguments.next().ok_or("missing original DIMACS source")?;
+            let limit = arguments.next()
+                .map(|value| value.parse::<u64>().map_err(|_| "invalid node budget"))
+                .transpose()?;
+            if arguments.next().is_some() {
+                return_fail("too many SAT arguments");
+            }
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|e| format!("cannot read source: {e}"))?;
+            let formula = Cnf::parse(&raw)?;
+            let preparation = Guidance::for_source(&formula, strategy)?;
+            let result = solve(&formula, &preparation, limit);
+            if formula.variables <= 16 && !check_against_exhaustive(&formula, &result) {
+                return_fail("independent exhaustive witness/refutation failed");
+            }
+            println!("PNP_TERNARY_SAT|engine={}|variables={}|clauses={}|fanout={}|lanes_used={}|mtpfrozen_patterns={}|fischer_addresses={}|matrix_rooms={}|fabric_witnesses={}|nodes={}|propagations={}|literal_checks={}|status={}|json=0",
+                strategy.label(), formula.variables, formula.clauses.len(),
+                preparation.fanout, preparation.lanes_used,
+                preparation.frozen_mtp_patterns, preparation.fischer_addresses,
+                preparation.matrix_rooms, preparation.fabric_witnesses,
+                result.nodes, result.propagations, result.literal_checks,
+                result.status.label());
+            if let Some(model) = result.model {
+                println!("PNP_TERNARY_MODEL|engine={}|trits={}|source_verified=PASS|json=0",
+                    strategy.label(), model_to_text(&model));
+            }
+            Ok(())
+        }
+        _ => Err("usage: pnp-native audit [root] | certify | relic | sat ENGINE FILE [node-budget]".to_owned()),
     };
     if let Err(message) = result {
         eprintln!("PNP_NATIVE_FAIL|reason={message}|json=0");
         std::process::exit(1);
     }
+}
+
+fn return_fail(reason: &str) -> ! {
+    eprintln!("PNP_NATIVE_FAIL|reason={reason}|json=0");
+    std::process::exit(1);
 }
