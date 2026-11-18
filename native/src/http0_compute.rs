@@ -85,9 +85,9 @@ fn compute_independent(task:&Task)->[u64;CELLS]{
     }
     current
 }
-#[derive(Default)]
 type MemoKey=(usize,u64,u8,u64,[u8;CELLS]);
 type Memo=BTreeMap<MemoKey,[u64;CELLS]>;
+#[derive(Default)]
 struct Service{
     calls:usize,
     hits:usize,
