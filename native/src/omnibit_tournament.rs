@@ -134,7 +134,7 @@ fn binary_pack(trits:&[Trit]) -> Vec<u8> {
     out
 }
 fn binary_unpack(body:&[u8],n:usize)->Result<Vec<Trit>,String>{
-    if body.len()!=2+n.div_ceil(4) || body.get(0)!=Some(&1) || body.get(1)!=Some(&(n as u8)){
+    if body.len()!=2+n.div_ceil(4) || body.first()!=Some(&1) || body.get(1)!=Some(&(n as u8)){
         return Err("binary arm frame/length mismatch".to_owned());
     }
     let mut result=Vec::with_capacity(n);
