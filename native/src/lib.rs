@@ -12,6 +12,8 @@ pub mod gulp_gc;
 pub mod guidance;
 pub mod matrix;
 pub mod omnibit_tournament;
+pub mod omega_operator_catalog;
+pub mod omnibit_operator_gate;
 pub mod policy;
 pub mod relic;
 pub mod prism;
