@@ -303,6 +303,50 @@ pub fn request(tensor: u8, glyph: u8) -> Result<[u8; REQUEST_BYTES], String> {
     Ok(out)
 }
 
+/// Batch exact HTTP-0 source reads over one loopback connection, avoiding a
+/// TCP listener and new thread for each of the 27-glyph address requests.
+/// This is a separate performance control; source fidelity is unchanged.
+pub fn loopback_batch(
+    store: &DiskRime, addresses: &[(u8, u8)],
+) -> Result<Vec<u64>, String> {
+    if addresses.is_empty() || addresses.len() > 256 {
+        return Err("HTTP-0 batch length outside bounded pilot".into());
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let socket = listener.local_addr().map_err(|e| e.to_string())?;
+    let frames = addresses.iter().map(|&(tensor, glyph)| request(tensor, glyph))
+        .collect::<Result<Vec<_>, _>>()?;
+    std::thread::scope(|scope| -> Result<Vec<u64>, String> {
+        let worker = scope.spawn(|| -> Result<(), String> {
+            let (mut stream, _) = listener.accept().map_err(|e| e.to_string())?;
+            for _ in 0..frames.len() {
+                let mut incoming = [0_u8; REQUEST_BYTES];
+                stream.read_exact(&mut incoming).map_err(|e| e.to_string())?;
+                let reply = store.reply(&incoming)?;
+                stream.write_all(&reply).map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        });
+        let client = (|| -> Result<Vec<u64>, String> {
+            let mut stream = TcpStream::connect(socket).map_err(|e| e.to_string())?;
+            let mut values = Vec::with_capacity(frames.len());
+            for req in &frames {
+                stream.write_all(req).map_err(|e| e.to_string())?;
+                let mut reply = [0_u8; REPLY_BYTES];
+                stream.read_exact(&mut reply).map_err(|e| e.to_string())?;
+                if reply[0..3] != req[0..3] || reply[7..15] != req[3..11] {
+                    return Err("batched HTTP-0 response identity mismatch".into());
+                }
+                values.push(u64::from(u32::from_le_bytes(reply[3..7].try_into()
+                    .map_err(|_| "response word width")?)));
+            }
+            Ok(values)
+        })();
+        worker.join().map_err(|_| "batched HTTP-0 worker panicked".to_owned())??;
+        client
+    })
+}
+
 pub fn loopback_once(store: &DiskRime, tensor: u8, glyph: u8) -> Result<u64, String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
     let socket: SocketAddr = listener.local_addr().map_err(|e| e.to_string())?;
