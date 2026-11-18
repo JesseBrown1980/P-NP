@@ -40,9 +40,11 @@ integer inference are independently matched. The original G4 logic
 must reject missing learned G1/G2/G3 input signals, without quietly
 substituting deterministic pseudo-neural predictions.
 
-**Status:** implementation in new native integration acceptance gate.
-Results and timing will be reported from hosted receipts after both jobs
-pass, with real measurements and a clearly stated neural-inference HOLD.
+**First hosted benchmark PASS:** [run #44354419893](https://github.com/JesseBrown1980/P-NP/actions/runs/44354419893), both native and independent artifact-check jobs passed, **107 Rust tests**. All 51,840 native HTTP-0 calls reconstructed the 27 source trits and all 27 exact field values; 18 matrix third-seat groups and 54 authentic G4 missing-trained-input holds passed. Four floor widths and all 40 original Omnibit operators were exercised in each of six backend arms.
+
+Per **8,640 matched representations**, direct native execution took **139.261 ms**, direct source-keyed memoization **10.643 ms**. Across 3/27/81 room capacities, un-cached HTTP-0 took **493.261 / 506.776 / 516.303 ms**, compared with room recall **435.330 / 439.431 / 365.735 ms**. Each cached arm completed **54 physical recurrences and 8,586 exact cross-representation memory hits**, while each un-cached arm completed all 8,640 recurrences. These are single-run measurements from a serial backend worker; CPU concurrency and true trained-GNN performance remain separate gates.
+
+The genuine four trainable GNN families and nine source-authenticated Q20 checkpoint archives are linked into every integration evidence root. **Trained GNN forward parity remains HOLD** until graph/tensor semantics and original held-out inference outputs can be independently matched. The native GAC 60D tuples are verified source-bound metadata, with physical-axis routing still gated.
 
 ## Fischer function-room computation, actual recall and HRM-shape routing (November 18, 2026)
 
