@@ -2,6 +2,7 @@
 //! Rust 1.81 exact-integer P-NP policy and native matrix-fabric pilot.
 //! Historical Python algorithms are retained solely as legacy evidence.
 
+pub mod binary_ternary_bridge;
 pub mod checkpoint;
 pub mod ensemble;
 pub mod freeze;

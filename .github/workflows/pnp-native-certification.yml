@@ -92,7 +92,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -499,6 +499,54 @@ jobs:
           native/target/release/pnp-native gulp-discard-verify source-gac source-neural source-omni evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_GULP_DIGESTS.sha256 )
           echo 'PNP_GULP_NEGATIVE|bad_input=PRESERVED|early_commit=PRESERVED|raw_reappeared=REJECTED|receipt_tamper=REJECTED|real_delete=PASS|json=0'
+      - name: Source-authenticated binary floor and balanced ternary 243-256 bridge
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native bridge-attest source-prism source-gac source-neural source-omni evidence evidence | tee PNP_BRIDGE_ATTEST.hbp
+          native/target/release/pnp-native bridge-verify source-prism source-gac source-neural source-omni evidence evidence | tee PNP_BRIDGE_VERIFY.hbp
+          grep -Fq 'PNP_BRIDGE|source_prism=VERIFIED|source_gac=VERIFIED|binary_floors=4|ternary_landings=8|floor_checks=3186|route_checks=9840|reserved_byte_codes=13|reserved_as_data=REJECTED|matrix_cells=27|prism_roundtrip=EXACT|receipts=26|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_BRIDGE_ATTEST.hbp
+          grep -Fq 'PNP_BRIDGE_VERIFY|receipts=26|upstream_source=VERIFIED|floor_inverses=PASS|reserved_code_rejection=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_BRIDGE_VERIFY.hbp
+          test "$(grep -c '^BRIDGE_FLOOR|' evidence/PNP_BRIDGE.hbp)" -eq 4
+          test "$(grep -c '^BRIDGE_LADDER|' evidence/PNP_BRIDGE.hbp)" -eq 8
+          test "$(grep -c '^BRIDGE_RESERVED|' evidence/PNP_BRIDGE.hbp)" -eq 13
+          test "$(grep -c '^BRIDGE_MATRIX|' evidence/PNP_BRIDGE.hbp)" -eq 1
+          test "$(grep -c '^HBI|' evidence/PNP_BRIDGE.hbi)" -eq 26
+          grep -Fq '|id=256|' evidence/PNP_BRIDGE.hbp
+          grep -Fq '|floor=256|width=5|ternary_states=243|reserved=13|roundtrip=EXHAUSTIVE|reserved_policy=REJECT_AS_DATA|' evidence/PNP_BRIDGE.hbp
+          grep -Fq '|trits=8|states=6561|floor_first=256|floor_second=64|roundtrip=EXHAUSTIVE|' evidence/PNP_BRIDGE.hbp
+          grep -Fq '|code=255|as_data=REJECT|meaning=UNASSIGNED|' evidence/PNP_BRIDGE.hbp
+          grep -Fq '|center_address=13|center5trit_code=121|floor_checks=3186|routed_checks=9840|prism_input_bytes=243|prism_glyphs=195|' evidence/PNP_BRIDGE.hbp
+          cp evidence/PNP_BRIDGE.hbp "$RUNNER_TEMP/frozen-bridge.hbp"
+          cp evidence/PNP_BRIDGE.hbi "$RUNNER_TEMP/frozen-bridge.hbi"
+          cp evidence/PNP_BRIDGE.anchor "$RUNNER_TEMP/frozen-bridge.anchor"
+          native/target/release/pnp-native bridge-attest source-prism source-gac source-neural source-omni evidence evidence > "$RUNNER_TEMP/repeat-bridge.hbp"
+          cmp evidence/PNP_BRIDGE.hbp "$RUNNER_TEMP/frozen-bridge.hbp"
+          cmp evidence/PNP_BRIDGE.hbi "$RUNNER_TEMP/frozen-bridge.hbi"
+          cmp evidence/PNP_BRIDGE.anchor "$RUNNER_TEMP/frozen-bridge.anchor"
+          ( cd evidence && sha256sum PNP_BRIDGE.hbp PNP_BRIDGE.hbi PNP_BRIDGE.anchor > PNP_BRIDGE_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_BRIDGE_DIGESTS.sha256 )
+      - name: Binary ternary bridge original-source and receipt negative controls
+        run: |
+          set -euo pipefail
+          for name in PNP_BRIDGE.hbp PNP_BRIDGE.hbi PNP_BRIDGE.anchor; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native bridge-verify source-prism source-gac source-neural source-omni evidence evidence > "$RUNNER_TEMP/rejected-bridge.log" 2>&1; then
+              echo "PNP_BRIDGE_TAMPER_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp evidence/PNP_PRISM.hbp "$RUNNER_TEMP/original-upstream-prism.hbp"
+          printf X >> evidence/PNP_PRISM.hbp
+          if native/target/release/pnp-native bridge-verify source-prism source-gac source-neural source-omni evidence evidence > "$RUNNER_TEMP/rejected-upstream.log" 2>&1; then
+            echo 'PNP_BRIDGE_TAMPER_FAIL|upstream=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/original-upstream-prism.hbp" evidence/PNP_PRISM.hbp
+          native/target/release/pnp-native bridge-verify source-prism source-gac source-neural source-omni evidence evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_BRIDGE_DIGESTS.sha256 )
+          echo 'PNP_BRIDGE_NEGATIVE|reserved_243_to_255=REJECTED|upstream=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -571,7 +619,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp > evidence/SOURCE_PINS.sha256
@@ -607,6 +655,16 @@ jobs:
           sha256sum -c PNP_PRISM_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_GULP_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_BRIDGE_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_BRIDGE|source_prism=VERIFIED|source_gac=VERIFIED|binary_floors=4|ternary_landings=8|floor_checks=3186|route_checks=9840|reserved_byte_codes=13|' PNP_BRIDGE_ATTEST.hbp
+          grep -Fq 'PNP_BRIDGE_VERIFY|receipts=26|upstream_source=VERIFIED|floor_inverses=PASS|reserved_code_rejection=PASS|' PNP_BRIDGE_VERIFY.hbp
+          test "$(grep -c '^BRIDGE_FLOOR|' PNP_BRIDGE.hbp)" -eq 4
+          test "$(grep -c '^BRIDGE_LADDER|' PNP_BRIDGE.hbp)" -eq 8
+          test "$(grep -c '^BRIDGE_RESERVED|' PNP_BRIDGE.hbp)" -eq 13
+          test "$(grep -c '^HBI|' PNP_BRIDGE.hbi)" -eq 26
+          grep -Fq '|floor=256|width=5|ternary_states=243|reserved=13|roundtrip=EXHAUSTIVE|' PNP_BRIDGE.hbp
+          grep -Fq '|trits=8|states=6561|floor_first=256|floor_second=64|roundtrip=EXHAUSTIVE|' PNP_BRIDGE.hbp
+          grep -Fq '|code=255|as_data=REJECT|meaning=UNASSIGNED|' PNP_BRIDGE.hbp
           grep -Fq 'PNP_GULP_GC|events=10|grouping=KIND_GLYPH|summary=COMMITTED|raw_owned=DELETED|' PNP_GULP_DISCARD_RUN.hbp
           grep -Fq 'PNP_GULP_GC_VERIFY|events=10|raw_owned=ABSENT|patterns=RETAINED|' PNP_GULP_DISCARD_VERIFY.hbp
           test ! -e PNP_GULP_EPHEMERAL

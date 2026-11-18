@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Native binary ↔ balanced-ternary matrix bridge (November 18, 2026)
+
+The original Asolaria concept uses two coordinated address/computation ladders in the same matrix fabric: **binary floors 64, 256, 1,024, 4,096** and native **balanced ternary 3, 9, 27, 81, 243, 729, 2,187, 6,561**. The [bridge protocol](native/BINARY_TERNARY_BRIDGE_PROTOCOL.md) establishes the exact reversible mapping from `−1/0/+1` trit sequences into their floor's valid data codes. Five trits form **243 states** inside a 256-value byte floor; codes **243–255 are reserved, never silently decoded as data**. The 6,561-state eight-trit landing uses a **256 floor (five trits) plus a 64 floor (three trits)**.
+
+The Rust 1.81 bridge exhaustively tests all **3,186 valid per-floor states**, all **9,840 ternary ladder addresses**, every rejected reserved code across all four floors, and all 27 physical matrix-coordinate addresses including the central Omega cell. It also sends all 243 valid five-trit byte codes through the previously source-authenticated Q-PRISM 256↔1024 translator and verifies exact byte reconstruction. Existing PRISM and GAC HBI/HBP archives are validated first, followed by 26 new indexed **HBI → HBP → SHA → SH → HASH** receipts and independent byte replay.
+
+This fixes an explicit ordinal convention for interoperability; the source repositories establish the two computational ladders and matrix fabric, while the particular `−→0, 0→1, +→2` byte numbering is the newly tested bridge rule. Source authority, GC reclamation, neural inference, and tournament performance remain separately verifiable.
+
+---
+
 ## Automatic GULP then garbage collection — verified knowledge retention (November 18, 2026)
 
 The original GULP/GC architecture now has a native **automatic compact → commit → verify → discard** path. The [GC recovery and post-GULP retention protocol](native/GC_ARCHIVE_RESTART_PROTOCOL.md) preserves original Git-pinned GAC/Omni sources and audit archives while allowing actual physical deletion of **owned temporary event batches** after their knowledge has been counted and source-linked HBI/HBP receipts have been flushed and independently checked. **No per-operation human approval** is required under the frozen policy.
