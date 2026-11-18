@@ -154,7 +154,7 @@ jobs:
           root="$RUNNER_TEMP/constellation"
           native/target/release/pnp-native rime-sat-bench "$root/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf" 5 | tee "$root/RIME_SAT_BENCH.hbp"
           grep -Fq 'PNP_RIME_SAT_BENCH|schema=v1|source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735|cases=24|sat=11|unsat=13|rounds=5|rime_pairs=324|shadow_cubes=24|' "$root/RIME_SAT_BENCH.hbp"
-          for arm in DIRECT_BASE FISCHER FROZEN_DISK PUMP_FUNNEL_HTTP0; do
+          for arm in DIRECT_BASE FISCHER FROZEN_DISK PUMP_FUNNEL_HTTP0 PUMP_FUNNEL_BATCHED_HTTP0; do
             grep -Fq "PNP_RIME_SAT_ARM|arm=$arm|" "$root/RIME_SAT_BENCH.hbp"
           done
           grep -Fq 'PNP_RIME_SAT_ACCEPT|same_cases=PASS|sat_model=PASS|unsat_exhaustive=PASS|three_path_consensus=PASS|source_after=PASS|speed_status=MEASURED|p_np_status=OPEN|json=0' "$root/RIME_SAT_BENCH.hbp"
