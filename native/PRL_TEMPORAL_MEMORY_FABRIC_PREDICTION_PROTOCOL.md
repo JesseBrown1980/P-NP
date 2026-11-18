@@ -41,4 +41,27 @@ PNP_PRL_CAUSAL_DIGESTS.sha256.
 
 Interpretation: a positive result establishes an exact finite classical, synthetic, causal prediction gain transmitted through this real native multi-plane implementation, with a count-preserving negative temporal-order control. It does not measure physical qubit data, trained-GNN inference, P=NP, or parallel scaling. Those remain source-scoped research gates.
 
-**Status:** implementation staged; hosted numerical results pending.
+**Hosted acceptance:** PASS on [run #44397648431](https://github.com/JesseBrown1980/P-NP/actions/runs/44397648431), both Rust 1.81 source-certification and independent published-artifact SHA jobs successful. 109 native tests PASS. The additional acceptance result is committed only after a passing final run of these documentation changes.
+
+## Actual measured Brier evidence
+
+The original source has **three independent seeded synthetic repetitions per regime**, nine case groups in total. The four floor representations and three room widths replicate the **same nine** source cases, rather than producing 108 statistically independent datasets. The table below uses one canonical 3-room/64-symbol floor view per original source group, and aggregates three separate source repetitions per regime.
+
+All source outcomes are 8,000 held-out events per repetition. Brier scores are mean squared forecast error for binary outcomes, calculated from the exact Q10000 integer sums. The percentage gain is (memoryless error − fitted-memory error) / memoryless error.
+
+| Original synthetic regime | Source repetitions | Validation-selected capacities | Mean memoryless Brier | Mean learned-memory Brier | Held-out Brier gain | Shuffled order gain |
+|---|---:|---|---:|---:|---:|---:|
+| IID_NULL | 3 | 0, 0, 0 | 0.24785035 | 0.24785035 | **0.000%** | **0.000%** |
+| ONE_TLS | 3 | 27, 27, 27 | 0.248735675 | 0.180554214 | **+27.411%** | **−15.946%** |
+| THREE_TLS | 3 | 27, 1, 1 | 0.249471095 | 0.234687417 | **+5.926%** | **−2.647%** |
+
+At the individual held-out source-repetition level, ONE_TLS shows gains 28.202%, 25.080%, 28.960%; THREE_TLS shows gains 6.298%, 5.965%, 5.515%. All six distinct coupled source repetitions reverse sign with the original count-preserving shuffle. The single-run native HTTP-0 wall times for 21,384 requests / 576,000 scored events at each room capacity were 1.608 s (3), 1.664 s (27), 1.664 s (81). These times include native transport, matrix computation, prediction and independent response checking, and are not a trained-GNN speed comparison.
+
+The full accepted evidence contains:
+- 64,152 native HTTP-0 frame deliveries (all source trits and 27 matrix values exact).
+- 1,728,000 Bernoulli event predictions with two Q10000 probabilities per event, matched independently against the original fitted integer model.
+- 108 paired chronological/shuffled Brier receipts: 72 coupled positive-and-reversed rows, 36 IID null rows. Each original source pair is replicated across four floor formats and three room widths.
+- 120 source/score/third-seat rows in HBI/HBP/SHA/SH/HASH; 72 canonical forecast stream vectors stored in the binary archive with source digest 24c8c55b95b1272025146023e4cdd87064aa8b0c778360e6008782a4d9f3c894.
+- Complete regenerate-and-compare, byte tamper/reordered-route negative controls and separate published-artifact SHA acceptance.
+
+Scientific interpretation: ordered synthetic reservoir event history contains statistically usable causal information for the fixed training-only predictor under these precommitted settings. The native four-floor/Omnibit40/Fischer/HTTP-0 matrix path carries that information without changing the integer forecasts. The result is a finite, source-authenticated **classical computational observation** using the PRL-inspired test scenarios; the real qubit jump dataset and trained GNN forward model remain separate research gates.
