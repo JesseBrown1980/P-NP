@@ -1,0 +1,132 @@
+name: "Bitcoin genesis double-SHA256 SAT — seven engines"
+on:
+  pull_request:
+    paths:
+      - "experiments/bitcoin/**"
+      - ".github/workflows/bitcoin-genesis-7.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sha256d-bitblast-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Exact source policy and historic repository hashes
+        run: |
+          set -euo pipefail
+          python3 -I -B tools/exact_policy.py experiments/bitcoin/genesis.py experiments/bitcoin/watched.py experiments/bitcoin/arm.py experiments/bitcoin/runner.py experiments/bitcoin/verify.py
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -m py_compile experiments/bitcoin/*.py
+      - name: Bitblast Bitcoin SHA256d exact original header with hidden nonce
+        run: |
+          set -euo pipefail
+          mkdir -p build/source
+          python3 -s -B experiments/bitcoin/genesis.py build/source | tee build/source/GENESIS_BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|full_32_bit_nonce=ENCODED|merkle_nonce_288_bits=ENCODED|SAT_reference_models=4|status=PASS' build/source/GENESIS_BUILD.hbp
+          test "$(find build/source -maxdepth 1 -name '*.cnf' | wc -l)" -eq 4
+          test "$(grep -c '^BTC_CNF|' build/source/GENESIS_BUILD.hbp)" -eq 4
+          ( cd build/source && sha256sum *.cnf *.txt GENESIS_BUILD.hbp > SOURCE.sha256 )
+          ( cd build/source && sha256sum -c SOURCE.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-source-bitblast
+          path: build/source/
+          retention-days: 60
+          if-no-files-found: error
+  benchmark:
+    needs: sha256d-bitblast-source
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [hxf4, ym_fischer, rime_new, rime_original, minisat, cadical, picosat]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: btc-source-bitblast
+          path: source
+      - name: Check same original encoded source and execute seven-arm benchmark
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 > /dev/null )
+          if [[ "$ARM" == minisat || "$ARM" == cadical || "$ARM" == picosat ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2' time
+            dpkg-query -W minisat cadical picosat
+          fi
+          mkdir -p "build/arm-results/$ARM"
+          for case in nonce4 nonce8 nonce32 merkle_nonce288; do
+            python3 -s -B experiments/bitcoin/runner.py "$ARM" "$case" source "build/arm-results/$ARM/$case" | tee "build/arm-results/$ARM/$case.hbp"
+          done
+          test "$(find "build/arm-results/$ARM" -name receipt.txt -type f | wc -l)" -eq 4
+          ( cd build/arm-results && find "$ARM" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
+          ( cd build/arm-results && sha256sum -c "$ARM/MANIFEST.sha256" >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-arm-${{ matrix.arm }}
+          path: build/arm-results/
+          retention-days: 60
+          if-no-files-found: error
+  independently-verified:
+    needs: benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: btc-source-bitblast
+          path: evidence/source
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: btc-arm-*
+          path: evidence/arm-results
+          merge-multiple: true
+      - name: Independently verify original Bitcoin block and seven-arm outcomes
+        run: |
+          set -euo pipefail
+          ( cd evidence/source && sha256sum -c SOURCE.sha256 >/dev/null )
+          for arm in hxf4 ym_fischer rime_new rime_original minisat cadical picosat; do
+            ( cd evidence/arm-results && sha256sum -c "$arm/MANIFEST.sha256" >/dev/null )
+          done
+          python3 -s -B experiments/bitcoin/verify.py evidence | tee evidence/BTC_VERIFIED.hbp
+          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=4|observations=28|' evidence/BTC_VERIFIED.hbp
+          grep -Fq '|wrong_header_rejections=20|all_claimed_models=PASS|status=PASS' evidence/BTC_VERIFIED.hbp
+          mkdir -p evidence/research-source
+          cp experiments/bitcoin/*.py evidence/research-source/
+          cp .github/workflows/bitcoin-genesis-7.yml evidence/research-source/
+          ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
+          ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: btc-7way-verified-complete-evidence
+          path: evidence/
+          retention-days: 60
+          if-no-files-found: error
+  archived-check:
+    needs: independently-verified
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: btc-7way-verified-complete-evidence
+          path: verified
+      - name: Re-audit published Bitcoin SHA256d SAT data
+        run: |
+          set -euo pipefail
+          cd verified
+          test -s BTC_VERIFIED.hbp
+          test -s source/nonce32.cnf
+          test -s source/merkle_nonce288.cnf
+          grep -Fq 'BTC_REFEREE_FINAL|arms=7|cases=4|observations=28|' BTC_VERIFIED.hbp
+          sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
+          echo 'BITCOIN_7WAY_FINAL|genesis_SHA256d=PASS|source=PASS|archive=PASS|status=PASS'
