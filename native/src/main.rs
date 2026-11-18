@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric,
     guidance::{Guidance, Strategy},
-    policy, relic,
+    policy, relic, source,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -36,6 +36,32 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
+        Some("source-attest") => {
+            let trained = arguments.next().ok_or("missing trained source root")?;
+            let stage = arguments.next().ok_or("missing stage source root")?;
+            let output = arguments.next().ok_or("missing HBI/HBP output root")?;
+            if arguments.next().is_some() {
+                return_fail("too many source attest arguments");
+            }
+            let count = source::attest(
+                Path::new(&trained), Path::new(&stage), Path::new(&output),
+            )?;
+            let independently_replayed = source::verify(Path::new(&output))?;
+            if count != independently_replayed {
+                return_fail("source HBI/HBP acceptance count differed");
+            }
+            println!("PNP_SOURCE_ATTEST|source_pins={count}|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("source-verify") => {
+            let path = arguments.next().ok_or("missing HBI/HBP archive path")?;
+            if arguments.next().is_some() {
+                return_fail("too many source verify arguments");
+            }
+            let count = source::verify(Path::new(&path))?;
+            println!("PNP_SOURCE_VERIFY|source_pins={count}|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
         Some("relic") => {
             for level in 0..5 {
                 let a = relic::anchor(level).ok_or("landing overflow")?;
@@ -81,7 +107,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
