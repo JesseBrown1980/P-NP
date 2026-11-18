@@ -3,8 +3,12 @@
 //! Historical Python algorithms are retained solely as legacy evidence.
 
 pub mod freeze;
+pub mod guidance;
 pub mod matrix;
 pub mod policy;
+pub mod relic;
+pub mod solver;
+pub mod ternary;
 pub mod triad;
 
 pub fn certify_matrix_fabric() -> Result<(usize, usize, usize), &'static str> {
