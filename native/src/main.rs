@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave,
     guidance::{Guidance, Strategy},
-    policy, relic, source,
+    policy, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -31,6 +31,9 @@ fn main() {
                 let (balanced, coordinated, triples) = certify_exact_witness()
                     .map_err(str::to_owned)?;
                 println!("PNP_NATIVE_WITNESS|ordered_triples={triples}|balanced_faults_rejected={balanced}|coordinated_reports_rejected={coordinated}|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0");
+                let (wave_rooms, path_decisions, children_verified) = certify_lazy_wave()
+                    .map_err(str::to_owned)?;
+                println!("PNP_NATIVE_WAVE|rooms={wave_rooms}|path_decisions={path_decisions}|signed_children={children_verified}|center=1|addressed_lazy=PASS|third_seat=PASS|altered_paths=REJECTED|status=PASS|json=0");
                 println!("PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|source_frozen=PASS|nodes_runtime=0|json_runtime=0|v8_runtime=0|status=PASS|json=0");
                 Ok(())
             }
@@ -51,6 +54,37 @@ fn main() {
                 return_fail("source HBI/HBP acceptance count differed");
             }
             println!("PNP_SOURCE_ATTEST|source_pins={count}|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("score-attest") => {
+            let input = arguments.next().ok_or("missing original scoring HBI input")?;
+            let sources = arguments.next().ok_or("missing authenticated source archive")?;
+            let output = arguments.next().ok_or("missing scoring HBI/HBP output directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many score attest arguments");
+            }
+            let count = scoring::attest(
+                Path::new(&input), Path::new(&sources), Path::new(&output),
+            )?;
+            if scoring::verify(Path::new(&input), Path::new(&sources), Path::new(&output))?
+                != count
+            {
+                return_fail("source score replay differed");
+            }
+            println!("PNP_SOURCE_SCORE|cases={count}|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|trained_gnn=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("score-verify") => {
+            let input = arguments.next().ok_or("missing original scoring HBI input")?;
+            let sources = arguments.next().ok_or("missing authenticated source archive")?;
+            let output = arguments.next().ok_or("missing scoring archive")?;
+            if arguments.next().is_some() {
+                return_fail("too many score verify arguments");
+            }
+            let count = scoring::verify(
+                Path::new(&input), Path::new(&sources), Path::new(&output),
+            )?;
+            println!("PNP_SCORE_VERIFY|cases={count}|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("source-verify") => {
@@ -94,11 +128,12 @@ fn main() {
             if formula.variables <= 16 && !check_against_exhaustive(&formula, &result) {
                 return_fail("independent exhaustive witness/refutation failed");
             }
-            println!("PNP_TERNARY_SAT|engine={}|variables={}|clauses={}|fanout={}|lanes_used={}|mtpfrozen_patterns={}|fischer_addresses={}|matrix_rooms={}|fabric_witnesses={}|nodes={}|propagations={}|literal_checks={}|status={}|json=0",
+            println!("PNP_TERNARY_SAT|engine={}|variables={}|clauses={}|fanout={}|lanes_used={}|mtpfrozen_patterns={}|fischer_addresses={}|matrix_rooms={}|fabric_witnesses={}|wave_reads={}|wave_children={}|nodes={}|propagations={}|literal_checks={}|status={}|json=0",
                 strategy.label(), formula.variables, formula.clauses.len(),
                 preparation.fanout, preparation.lanes_used,
                 preparation.frozen_mtp_patterns, preparation.fischer_addresses,
                 preparation.matrix_rooms, preparation.fabric_witnesses,
+                preparation.wave_reads, preparation.wave_choices_checked,
                 result.nodes, result.propagations, result.literal_checks,
                 result.status.label());
             if let Some(model) = result.model {
@@ -107,7 +142,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {

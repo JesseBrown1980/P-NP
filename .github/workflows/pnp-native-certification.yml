@@ -60,7 +60,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -76,6 +76,7 @@ jobs:
           grep -Fq 'PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms=120|played_cells=3240|omega_centers=120|' PNP_MATRIX.hbp
           grep -Fq '|planted_faults_rejected=42|operator_approval=HELD|json=0' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WAVE|rooms=120|path_decisions=426|signed_children=1278|center=1|addressed_lazy=PASS|third_seat=PASS|altered_paths=REJECTED|status=PASS|json=0' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           native/target/release/pnp-native certify > PNP_MATRIX_REPEAT.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
@@ -123,6 +124,55 @@ jobs:
           native/target/release/pnp-native source-verify evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_SOURCE_DIGESTS.sha256 )
           echo 'PNP_SOURCE_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|checkpoint=REJECTED|restored=PASS|json=0'
+      - name: Source-matched integer SHA baseline and reverse-gain HBI HBP receipts
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native score-attest native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence | tee PNP_SCORE_ATTEST.hbp
+          native/target/release/pnp-native score-verify native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence | tee PNP_SCORE_REPLAY.hbp
+          grep -Fq 'PNP_SOURCE_SCORE|cases=9|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|trained_gnn=HOLD|status=PASS|json=0' PNP_SCORE_ATTEST.hbp
+          grep -Fq 'PNP_SCORE_VERIFY|cases=9|sha_baseline=EXACT|reverse_gain=EXACT|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0' PNP_SCORE_REPLAY.hbp
+          test "$(grep -c '^SCORE|' evidence/PNP_SCORE.hbp)" -eq 9
+          test "$(grep -c '^HBI|' evidence/PNP_SCORE.hbi)" -eq 9
+          grep -Fq '|baseline_q=8190|reverse_q=1810|promoted=1|mark=GENIUS|' evidence/PNP_SCORE.hbp
+          cp evidence/PNP_SCORE.hbp "$RUNNER_TEMP/frozen-score.hbp"
+          cp evidence/PNP_SCORE.hbi "$RUNNER_TEMP/frozen-score.hbi"
+          cp evidence/PNP_SCORE.anchor "$RUNNER_TEMP/frozen-score.anchor"
+          native/target/release/pnp-native score-attest native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence > "$RUNNER_TEMP/repeat-score.hbp"
+          cmp evidence/PNP_SCORE.hbp "$RUNNER_TEMP/frozen-score.hbp"
+          cmp evidence/PNP_SCORE.hbi "$RUNNER_TEMP/frozen-score.hbi"
+          cmp evidence/PNP_SCORE.anchor "$RUNNER_TEMP/frozen-score.anchor"
+          ( cd evidence && sha256sum PNP_SCORE.hbp PNP_SCORE.hbi PNP_SCORE.anchor > PNP_SCORE_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_SCORE_DIGESTS.sha256 )
+          echo 'HBIHEADER|schema=pnp.score.cases.v1|source_blob=b101c0989de3af0ca41db0eac1293c758d7e5296|seal=HBI-HBP-SHA-SH-HASH|json=0' > "$RUNNER_TEMP/UNSEEN.hbi"
+          echo 'CASE|id=fresh|pid_hex=666f6f|content_hex=626172|baseline_q=none|reverse_q=none|mark=none|json=0' >> "$RUNNER_TEMP/UNSEEN.hbi"
+          native/target/release/pnp-native score-attest "$RUNNER_TEMP/UNSEEN.hbi" evidence "$RUNNER_TEMP/unseen" > "$RUNNER_TEMP/fresh-score.hbp"
+          native/target/release/pnp-native score-verify "$RUNNER_TEMP/UNSEEN.hbi" evidence "$RUNNER_TEMP/unseen" > /dev/null
+          grep -Fq 'baseline_sha256=0fc7e25e075c7849f89b9729d1aeada1c4d791893248a042f8025c35f26b635f|sh=0fc7e25e075c7849|baseline_q=390|reverse_q=9610|promoted=0|mark=MISTAKE|' "$RUNNER_TEMP/unseen/PNP_SCORE.hbp"
+          test "$(grep -c '^SCORE|' "$RUNNER_TEMP/unseen/PNP_SCORE.hbp")" -eq 1
+          echo 'PNP_SCORE_FRESH|input=UNSEEN|source_authenticated=PASS|integer_output=EXACT|hbi=PASS|hbp=PASS|json=0'
+          echo 'PNP_SCORE_REFERENCE|original_source=PINNED|integer_q=EXACT|cases=9|byte_replay=PASS|json=0'
+      - name: Independent original-score evidence corruption controls
+        run: |
+          set -euo pipefail
+          for path in PNP_SCORE.hbp PNP_SCORE.hbi PNP_SCORE.anchor; do
+            cp "evidence/$path" "$RUNNER_TEMP/$path"
+            printf 'X' >> "evidence/$path"
+            if native/target/release/pnp-native score-verify native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence > "$RUNNER_TEMP/score-tamper.hbp" 2>&1; then
+              echo "PNP_SCORE_NEGATIVE_FAIL|path=$path|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$path" "evidence/$path"
+          done
+          cp native/fixtures/SOURCE_SCORE_VECTORS.hbi "$RUNNER_TEMP/source-score.hbi"
+          sed -i 's/baseline_q=8190/baseline_q=8191/' native/fixtures/SOURCE_SCORE_VECTORS.hbi
+          if native/target/release/pnp-native score-verify native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence > "$RUNNER_TEMP/score-oracle-tamper.hbp" 2>&1; then
+            echo 'PNP_SCORE_NEGATIVE_FAIL|oracle=altered|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/source-score.hbi" native/fixtures/SOURCE_SCORE_VECTORS.hbi
+          native/target/release/pnp-native score-verify native/fixtures/SOURCE_SCORE_VECTORS.hbi evidence evidence > /dev/null
+          ( cd evidence && sha256sum -c PNP_SCORE_DIGESTS.sha256 )
+          echo 'PNP_SCORE_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|oracle=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -195,10 +245,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -224,6 +274,13 @@ jobs:
           cd accepted
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
           sha256sum -c PNP_SOURCE_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_SCORE_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_SOURCE_SCORE|cases=9|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_ATTEST.hbp
+          grep -Fq 'PNP_SCORE_VERIFY|cases=9|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_REPLAY.hbp
+          test "$(grep -c '^SCORE|' PNP_SCORE.hbp)" -eq 9
+          test "$(grep -c '^HBI|' PNP_SCORE.hbi)" -eq 9
+          grep -Fq '|baseline_q=8190|reverse_q=1810|promoted=1|mark=GENIUS|' PNP_SCORE.hbp
+          grep -Fq '|trained_gnn=HOLD|' PNP_SCORE.hbp
           grep -Fq 'PNP_SOURCE_ATTEST|source_pins=23|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0' SOURCE_ATTEST.hbp
           grep -Fq 'PNP_SOURCE_VERIFY|source_pins=23|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' SOURCE_VERIFY.hbp
           test "$(grep -c '^HBI|' PNP_TRAINED_SOURCE.hbi)" -eq 23
@@ -235,6 +292,7 @@ jobs:
           test "$root_bi" = "$(sha256sum PNP_TRAINED_SOURCE.hbi | cut -d' ' -f1)"
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WAVE|rooms=120|path_decisions=426|signed_children=1278|center=1|addressed_lazy=PASS|' PNP_MATRIX.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
           cmp PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp
           cmp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp

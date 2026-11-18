@@ -11,6 +11,7 @@ use crate::freeze::{fischer_address, FrozenMatrix, RIME_PRIME};
 use crate::matrix::{Matrix, CELLS};
 use crate::ternary::{Cnf, Trit};
 use crate::triad::wave_cascade;
+use crate::wave::WaveRouter;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Strategy {
@@ -96,6 +97,8 @@ pub struct Guidance {
     pub matrix_rooms: usize,
     pub fabric_witnesses: usize,
     pub root_accepted: bool,
+    pub wave_reads: usize,
+    pub wave_choices_checked: usize,
 }
 
 fn token(lit: i32) -> i8 {
@@ -195,6 +198,8 @@ impl Guidance {
             }
         }
 
+        let mut wave_reads = 0_usize;
+        let mut wave_choices_checked = 0_usize;
         let (matrix_rooms, fabric_witnesses, root_accepted) =
             if strategy.uses_matrix() {
                 let original = cnf_matrix(cnf, fanout)?;
@@ -207,14 +212,33 @@ impl Guidance {
                 if !witnessed.accepted {
                     return Err("third fabric witness rejected source".to_owned());
                 }
+                let router = WaveRouter::new(&frozen)
+                    .ok_or("wave source could not rebuild the signed fabric")?;
                 for (index, position) in score.iter_mut().enumerate() {
                     let cell = index % CELLS;
                     let room = (index / CELLS) % fanout;
                     let played = frozen.play(room, cell)
                         .ok_or("Bobby Fischer playback rejected")?;
-                    // The frozen matrix is the actual third information-flow
-                    // source; it contributes an integer signed observation.
-                    *position += i128::from(played.value.unsigned_abs()) * 16;
+                    // Exact requested branch traverses 3-ary supervisors.
+                    // Each node's signed child sums are frozen/reconstructed
+                    // from actual matrix data; these values affect ordering.
+                    let wave = router.read(index % fanout)
+                        .ok_or("on-demand ternary wave traversal rejected")?;
+                    if !router.verify_read(&wave) {
+                        return Err("wave reflection disagreed with fabric".to_owned());
+                    }
+                    wave_reads = wave_reads.checked_add(1)
+                        .ok_or("wave read counter overflow")?;
+                    wave_choices_checked = wave_choices_checked
+                        .checked_add(wave.choices_checked)
+                        .ok_or("wave supervisor counter overflow")?;
+                    let wave_score = wave.room_total.unsigned_abs();
+                    let wave_score = i128::try_from(wave_score)
+                        .map_err(|_| "wave score out of range")?;
+                    *position = position
+                        .checked_add(i128::from(played.value.unsigned_abs()) * 16)
+                        .and_then(|v| v.checked_add(wave_score * 4))
+                        .ok_or("integer matrix wave score overflow")?;
                 }
                 (fanout, witnessed.fabric_reads, witnessed.accepted)
             } else {
@@ -258,6 +282,7 @@ impl Guidance {
             strategy, order, fanout, lanes_used,
             frozen_mtp_patterns, fischer_addresses,
             matrix_rooms, fabric_witnesses, root_accepted,
+            wave_reads, wave_choices_checked,
         })
     }
 }
@@ -281,6 +306,14 @@ mod tests {
                        if strategy.uses_matrix() { guided.fanout } else { 0 });
             assert_eq!(guided.fischer_addresses,
                        if strategy.uses_fischer() { 121 } else { 0 });
+            assert_eq!(guided.wave_reads,
+                       if strategy.uses_matrix() { 121 } else { 0 });
+            assert_eq!(guided.wave_choices_checked,
+                       if strategy.uses_matrix() {
+                           121 * match guided.fanout {
+                               3 => 3, 27 => 9, 81 => 12, _ => unreachable!(),
+                           }
+                       } else { 0 });
         }
     }
 

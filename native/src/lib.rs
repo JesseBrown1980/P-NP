@@ -7,11 +7,13 @@ pub mod guidance;
 pub mod matrix;
 pub mod policy;
 pub mod relic;
+pub mod scoring;
 pub mod sha256;
 pub mod source;
 pub mod solver;
 pub mod ternary;
 pub mod triad;
+pub mod wave;
 
 pub fn certify_matrix_fabric() -> Result<(usize, usize, usize), &'static str> {
     use crate::freeze::FrozenMatrix;
@@ -118,4 +120,53 @@ pub fn certify_exact_witness() -> Result<(usize, usize, usize), &'static str> {
         return Err("exact witness acceptance totals changed");
     }
     Ok((balanced_rejected, coordinated_rejected, exact_triples))
+}
+
+/// Independently exercise every physically materialized 3/9/27/81 room
+/// through the lazy signed ternary wave; count checks and reject altered paths.
+pub fn certify_lazy_wave() -> Result<(usize, usize, usize), &'static str> {
+    use crate::freeze::FrozenMatrix;
+    use crate::matrix::Matrix;
+    use crate::wave::WaveRouter;
+
+    let mut rooms = 0_usize;
+    let mut path_decisions = 0_usize;
+    let mut children_verified = 0_usize;
+    for count in [3_usize, 9, 27, 81] {
+        let source = Matrix::generated(count)?;
+        let frozen = FrozenMatrix::freeze(&source);
+        let router = WaveRouter::new(&frozen).ok_or("wave source witness unavailable")?;
+        for room in 0..count {
+            let original = source.room(room).ok_or("room absent")?;
+            let expected: i128 = original.iter().map(|&x| i128::from(x)).sum();
+            let report = router.read(room).ok_or("wave traversal absent")?;
+            if !router.verify_read(&report)
+                || report.room_total != expected
+                || report.center_value != 1
+                || report.address != room as u128
+            {
+                return Err("wave third-seat source replay disagreed");
+            }
+            let mut corrupted = report.clone();
+            corrupted.room_total = corrupted.room_total.checked_add(1)
+                .ok_or("corruption overflow")?;
+            if router.verify_read(&corrupted) {
+                return Err("altered ternary wave report accepted");
+            }
+            let mut tampered_path = report.clone();
+            tampered_path.digits[0] = tampered_path.digits[0].negate();
+            tampered_path.address = tampered_path.address.checked_add(1)
+                .ok_or("path corruption overflow")?;
+            if router.verify_read(&tampered_path) {
+                return Err("altered wave address accepted");
+            }
+            rooms += 1;
+            path_decisions += report.levels;
+            children_verified += report.choices_checked;
+        }
+    }
+    if (rooms, path_decisions, children_verified) != (120, 426, 1278) {
+        return Err("ternary wave acceptance counts changed");
+    }
+    Ok((rooms, path_decisions, children_verified))
 }
