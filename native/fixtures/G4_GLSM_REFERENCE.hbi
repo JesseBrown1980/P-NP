@@ -11,4 +11,4 @@ G4CASE|id=path_below|prev=EDGE_MINED|edge=1|path=4999|gain=0|g1=1024|g2=1025|g3=
 G4CASE|id=path_at|prev=EDGE_MINED|edge=1|path=5000|gain=0|g1=1027|g2=1028|g3=1029|next=PATH_FOUND|emit=1|tier0=0|json=0
 G4CASE|id=gain_below|prev=PATH_FOUND|edge=1|path=5000|gain=4999|g1=1030|g2=1031|g3=1032|next=PATH_FOUND|emit=0|tier0=0|json=0
 G4CASE|id=gain_at|prev=PATH_FOUND|edge=1|path=5000|gain=5000|g1=1033|g2=1034|g3=1035|next=CONVERGED|emit=1|tier0=0|json=0
-G4CASE|id=edge_zero|prev=DESCRIBED|edge=0|path=9000|gain=9000|g1=1036|g2=1037|g3=1038|next=DESCRIBED|emit=0|tier0=0
+G4CASE|id=edge_zero|prev=DESCRIBED|edge=0|path=9000|gain=9000|g1=1036|g2=1037|g3=1038|next=DESCRIBED|emit=0|tier0=0|json=0
