@@ -64,3 +64,8 @@ The [historical ASOLARIA Rime Fischer implementation](historical/asolaria-2026-0
 ## Hard SAT challenge: six competitors, four original CNFs
 
 The [source-frozen six-contender hard SAT benchmark](docs/HARD_SAT_SIX_WAY_20261117.md) tested the original Yang–Mills Fischer strategy, newly implemented Rime, byte-identical historical ASOLARIA Fischer, MiniSat, CaDiCaL and PicoSAT on PHP(21,20), a 128-vertex odd-charge Tseitin contradiction and two controls. The original SAT witness, exact XOR and DRAT claims were independently checked; 100 adversarial verdict flips were rejected. The largest PHP challenge exhausted all declared budgets, while all three structural approaches certified the Tseitin contradiction at zero search nodes. The mathematical P versus NP question remains open.
+
+
+## 84-case six-competitor SAT array
+
+The [accepted 14-input × six-arm research array](docs/SAT_ARRAY_84_RESULTS_20261117.md) reproduces 84 source-identical SAT runs across original Yang–Mills Fischer, new Pohlig–Hellman-guided Rime, byte-original historical ASOLARIA Rime, MiniSat, CaDiCaL and PicoSAT. All six arms completed 11/14 decisions, with three declared HOLDs each. The modern and historical PH variants used fewer search nodes on medium UNSAT pigeonhole tests; Yang–Mills used fewer on larger satisfiable controls. The parity-aware research engines certified four Tseitin contradictions at zero search nodes. Independent acceptance verified all 84 original sources, SAT witnesses, eight CaDiCaL DRAT proofs and 20 corrupted-witness controls. [Hosted final run #44208774230](https://github.com/JesseBrown1980/P-NP/actions/runs/44208774230).
