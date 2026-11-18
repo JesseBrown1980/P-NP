@@ -24,7 +24,6 @@ const ROWS: usize = 1 + STREAMS*ROUTES + 9 + 3 + 4 + 1;
 const EVENTS: usize = 8_000;
 const SYMBOLS: usize = 20;
 const BLOCKS_PER_PAIR: [usize;3] = [400,80,50];
-const CANDIDATES_PER_BLOCK: usize = 40;
 const HBP_HEADER: &str = "HBPHEADER|schema=pnp.tls.omnibit40.coded.v1|scope=PUBLIC_SYNTHETIC|seal=HBI-HBP-SHA-SH-HASH|json=0\n";
 const HBI_HEADER: &str = "HBIHEADER|schema=pnp.tls.omnibit40.index.v1|for=PNP_TLS_OMNI40.hbp|seal=HBI-HBP-SHA-SH-HASH|json=0\n";
 const GC_OWNED: &str = "PNP_TLS_OMNI40_GULP_OWNED.tmp";
@@ -449,10 +448,10 @@ fn make_bundle(source_sha:&str,operator_sha:&str,inputs:&[Input],
             }
         }
     }
-    for mode in 0..3_usize{
+    for (mode,amounts) in by_mode.iter().enumerate(){
         push("TLS_OMNI_REGIME",&format!("{mode}"),&format!(
             "mode={mode}|runs_per_route=6|binary_frame_bytes={}|ternary_frame_bytes={}|mixed_frame_bytes={}|source=HELDOUT_AND_SHUFFLED",
-            by_mode[mode][0],by_mode[mode][1],by_mode[mode][2]
+            amounts[0],amounts[1],amounts[2]
         ));
     }
     let gc=[
