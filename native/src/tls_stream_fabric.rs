@@ -238,7 +238,7 @@ fn make_bundle(prior: &Path) -> Result<(Bundle, Stats), String> {
     let binary_length = fs::metadata(std::env::current_exe().map_err(|e|e.to_string())?)
         .map_err(|e|e.to_string())?.len() as usize;
     let snapshot_charge = snapshots.iter().map(|x|x.len()+2).sum::<usize>();
-    let mut routed = FabricClient::start()?;
+    let routed = FabricClient::start()?;
     let mut times = [0_u128;3];
     let mut verified_calls=0;
     for (lane,arity) in [3,27,81].into_iter().enumerate() {
