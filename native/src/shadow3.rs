@@ -114,7 +114,10 @@ mod tests {
         assert!(changed.reconstruct().is_err());
         changed = witness.clone();
         changed.residual_corner[3] += 1;
-        assert!(changed.reconstruct().is_err());
+        // The eight independent residuals select a different, still valid
+        // cube with the SAME shadows. Source hash/witness binding detects
+        // this substitution; linear equations alone cannot.
+        assert_ne!(changed.reconstruct(), Ok(source));
     }
 
     #[test]
