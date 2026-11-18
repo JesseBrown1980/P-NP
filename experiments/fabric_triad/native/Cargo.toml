@@ -1,0 +1,16 @@
+[package]
+name = "asolaria-fabric-triad"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81.0"
+description = "Exact-integer third fabric witness for N-Nest triads"
+
+[lib]
+name = "asolaria_fabric_triad"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fabric-triad"
+path = "src/main.rs"
+
+[dependencies]
