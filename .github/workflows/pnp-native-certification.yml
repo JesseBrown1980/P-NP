@@ -59,6 +59,14 @@ jobs:
           path: source-omni
           persist-credentials: false
           fetch-depth: 1
+      - name: Checkout original Q-PRISM Rust Host8 code at frozen Git commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control
+          ref: b4a21a25381d6920b7aab92c94c3c3e1420fc9e4
+          path: source-prism
+          persist-credentials: false
+          fetch-depth: 1
       - name: Pin exact Rust 1.81, offline sources and Clippy
         run: |
           set -euo pipefail
@@ -84,7 +92,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -330,6 +338,49 @@ jobs:
           native/target/release/pnp-native fabric-gc-verify source-gac source-neural source-omni evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 )
           echo 'PNP_FABRIC_GC_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: Exact Q-PRISM 256-to-1024 40-bit rung with signed source receipts
+        run: |
+          set -euo pipefail
+          rustc --edition=2021 --test source-prism/host8/qprism_cube_host8.rs -o "$RUNNER_TEMP/qprism-original-tests"
+          "$RUNNER_TEMP/qprism-original-tests" | tee ORIGINAL_PRISM_REFERENCE.hbp
+          native/target/release/pnp-native prism-attest source-prism evidence | tee PNP_PRISM_ATTEST.hbp
+          native/target/release/pnp-native prism-verify source-prism evidence | tee PNP_PRISM_VERIFY.hbp
+          grep -Fq 'PNP_PRISM|rung=256_1024|bits=40|bytes_per_block=5|glyphs_per_block=4|cube_bytes=3200|cube_glyphs=2560|cases=15|source_git=VERIFIED|canonical_padding=PASS|inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|operator=HELD|status=PASS|json=0' PNP_PRISM_ATTEST.hbp
+          grep -Fq 'PNP_PRISM_VERIFY|cases=15|original_source=VERIFIED|inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_PRISM_VERIFY.hbp
+          test "$(grep -c '^PRISM|' evidence/PNP_PRISM.hbp)" -eq 15
+          test "$(grep -c '^HBI|' evidence/PNP_PRISM.hbi)" -eq 15
+          grep -Fq 'input_sha256=fe28e4a1813ea87aa55d9e4aad3e8ac028a2142890e39b3ab8e5eb40ba4ef05e|symbols_sha256=9593d266e75e5494172c62f4ceaebc2c4bd9a9cb9476f528f9d71543f313d4ab' evidence/PNP_PRISM.hbp
+          cp evidence/PNP_PRISM.hbp "$RUNNER_TEMP/original-prism.hbp"
+          cp evidence/PNP_PRISM.hbi "$RUNNER_TEMP/original-prism.hbi"
+          cp evidence/PNP_PRISM.anchor "$RUNNER_TEMP/original-prism.anchor"
+          native/target/release/pnp-native prism-attest source-prism evidence > "$RUNNER_TEMP/repeat-prism.hbp"
+          cmp evidence/PNP_PRISM.hbp "$RUNNER_TEMP/original-prism.hbp"
+          cmp evidence/PNP_PRISM.hbi "$RUNNER_TEMP/original-prism.hbi"
+          cmp evidence/PNP_PRISM.anchor "$RUNNER_TEMP/original-prism.anchor"
+          ( cd evidence && sha256sum PNP_PRISM.hbp PNP_PRISM.hbi PNP_PRISM.anchor > PNP_PRISM_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_PRISM_DIGESTS.sha256 )
+      - name: PRISM source/HBI/HBP/anchor deliberate tamper rejection
+        run: |
+          set -euo pipefail
+          for name in PNP_PRISM.hbp PNP_PRISM.hbi PNP_PRISM.anchor; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native prism-verify source-prism evidence > "$RUNNER_TEMP/prism-tamper.hbp" 2>&1; then
+              echo "PNP_PRISM_TAMPER_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp source-prism/host8/qprism_cube_host8.rs "$RUNNER_TEMP/frozen-original-prism.rs"
+          printf X >> source-prism/host8/qprism_cube_host8.rs
+          if native/target/release/pnp-native prism-verify source-prism evidence > "$RUNNER_TEMP/original-prism-tamper.hbp" 2>&1; then
+            echo 'PNP_PRISM_TAMPER_FAIL|original_source=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/frozen-original-prism.rs" source-prism/host8/qprism_cube_host8.rs
+          native/target/release/pnp-native prism-verify source-prism evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_PRISM_DIGESTS.sha256 )
+          echo 'PNP_PRISM_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -402,10 +453,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -435,6 +486,12 @@ jobs:
           sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_PRISM_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_PRISM|rung=256_1024|bits=40|bytes_per_block=5|glyphs_per_block=4|cube_bytes=3200|cube_glyphs=2560|cases=15|' PNP_PRISM_ATTEST.hbp
+          grep -Fq 'PNP_PRISM_VERIFY|cases=15|original_source=VERIFIED|inverse=EXACT|' PNP_PRISM_VERIFY.hbp
+          test "$(grep -c '^PRISM|' PNP_PRISM.hbp)" -eq 15
+          test "$(grep -c '^HBI|' PNP_PRISM.hbi)" -eq 15
+          grep -Fq 'input_sha256=fe28e4a1813ea87aa55d9e4aad3e8ac028a2142890e39b3ab8e5eb40ba4ef05e|symbols_sha256=9593d266e75e5494172c62f4ceaebc2c4bd9a9cb9476f528f9d71543f313d4ab' PNP_PRISM.hbp
           grep -Fq 'PNP_FABRIC_GC|sources=10|gac=3|neural=5|omni=2|tuple_dim=60|access_cells=36|gc_policy_cases=6|records=16|' PNP_FABRIC_GC_ATTEST.hbp
           grep -Fq 'PNP_FABRIC_GC_VERIFY|records=16|tuple_dim=60|access_cells=36|source_hashes=VERIFIED|' PNP_FABRIC_GC_VERIFY.hbp
           test "$(grep -c '^FABRIC_SOURCE|' PNP_FABRIC_GC.hbp)" -eq 10
