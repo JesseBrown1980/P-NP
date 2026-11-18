@@ -63,6 +63,23 @@ impl TemporalService{
             self.models.insert(id,Model{fit,choice});
             return Ok(vec![VERSION,choice as u8]);
         }
+        if route.starts_with("/temporal/score/"){
+            let segments:Vec<&str>=route.split('/').collect();
+            if segments.len()!=7 || !segments[0].is_empty()
+                || segments[1]!="temporal" || segments[2]!="score"
+                || !data.is_empty(){
+                return Err("temporal score request framing wrong".into());
+            }
+            let arity:usize=segments[3].parse().map_err(|_|"score arity")?;
+            let case:u8=segments[4].parse().map_err(|_|"score case")?;
+            let variant:u8=segments[5].parse().map_err(|_|"score variant")?;
+            let floor:u16=segments[6].parse().map_err(|_|"score floor")?;
+            let (b,s)=self.score(arity,case,variant,floor)?;
+            let mut out=Vec::with_capacity(32);
+            out.extend_from_slice(&b.to_le_bytes());
+            out.extend_from_slice(&s.to_le_bytes());
+            return Ok(out);
+        }
         let parts:Vec<&str>=route.split('/').collect();
         if parts.len()!=11 || !parts[0].is_empty() || parts[1]!="temporal"
             || parts[2]!="frame"{
@@ -239,6 +256,20 @@ impl TemporalClient{
             return Err("independent floor/ternary or 243-tick matrix witness disagrees".into());
         }
         Ok(PredictedFrame{model:usize::from(response[1]),trits,matrix,probs})
+    }
+    pub fn score(&self,arity:usize,case:u8,variant:u8,floor:u16)
+        ->Result<(u128,u128),String>
+    {
+        let path=format!("/temporal/score/{arity}/{case}/{variant}/{floor}");
+        let (status,body)=self.client.call(&path,&[])?;
+        if status!="HTTP/1.1 200 OK\r\n" || body.len()!=32{
+            return Err("temporal independent score receipt malformed".into());
+        }
+        let b=u128::from_le_bytes(body[..16].try_into()
+            .map_err(|_|"temporal baseline score width")?);
+        let s=u128::from_le_bytes(body[16..].try_into()
+            .map_err(|_|"temporal learned score width")?);
+        Ok((b,s))
     }
     pub fn invalid_frame_rejected(&self,arity:usize,task:&Task)->Result<usize,String>{
         let good=matrix_wire::encode(task,256,0)?;
