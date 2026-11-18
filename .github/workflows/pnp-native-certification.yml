@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   pnp-native-rust181-gate:
     name: native-rust181-int-only-clippy-sources-replay
@@ -158,6 +159,37 @@ jobs:
             grep -Fq "PNP_RIME_SAT_ARM|arm=$arm|" "$root/RIME_SAT_BENCH.hbp"
           done
           grep -Fq 'PNP_RIME_SAT_ACCEPT|same_cases=PASS|sat_model=PASS|unsat_exhaustive=PASS|three_path_consensus=PASS|source_after=PASS|speed_status=MEASURED|p_np_status=OPEN|json=0' "$root/RIME_SAT_BENCH.hbp"
+      - name: Run Bitcoin genesis SHA256d original-bitblast Rime/Pump-Funnel comparison
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/bitcoin-original"
+          mkdir -p "$source_root"
+          if ! gh run download 44213748169 --repo JesseBrown1980/P-NP \
+                --name btc-source-bitblast --dir "$source_root"; then
+            echo 'BTC_SOURCE_ARCHIVE|fetch=UNAVAILABLE|fallback=ORIGINAL_GENERATOR|json=0'
+            python3 -s -B experiments/bitcoin/genesis.py "$source_root" \
+                | tee "$source_root/GENESIS_BUILD.hbp"
+          fi
+          test -s "$source_root/nonce4.cnf"
+          test -s "$source_root/nonce8.cnf"
+          test -s "$source_root/nonce32.cnf"
+          test -s "$source_root/merkle_nonce288.cnf"
+          ( cd "$source_root" && test -f SOURCE.sha256 && sha256sum -c SOURCE.sha256 ) || \
+            echo 'BTC_SOURCE_ARCHIVE|external_manifest=UNAVAILABLE|native_original_SHA_GATE=MANDATORY'
+          test -s "$RUNNER_TEMP/constellation/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf"
+          timeout --kill-after=5s 240s native/target/release/pnp-native \
+            bitcoin-rime-bench "$source_root" \
+            "$RUNNER_TEMP/constellation/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf" \
+              | tee "$RUNNER_TEMP/BITCOIN_RIME_BENCH.hbp"
+          test "$(grep -c '^BTC_RIME_SOURCE|' "$RUNNER_TEMP/BITCOIN_RIME_BENCH.hbp")" -eq 4
+          test "$(grep -c '^BTC_RIME_ARM|' "$RUNNER_TEMP/BITCOIN_RIME_BENCH.hbp")" -eq 16
+          grep -Fq 'BTC_RIME_FINAL|cases=4|arms=4|observations=16|' \
+            "$RUNNER_TEMP/BITCOIN_RIME_BENCH.hbp"
+          grep -Fq '|all_original_sha256=PASS|every_sat_model=CHECKED|every_sat_sha256d=PASS|source_post=PASS|status=PASS|json=0' \
+            "$RUNNER_TEMP/BITCOIN_RIME_BENCH.hbp"
       - name: Use original 256-outcome Rust decoder with real master table
         shell: bash
         run: |
