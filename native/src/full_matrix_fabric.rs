@@ -60,7 +60,7 @@ pub struct Stats{
     pub arms:Vec<Arm>,
 }
 
-fn witnesses(tasks:&[Task],expected:&[[u64;CELLS]])
+fn witnesses(tasks:&[Task],expected:&[[u64;CELLS]],source_sha:&str)
     ->Result<(usize,usize,usize),String>
 {
     let mut triads=0;
@@ -84,7 +84,6 @@ fn witnesses(tasks:&[Task],expected:&[[u64;CELLS]])
         triads+=1;
     }
     if triads!=18{return Err("not all source matrix triads were checked".into());}
-    let source_sha=hash_bytes(MAGIC);
     let mut tuple_count=0;
     let mut gnn_count=0;
     for (i,task) in tasks.iter().enumerate(){
@@ -96,7 +95,7 @@ fn witnesses(tasks:&[Task],expected:&[[u64;CELLS]])
         coordinates[4]=i64::from(task.trits[13])-1;
         let tuple=FabricTuple{
             coordinates,tier:Tier::Public,scope:Scope::Pid,
-            source_digest:source_sha.clone(),
+            source_digest:source_sha.to_owned(),
         };
         let encoded=tuple.encode().map_err(str::to_owned)?;
         let parsed=encoded.split("|coordinates=").nth(1)
@@ -131,11 +130,12 @@ fn source_and_roots(prior:&Path)->Result<(Vec<Task>,Vec<String>),String>{
     for filename in PRIOR_FILES {
         let bytes=fs::read(prior.join(filename))
             .map_err(|e|format!("pinned gate {filename}: {e}"))?;
-        if bytes.len()<80 || !bytes.starts_with(if filename.ends_with(".bin"){
+        let expected_header:&[u8]=if filename.ends_with(".bin"){
             b"PNP-TERNARY-KERNEL-RESULTS-v1\0"
         }else{
             b"HBPHEADER|"
-        }){
+        };
+        if bytes.len()<80 || !bytes.starts_with(expected_header){
             return Err(format!("prior original plane missing: {filename}"));
         }
         roots.push(hash_bytes(&bytes));
@@ -214,7 +214,7 @@ type Bundle=(Vec<u8>,String,String,String);
 fn execute(prior:&Path)->Result<(Bundle,Stats),String>{
     let (tasks,roots)=source_and_roots(prior)?;
     let expected=tasks.iter().map(compute_primary).collect::<Vec<_>>();
-    let (matrix_triads,tuple_checks,gnn_hold_checks)=witnesses(&tasks,&expected)?;
+    let (matrix_triads,tuple_checks,gnn_hold_checks)=witnesses(&tasks,&expected,&roots[0])?;
     let output=output_bytes(&tasks,&expected)?;
     if inspect_bytes(&output)?!=TASKS{
         return Err("full matrix result file invalid".into());
@@ -390,7 +390,7 @@ mod tests{
             trits:[(i%3)as u8;CELLS],
         }).collect::<Vec<_>>();
         let expected=tasks.iter().map(compute_primary).collect::<Vec<_>>();
-        assert_eq!(witnesses(&tasks,&expected).unwrap(),(18,54,54));
+        assert_eq!(witnesses(&tasks,&expected,&hash_bytes(b"fixture")).unwrap(),(18,54,54));
         let body=output_bytes(&tasks,&expected).unwrap();
         assert_eq!(inspect_bytes(&body).unwrap(),54);
         let mut corrupted=body;
