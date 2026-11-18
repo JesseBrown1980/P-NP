@@ -88,5 +88,38 @@ PNP_FULL_MATRIX.hbi, PNP_FULL_MATRIX.anchor and the hosted SHA
 manifest. The original source archive and trained model bytes
 remain protected; prior automatic post-GULP scratch deletion is unchanged.
 
-**Status: source staged, hosted measurement pending.** Original
-trained GNN forward remains a separate HOLD.
+**Acceptance:** the first execution passed both jobs in [run #44354419893](https://github.com/JesseBrown1980/P-NP/actions/runs/44354419893) on 2026-11-18. The subsequent dedicated wrong-floor/padding-control change is subject to a fresh hosted rerun before promotion. Original trained GNN forward remains a separate HOLD.
+
+
+## First hosted result, 2026-11-18 (run #44354419893)
+
+The native Rust 1.81 gate passed with 107 unit tests, no Clippy
+warnings, an exact-integer LLVM check, and independently rechecked
+published evidence. All 51,840 cross-system calls reconstructed both
+the 27 original trits and 27 output field elements exactly.
+
+| Source/room configuration | Calls | Actual recurrences | Memory hits | Visited rooms | Single-run wall |
+|---|---:|---:|---:|---:|---:|
+| Direct same-crossing processor | 8,640 | 8,640 | 0 | in-process | 139.261 ms |
+| Direct source-keyed memo | 8,640 | 54 | 8,586 | in-process | 10.643 ms |
+| Fischer HTTP-0, width 3, no recall | 8,640 | 8,640 | 0 | 3 | 493.261 ms |
+| Fischer HTTP-0, width 3, recall | 8,640 | 54 | 8,586 | 3 | 435.330 ms |
+| Fischer HTTP-0, width 27, no recall | 8,640 | 8,640 | 0 | 27 | 506.776 ms |
+| Fischer HTTP-0, width 27, recall | 8,640 | 54 | 8,586 | 27 | 439.431 ms |
+| Fischer HTTP-0, width 81, no recall | 8,640 | 8,640 | 0 | 54 | 516.303 ms |
+| Fischer HTTP-0, width 81, recall | 8,640 | 54 | 8,586 | 54 | 365.735 ms |
+
+Each room-capacity column has two matched native-process arms with
+the same original task data and same cross-product of original
+operators and four exact binary floors. HTTP-0 worker is sequential;
+performance differences across widths are single-run observations,
+not concurrent scaling or trained model advantage. The source
+authenticated four-GNN-family and nine-checkpoint provenance,
+54 native G4 missing-signal holds, 54 GAC 60D **metadata**
+roundtrips and 18 exact third-seat matrix triads passed.
+
+This is the first connected binary/ternary/Omnibit40/Fischer/HTTP-0
+compute/witness trial. The next neural acceptance gate must implement
+original-model tensor naming, shapes, stride/adjacency and activations,
+and match independent source forward outputs on held-out graphs
+before introducing learned GNN routing or learning claims.
