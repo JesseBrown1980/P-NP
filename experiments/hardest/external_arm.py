@@ -139,5 +139,5 @@ if __name__ == "__main__":
     assert len(sys.argv) == 6
     arm, case, cnf_path, archive_path, drat = sys.argv[1:]
     assert arm in ("minisat", "cadical", "picosat")
-    assert case in ("php21", "php8", "tseitin128")
+    assert case in ("php21", "php8", "tseitin128", "php4sat")
     run_external(arm, case, Path(cnf_path), Path(archive_path), Path(drat))
