@@ -6,6 +6,7 @@
 
 use crate::binary_ternary_bridge::{decode_route, encode_route};
 use crate::freeze::{fischer_address, FrozenMatrix};
+use crate::fischer_prime_tower::reverse_fischer_address;
 use crate::matrix::{kind, CellKind, Matrix, CELLS, OMEGA};
 use crate::prism;
 use crate::sha256::hash_bytes;
@@ -179,6 +180,9 @@ impl BrownSlice {
         for index in indices {
             let address = fischer_address(index as u64, room as u64)
                 .ok_or("invalid Fischer null-outward address")?;
+            if reverse_fischer_address(address) != Some((index as u64, room as u64)) {
+                return Err("Fischer prime-tower reverse address rejected");
+            }
             out.push((index, restored[index], address));
         }
         if out.first().map(|entry| entry.0) != Some(OMEGA) {
