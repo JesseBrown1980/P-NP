@@ -1,5 +1,16 @@
 # P-NP — exact complexity research laboratory
 
+## Mandatory native software acceptance (November 17–18, 2026)
+
+**The Yang–Mills engineering standard now governs every P-NP implementation, retrospectively and prospectively.** Rust **1.81.0**, exact integers/trits, zero floating point, **zero Node.js / JSON / V8 runtime**, offline locked builds, Clippy `-D warnings`, original-source SHA pins, separate independent checks, tamper rejection, exact HBP/HBI receipts and independently rechecked archives.
+
+**All 44 historical Python executable files and all 10 prior CI workflows are `FAIL_NATIVE_ACCEPTANCE` as software under this new standard**, including earlier Fischer/HXF, SAT-array, Bitcoin, RIME, MTP and N-Nest prototypes. Their original source blobs and independently replayable research results remain preserved. Historical GREEN benchmark receipts mean the archived tests passed their *original* requirements; they are not Yang–Mills-grade software approval. Pending Python-first drafts also require Rust-native recertification.
+
+The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pinned legacy inventory](policy/LEGACY_PINNED.hbp) define the cutover. The native Rust `native/` acceptance pilot covers universal 27-cell matrix addressing, 2D shadow freeze/play and the matrix-as-third-fabric-witness cascade. The complete trained GNN/FNN, Omni/Host-8, hotel, tournament, and SAT-solving architecture is **HOLD pending its own native implementation and tests**. [Native CI workflow](.github/workflows/pnp-native-certification.yml).
+
+---
+
+
 **Status (2026-11-17): OPEN RESEARCH.** This repository tests whether source-frozen, independently verified representation discovery and move selection can reduce the total cost of difficult constraint problems. The mathematical outcome is undecided. A finite set of successful experiments is evidence about algorithms and instances, while a statement about the complexity classes P and NP requires a mathematical theorem.
 
 ## Purpose

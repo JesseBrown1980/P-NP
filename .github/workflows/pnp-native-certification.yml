@@ -1,0 +1,138 @@
+name: "P-NP mandatory native Rust 1.81 software acceptance"
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pnp-native-rust181-gate:
+    name: native-rust181-int-only-clippy-sources-replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin exact Rust 1.81, offline sources and Clippy
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy --component rustfmt
+          rustc +1.81.0 --version | tee RUST_PIN.hbp
+          grep -Fq 'rustc 1.81.0 ' RUST_PIN.hbp
+          test "$(grep -c '^\[\[package\]\]' native/Cargo.lock)" -eq 1
+          test "$(find native -name Cargo.toml -type f | wc -l)" -eq 1
+          test "$(find native -name Cargo.lock -type f | wc -l)" -eq 1
+      - name: All native tests, zero-warning Clippy, and locked release build
+        working-directory: native
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --all-targets --offline --locked
+          cargo +1.81.0 clippy --all-targets --offline --locked -- -D warnings
+          cargo +1.81.0 build --release --offline --locked
+      - name: Reject drift in legacy implementations and any new non-Rust code
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native audit . | tee PNP_AUDIT.hbp
+          grep -Fq 'PNP_LEGACY_AUDIT|legacy_failed=54|python_scripts=44|old_workflows=10|' PNP_AUDIT.hbp
+          grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
+      - name: Independently scan executable project Rust source
+        run: |
+          set -euo pipefail
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/lib.rs native/src/main.rs native/src/matrix.rs native/src/freeze.rs native/src/triad.rs; then
+            echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
+            exit 1
+          fi
+          if git ls-files | grep -E '^native/.*\.(js|cjs|mjs|json|py|ts)$'; then
+            echo 'PNP_NATIVE_REJECT|reason=external_runtime_in_native_path|json=0'
+            exit 1
+          fi
+          echo 'PNP_SOURCE_INTEGER|float_types=0|unsafe_blocks=0|nodejs=0|json_runtime=0|v8=0|status=PASS|json=0'
+      - name: Test frozen matrix, 2D shadow and all third-seat corrections
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native certify | tee PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms=120|played_cells=3240|omega_centers=120|' PNP_MATRIX.hbp
+          grep -Fq '|planted_faults_rejected=42|operator_approval=HELD|json=0' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
+          native/target/release/pnp-native certify > PNP_MATRIX_REPEAT.hbp
+          cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
+          sha256sum PNP_MATRIX.hbp native/target/release/pnp-native > PNP_NATIVE_OUTPUT.sha256
+          sha256sum -c PNP_NATIVE_OUTPUT.sha256
+          echo 'PNP_DETERMINISM|byte_exact=PASS|replay=PASS|status=PASS|json=0'
+      - name: Scan compiled LLVM IR for floating arithmetic instructions
+        working-directory: native
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 rustc --release --offline --locked --lib -- --emit=llvm-ir
+          count=$(find target/release/deps -name 'pnp_native-*.ll' -type f | wc -l)
+          test "$count" -ge 1
+          if grep -nE '(^|[[:space:]])(fadd|fsub|fmul|fdiv|frem|fcmp)[[:space:]]|@llvm\.(sqrt|fma|fmuladd)\.' target/release/deps/pnp_native-*.ll; then
+            echo 'PNP_COMPILED_REJECT|reason=float_ir_instruction|json=0'
+            exit 1
+          fi
+          echo "PNP_COMPILED_INTEGER|project_ir_scanned=$count|float_ir_instructions=0|status=PASS|json=0"
+      - name: Plant source-tamper and foreign runtime negatives
+        run: |
+          set -euo pipefail
+          cp sat/engine.py "$RUNNER_TEMP/original-engine.py"
+          trap 'cp "$RUNNER_TEMP/original-engine.py" sat/engine.py; git reset -q -- intent_new_runtime.py >/dev/null 2>&1 || :; rm -f intent_new_runtime.py' EXIT
+          printf '\n# adversarial tamper\n' >> sat/engine.py
+          if native/target/release/pnp-native audit . >"$RUNNER_TEMP/TAMPER_LEGACY.hbp" 2>&1; then
+            echo 'PNP_NEGATIVE_FAIL|legacy_tamper_not_detected|json=0'
+            exit 1
+          fi
+          grep -Fq 'historical source changed' "$RUNNER_TEMP/TAMPER_LEGACY.hbp"
+          cp "$RUNNER_TEMP/original-engine.py" sat/engine.py
+          printf 'print(1)\n' > intent_new_runtime.py
+          git add -N intent_new_runtime.py
+          if native/target/release/pnp-native audit . >"$RUNNER_TEMP/TAMPER_RUNTIME.hbp" 2>&1; then
+            echo 'PNP_NEGATIVE_FAIL|new_nonrust_not_detected|json=0'
+            exit 1
+          fi
+          grep -Fq 'non-native executable is not accepted' "$RUNNER_TEMP/TAMPER_RUNTIME.hbp"
+          git reset -q -- intent_new_runtime.py
+          rm intent_new_runtime.py
+          native/target/release/pnp-native audit . >"$RUNNER_TEMP/RESTORE.hbp"
+          echo 'PNP_NEGATIVE_CONTROLS|legacy_source_tamper=REJECTED|new_nonrust_runtime=REJECTED|restored=PASS|json=0'
+      - name: Source-provenance and immutable HBP evidence archive
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 evidence/
+          git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
+          git ls-files > evidence/TRACKED_SOURCES.hbi
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp > evidence/SOURCE_PINS.sha256
+          ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
+          ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
+          echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pnp-native-rust181-software-acceptance-evidence
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+  archive-independent-recheck:
+    name: published-evidence-independent-check
+    needs: pnp-native-rust181-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-native-rust181-software-acceptance-evidence
+          path: accepted
+      - name: Independently recheck published original source and byte-exact evidence
+        run: |
+          set -euo pipefail
+          cd accepted
+          sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
+          grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
+          cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
+          grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
+          echo 'PNP_NATIVE_ARCHIVE|locked_rust=1.81.0|reproducible=PASS|sha256=PASS|status=PASS|json=0'

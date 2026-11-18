@@ -1,0 +1,20 @@
+[package]
+name = "pnp-native"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.81.0"
+license = "MIT"
+description = "Exact-integer source-frozen P-NP research acceptance kernel"
+
+[lib]
+name = "pnp_native"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pnp-native"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+overflow-checks = true
