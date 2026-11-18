@@ -28,10 +28,10 @@ fn main() {
             let remote = pnp_native::rime_disk::loopback_once(&store, 0, 0)?;
             if direct != remote { return_fail("HTTP-0 loopback differs from direct disk read"); }
             store.verify_source()?;
-            println!("PNP_RIME_DISK|source_sha256={}|bytes={}|tensors={}|glyphs=27|rime_pairs={}|compared={}|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0",
+            println!("PNP_RIME_DISK|source_sha256={}|bytes={}|tensors={}|glyphs=27|rime_pairs={}|compared={}|shadow_cubes={}|anchors_per_cube=8|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0",
                 pnp_native::rime_disk::FOUR_AXES_SHA256,
                 pnp_native::rime_disk::FOUR_AXES_BYTES,
-                store.tensor_count(), comparisons / 27, comparisons);
+                store.tensor_count(), comparisons / 27, comparisons, shadow_cubes);
             Ok(())
         },
         Some("audit") => {
