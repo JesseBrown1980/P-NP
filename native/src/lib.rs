@@ -55,3 +55,65 @@ pub fn certify_matrix_fabric() -> Result<(usize, usize, usize), &'static str> {
     }
     Ok((rooms_tested, played_cells, corruptions_rejected))
 }
+
+/// Stronger third-seat acceptance: same-column cancelling errors and
+/// coordinated worker/reflection claims must fail against a reversible
+/// matrix witness at every supervisor level.
+pub fn certify_exact_witness() -> Result<(usize, usize, usize), &'static str> {
+    use crate::freeze::FrozenMatrix;
+    use crate::matrix::Matrix;
+    use crate::triad::{
+        wave_cascade_balanced, wave_cascade_coordinated, Fault, Seat,
+    };
+
+    let mut balanced_rejected = 0;
+    let mut coordinated_rejected = 0;
+    let mut exact_triples = 0;
+    for (rooms, height) in [(3, 1), (9, 2), (27, 3), (81, 4)] {
+        let matrix = Matrix::generated(rooms)?;
+        let frozen = FrozenMatrix::freeze(&matrix);
+        if !frozen.verify() {
+            return Err("reversible frozen witness failure");
+        }
+        for room in 0..rooms {
+            for column in 0..9 {
+                let triple = frozen.reconstruct_triple(room, column)
+                    .ok_or("missing exact triple")?;
+                for (depth, value) in triple.iter().enumerate() {
+                    if *value != matrix.room(room).ok_or("missing source room")?
+                        [column + 9 * depth]
+                    {
+                        return Err("exact triple mismatch");
+                    }
+                }
+                exact_triples += 1;
+            }
+        }
+        for level in 0..=height {
+            for seat in [Seat::Worker, Seat::Reflection, Seat::MatrixFabric] {
+                let verdict = wave_cascade_balanced(
+                    &frozen, Fault { level, seat },
+                ).ok_or("balanced test could not execute")?;
+                if verdict.accepted || verdict.mismatches < 2
+                    || verdict.worker_total != verdict.reflection_total
+                    || verdict.worker_total != verdict.fabric_total
+                {
+                    return Err("balanced tamper bypassed exact witness");
+                }
+                balanced_rejected += 1;
+            }
+            let verdict = wave_cascade_coordinated(&frozen, level)
+                .ok_or("coordinated test could not execute")?;
+            if verdict.accepted || verdict.mismatches == 0 {
+                return Err("coordinated reports bypassed matrix witness");
+            }
+            coordinated_rejected += 1;
+        }
+    }
+    if (balanced_rejected, coordinated_rejected, exact_triples)
+        != (42, 14, 1080)
+    {
+        return Err("exact witness acceptance totals changed");
+    }
+    Ok((balanced_rejected, coordinated_rejected, exact_triples))
+}

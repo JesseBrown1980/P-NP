@@ -30,6 +30,44 @@ pub fn fischer_address(glyph: u64, position: u64) -> Option<u64> {
     Some(power_mod(RIME_GENERATOR, exponent, RIME_PRIME))
 }
 
+/// Exact, reversible three-layer witness for one 2D matrix column.
+/// Stored separately from the raw cell plane; no lossy projection is used.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TripleWitness {
+    sum: i128,
+    delta_first: i128,
+    delta_second: i128,
+}
+
+impl TripleWitness {
+    fn from_values(values: [i64; 3]) -> Self {
+        let first = i128::from(values[0]);
+        let second = i128::from(values[1]);
+        let third = i128::from(values[2]);
+        let sum = first + second + third;
+        Self {
+            sum,
+            delta_first: 3 * first - sum,
+            delta_second: 3 * second - sum,
+        }
+    }
+
+    fn recover(self) -> Option<[i64; 3]> {
+        let last = self.delta_first.checked_add(self.delta_second)?.checked_neg()?;
+        let mut recovered = [0_i64; 3];
+        for (index, delta) in [self.delta_first, self.delta_second, last]
+            .iter().copied().enumerate()
+        {
+            let numerator = self.sum.checked_add(delta)?;
+            if numerator % 3 != 0 {
+                return None;
+            }
+            recovered[index] = i64::try_from(numerator / 3).ok()?;
+        }
+        (Self::from_values(recovered) == self).then_some(recovered)
+    }
+}
+
 pub fn shadow(cells: &[i64; CELLS]) -> [i128; 9] {
     let mut out = [0_i128; 9];
     for z in 0..3 {
@@ -50,6 +88,7 @@ pub fn shadow(cells: &[i64; CELLS]) -> [i128; 9] {
 pub struct FrozenMatrix {
     data: Vec<[i64; CELLS]>,
     shadow_2d: Vec<[i128; 9]>,
+    exact_triples: Vec<[TripleWitness; 9]>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -63,17 +102,41 @@ pub struct PlayedCell {
 
 impl FrozenMatrix {
     pub fn freeze(matrix: &Matrix) -> Self {
+        let exact_triples = matrix.rooms().iter().map(|cells| {
+            std::array::from_fn(|column| {
+                TripleWitness::from_values([
+                    cells[column], cells[column + 9], cells[column + 18]
+                ])
+            })
+        }).collect();
         Self {
             data: matrix.rooms().to_vec(),
             shadow_2d: matrix.rooms().iter().map(shadow).collect(),
+            exact_triples,
         }
     }
 
     pub fn verify(&self) -> bool {
         !self.data.is_empty()
             && self.data.len() == self.shadow_2d.len()
+            && self.data.len() == self.exact_triples.len()
             && self.data.iter().zip(self.shadow_2d.iter())
-                .all(|(cells, projection)| shadow(cells) == *projection)
+                .zip(self.exact_triples.iter())
+                .all(|((cells, projection), triples)| {
+                    shadow(cells) == *projection
+                        && (0..9).all(|column| {
+                            triples[column].sum == projection[column]
+                                && triples[column].recover() == Some([
+                                    cells[column], cells[column + 9], cells[column + 18]
+                                ])
+                        })
+                })
+    }
+
+    /// Independently reconstruct all three values at a 2D address.
+    /// This is an exact inverse, not an intensity-only estimate.
+    pub fn reconstruct_triple(&self, room: usize, column: usize) -> Option<[i64; 3]> {
+        self.exact_triples.get(room)?.get(column)?.recover()
     }
 
     pub fn room_count(&self) -> usize {
@@ -108,7 +171,10 @@ impl FrozenMatrix {
     }
 
     pub fn retained_words(&self) -> usize {
-        self.data.len() * CELLS + self.shadow_2d.len() * 9 * 2
+        // i64-word equivalents: raw 27, shadow 18, reversible triples 54.
+        self.data.len() * CELLS
+            + self.shadow_2d.len() * 9 * 2
+            + self.exact_triples.len() * 9 * 6
     }
 }
 
@@ -135,7 +201,7 @@ mod tests {
             assert_eq!(snapshot.room_count(), n);
             assert!(snapshot.play(n, 0).is_none());
             assert!(snapshot.play(0, CELLS).is_none());
-            assert_eq!(snapshot.retained_words(), n * (CELLS + 18));
+            assert_eq!(snapshot.retained_words(), n * (CELLS + 18 + 54));
         }
     }
 
@@ -153,6 +219,44 @@ mod tests {
         let matrix = Matrix::generated(3).expect("matrix");
         let mut frozen = FrozenMatrix::freeze(&matrix);
         frozen.data[1][13] += 1;
+        assert!(!frozen.verify());
+    }
+
+    #[test]
+    fn exact_triples_round_trip_at_signed_boundaries() {
+        for values in [
+            [i64::MIN, 0, i64::MAX],
+            [i64::MAX, i64::MAX, i64::MIN],
+            [-1, 0, 1],
+            [0, 0, 0],
+        ] {
+            let witness = TripleWitness::from_values(values);
+            assert_eq!(witness.recover(), Some(values));
+            let mut corrupted = witness;
+            corrupted.delta_first += 1;
+            assert!(corrupted.recover().is_none());
+        }
+    }
+
+    #[test]
+    fn balanced_same_column_source_corruption_rejected() {
+        let source = Matrix::generated(3).expect("source");
+        let mut frozen = FrozenMatrix::freeze(&source);
+        assert_eq!(frozen.reconstruct_triple(0, 0), Some([-13, -4, 5]));
+        // Equal and opposite source changes cancel in the old 2D shadow.
+        frozen.data[0][0] += 1;
+        frozen.data[0][9] -= 1;
+        assert_eq!(shadow(&frozen.data[0]), frozen.shadow_2d[0]);
+        assert!(!frozen.verify());
+        assert!(frozen.play(0, 0).is_none());
+        assert_eq!(frozen.reconstruct_triple(0, 9), None);
+    }
+
+    #[test]
+    fn changed_reversible_witness_is_rejected() {
+        let source = Matrix::generated(3).expect("source");
+        let mut frozen = FrozenMatrix::freeze(&source);
+        frozen.exact_triples[0][0].delta_first += 3;
         assert!(!frozen.verify());
     }
 

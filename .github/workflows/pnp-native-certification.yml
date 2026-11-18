@@ -59,6 +59,7 @@ jobs:
           native/target/release/pnp-native certify | tee PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms=120|played_cells=3240|omega_centers=120|' PNP_MATRIX.hbp
           grep -Fq '|planted_faults_rejected=42|operator_approval=HELD|json=0' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           native/target/release/pnp-native certify > PNP_MATRIX_REPEAT.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
@@ -166,6 +167,7 @@ jobs:
           cd accepted
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|' PNP_MATRIX.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
           cmp PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp
           cmp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp

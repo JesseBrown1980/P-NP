@@ -10,6 +10,14 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Exact ternary matrix witness (November 18, 2026)
+
+[Phase-2 PR #29](https://github.com/JesseBrown1980/P-NP/pull/29) extends the native matrix third seat from aggregate comparison to **ordered, exact per-address reconstruction** using nine reversible `(S,d0,d1)` witness triples per 27-cell room. It preserves the 3/9/27/81 nested cascade and validates **1,080 triples** across 120 rooms. The new negative controls reject **42 balanced, sum-preserving ±1 faults** and **14 coordinated worker/reflection report faults**, alongside the original **42 single-report tests**. This redundancy is intentional verification storage, with original-source hashes and archived receipts supplying provenance.
+
+The [first hosted Rust 1.81 certification and independent archive run](https://github.com/JesseBrown1980/P-NP/actions/runs/44277700671) passed both jobs. Historical trained-network weights and the full Omni/Host-8 restoration remain assigned to [issue #28](https://github.com/JesseBrown1980/P-NP/issues/28).
+
+---
+
 ## Native ternary engine rebuild (November 18, 2026)
 
 The [Rust 1.81 native ternary engine protocol](native/TERNARY_ENGINE_PROTOCOL.md) now uses [THE RELIC REDISCOVERY](https://github.com/JesseBrown1980/THE-RELIC-REDISCOVERY) as the exact reference for invariant free-center semantics, ternary prefixes, intermediate ×3 waves, nonuniform structural landings, and 27-triple center/difference reconstruction. The 3/27/81 n-ary structures are real source-derived dispatch lanes and matrix fabric widths. Balanced `−1,0,+1` trits represent false, unassigned, true in the SAT core.

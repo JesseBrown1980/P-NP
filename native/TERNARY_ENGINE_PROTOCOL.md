@@ -46,6 +46,14 @@ native/target/release/pnp-native sat hybrid81 native/fixtures/php4_3.cnf 0
 
 The native solver tests exhaustively compare 2,304 small CNF/strategy outcomes against a separate complete assignment enumerator and replay 9 configurations on SAT, UNSAT, and PHP examples. The original source pin remains enforced; no legacy executable is edited. The native workflow also checks output determinism, source-only guidance, third-seat tamper controls, compiled project integer LLVM IR, and independent uploaded evidence recheck.
 
+## Phase-2 exact third-seat matrix witness (PR following #27)
+
+The frozen 27-cell room is now witnessed at **each of its nine 2D columns** by an exact, reversible 3-layer triple `(S,d0,d1)`. The data cells remain stored: each `S=x0+x1+x2`, `d0=3x0-S`, `d1=3x1-S`, and `d2=-d0-d1`; the independent matrix seat reconstructs `x_i=(S+d_i)/3` with exact divisibility and signed range checks. The 2D shadow is still retained for provenance, but equality of aggregate totals or shadows is not an acceptance criterion. The third seat checks original ordered values at every `(room,column,depth)` address.
+
+The fail-closed hierarchy retains all 42 established single-report faults and additionally exercises **42 cancelling ±1 report errors** (same shadow column, aggregate sum unchanged) plus **14 coordinated worker/reflection report corruptions** across all 3/9/27/81 supervisor levels. Exact reconstructed triples cover **1,080** addressed columns across 120 rooms. Passing reports are emitted by `pnp-native certify` as `PNP_NATIVE_WITNESS` and independently checked in the HBP archive replay. Source-cell and witness mutations, including a balanced two-cell mutation that preserves the old shadow, have direct negative tests.
+
+Each room retains 27 `i64` source words, 9 `i128` shadow words, and 27 `i128` reversible witness words: **99 `i64`-equivalent words per room**, deliberately storing redundant information for verification. This is a verification plane, not a compression claim or a cryptographic source authentication layer. Immutable Git source pins and SHA-256 evidence remain responsible for source provenance; a coordinated alteration of every source and witness surface requires external authenticating evidence to detect.
+
 ## Further certification work
 
 **HOLD for historical engine equivalence:** The archived MTP textual trained weights, GNN traversal-generated functions, FNN, Host-8 tournament, OmniDispatcher, OmniSpindle, OmniRouters, OmniHotel/OmegaHotel, and full original HXF structural certificates are not yet native Rust ports. Current MTP counts are trained *locally from input clause trits*, without external trained weights. The Fischer integer branch-prior is an exact generator-based addressing heuristic, not cryptographic inversion.
