@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -662,6 +662,64 @@ jobs:
           native/target/release/pnp-native omni40-verify source-omnibit evidence evidence > /dev/null
           ( cd evidence && sha256sum -c PNP_OMNI40_DIGESTS.sha256 )
           echo 'PNP_OMNI40_NEGATIVE|operator_selector=REJECTED|original_source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|payload=REJECTED|restored=PASS|json=0'
+      - name: PRL DOI-backed classical TLS hidden-memory paired-history acceptance
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native tls-memory-attest evidence | tee PNP_TLS_ATTEST.hbp
+          native/target/release/pnp-native tls-memory-verify evidence | tee PNP_TLS_VERIFY.hbp
+          grep -Fq 'PNP_TLS_MEMORY|doi=10.1103/j1r2-5ph7|model=CLASSICAL_FIXED_POINT_EULER|latent_cells=0_1_3_27_81|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_ATTEST.hbp
+          grep -Fq '|heldout_oracle_squared_error=0|' PNP_TLS_ATTEST.hbp
+          grep -Fq '|gc_exact_replay=HELD_UNLESS_STATE_RETAINED|physics_fit=NO|quantum_hardware=NO|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_TLS_ATTEST.hbp
+          grep -Fq 'PNP_TLS_MEMORY_VERIFY|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_VERIFY.hbp
+          grep -Fq '|records=196|source=FROZEN_DOI_REFERENCE|exact_trace=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_TLS_VERIFY.hbp
+          test "$(grep -c '^TLS_SOURCE|' evidence/PNP_TLS.hbp)" -eq 1
+          test "$(grep -c '^TLS_MODEL|' evidence/PNP_TLS.hbp)" -eq 10
+          test "$(grep -c '^TLS_PAIR|' evidence/PNP_TLS.hbp)" -eq 30
+          test "$(grep -c '^TLS_LAG|' evidence/PNP_TLS.hbp)" -eq 150
+          test "$(grep -c '^TLS_GC|' evidence/PNP_TLS.hbp)" -eq 4
+          test "$(grep -c '^TLS_SUMMARY|' evidence/PNP_TLS.hbp)" -eq 1
+          test "$(grep -c '^HBI|' evidence/PNP_TLS.hbi)" -eq 196
+          grep -Fq '|first_lag_difference=1080|' evidence/PNP_TLS.hbp
+          grep -Fq '|tls_cells=81|coupling=1200|' evidence/PNP_TLS.hbp
+          grep -Fq '|tls_cells=0|coupling=0|' evidence/PNP_TLS.hbp
+          grep -Fq '|scope=EXACT_REPLAY_REQUIRED|summary_committed=1|needed_state_retained=0|independent_replay=0|eligible_to_reclaim=0|' evidence/PNP_TLS.hbp
+          grep -Fq '|scope=EXACT_REPLAY_REQUIRED|summary_committed=1|needed_state_retained=1|independent_replay=1|eligible_to_reclaim=1|' evidence/PNP_TLS.hbp
+          grep -Fq '|g2_measured=NO|' evidence/PNP_TLS.hbp
+          grep -Fq '|model=CLASSICAL_FIXED_POINT|oracle_knows_generator=YES|physics_fit=NO|quantum_hardware=NO|statistical_predictive_gain=NOT_CLAIMED|' evidence/PNP_TLS.hbp
+          for name in PNP_TLS.hbp PNP_TLS.hbi PNP_TLS.anchor PNP_TLS_TRACE.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/original-$name"
+          done
+          native/target/release/pnp-native tls-memory-attest evidence > "$RUNNER_TEMP/repeated-tls.hbp"
+          for name in PNP_TLS.hbp PNP_TLS.hbi PNP_TLS.anchor PNP_TLS_TRACE.bin; do
+            cmp "evidence/$name" "$RUNNER_TEMP/original-$name"
+          done
+          ( cd evidence && sha256sum PNP_TLS.hbp PNP_TLS.hbi PNP_TLS.anchor PNP_TLS_TRACE.bin > PNP_TLS_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_TLS_DIGESTS.sha256 )
+      - name: TLS memory HBI HBP trace and source corruption adversarial checks
+        run: |
+          set -euo pipefail
+          for name in PNP_TLS.hbp PNP_TLS.hbi PNP_TLS.anchor PNP_TLS_TRACE.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/safe-$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native tls-memory-verify evidence > "$RUNNER_TEMP/tls-corrupted.log" 2>&1; then
+              echo "PNP_TLS_NEGATIVE_FAIL|file=$name"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/safe-$name" "evidence/$name"
+          done
+          cp native/fixtures/PRL_TLS_SOURCE.hbi "$RUNNER_TEMP/PRL_TLS_SOURCE.hbi"
+          printf X >> native/fixtures/PRL_TLS_SOURCE.hbi
+          # The fixture is embedded in the immutable Rust executable. The
+          # independent source hash check in the published source manifest
+          # catches filesystem-level alterations of the source after build.
+          if sha256sum native/fixtures/PRL_TLS_SOURCE.hbi | grep -Fq "$(sha256sum "$RUNNER_TEMP/PRL_TLS_SOURCE.hbi" | cut -d' ' -f1)"; then
+            echo 'PNP_TLS_NEGATIVE_FAIL|source_hash_unchanged'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/PRL_TLS_SOURCE.hbi" native/fixtures/PRL_TLS_SOURCE.hbi
+          native/target/release/pnp-native tls-memory-verify evidence > /dev/null
+          ( cd evidence && sha256sum -c PNP_TLS_DIGESTS.sha256 )
+          echo 'PNP_TLS_NEGATIVE|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|trace=REJECTED|frozen_source_tamper=DETECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -734,10 +792,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -773,6 +831,15 @@ jobs:
           sha256sum -c PNP_BRIDGE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_OMNI40_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_TLS_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_TLS_MEMORY|doi=10.1103/j1r2-5ph7|model=CLASSICAL_FIXED_POINT_EULER|latent_cells=0_1_3_27_81|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_ATTEST.hbp
+          grep -Fq 'PNP_TLS_MEMORY_VERIFY|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_VERIFY.hbp
+          test "$(grep -c '^TLS_PAIR|' PNP_TLS.hbp)" -eq 30
+          test "$(grep -c '^TLS_LAG|' PNP_TLS.hbp)" -eq 150
+          test "$(grep -c '^HBI|' PNP_TLS.hbi)" -eq 196
+          grep -Fq '|first_lag_difference=1080|' PNP_TLS.hbp
+          grep -Fq '|model=CLASSICAL_FIXED_POINT|oracle_knows_generator=YES|physics_fit=NO|quantum_hardware=NO|statistical_predictive_gain=NOT_CLAIMED|' PNP_TLS.hbp
+          grep -Fq '|scope=EXACT_REPLAY_REQUIRED|summary_committed=1|needed_state_retained=0|independent_replay=0|eligible_to_reclaim=0|' PNP_TLS.hbp
           grep -Fq 'PNP_OMNI40|original_catalog=BYTE_IDENTICAL|operators=40|rnq=8|tri=12|pi=20|floor_widths=6_8_10_12|compound=256_PLUS_64|public_fixtures=20|vantage_labels=6|candidate_trials=20160|selections=504|' PNP_OMNI40_ATTEST.hbp
           grep -Fq 'PNP_OMNI40_VERIFY|operators=40|candidate_trials=20160|selections=504|receipts=20710|all_payload_bytes=VERIFIED|' PNP_OMNI40_VERIFY.hbp
           test "$(grep -c '^OMNI40_OPERATOR|' PNP_OMNI40.hbp)" -eq 40

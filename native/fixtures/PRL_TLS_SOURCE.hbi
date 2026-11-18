@@ -1,0 +1,3 @@
+HBIHEADER|schema=pnp.prl.tls.source.v1|scope=PUBLIC_SCIENTIFIC_REFERENCE|seal=HBI-HBP-SHA-SH-HASH|json=0
+PRL_SOURCE|doi=10.1103/j1r2-5ph7|title=Probing_the_memory_of_a_superconducting_qubit_environment|journal=Physical_Review_Letters|accepted=2026-10-28|url=https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7|model=SOLOMON_POPULATION_RATES|experiment=NON_POISSONIAN_JUMP_TRACES|json=0
+PRL_SCOPE|physics=LONG_LIVED_TLS_MEMORY|simulation=CLASSICAL_FIXED_POINT_EULER|hardware=NOT_MEASURED|experimental_fitting=NOT_PERFORMED|quantum_coherence=NOT_INFERRED|source_content_sha256=NOT_PINNED|json=0

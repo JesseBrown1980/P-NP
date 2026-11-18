@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## PRL-backed temporal-memory and hidden TLS reservoirs — source-scoped classical gate (November 18, 2026)
+
+The [TLS temporal-memory protocol](native/TLS_TEMPORAL_MEMORY_PROTOCOL.md) connects the experimentally measured memory of superconducting qubit environments in Gosling et al., [PRL DOI 10.1103/j1r2-5ph7](https://doi.org/10.1103/j1r2-5ph7), with a new **classical, exact fixed-point computational test** of the Asolaria matrix fabric. This is an independently verifiable simulation inspired by Solomon population equations, not a quantum-device measurement or a fitted physical model.
+
+The Rust 1.81 acceptance tests **0/1/3/27/81 hidden TLS cells**, 10 fixed synthetic model configurations, 30 matched low/high hidden-state pairs and 150 temporal-lag observations. **18 memoryless controls** must have no false hidden-memory signal, while **12 coupled pairs** must show distinct future visible populations despite matching their current visible state. A separate integer net-flux calculation verifies the simulator and a history-shuffle test checks causal dependence on hidden state.
+
+An exact **196-record HBI → HBP → SHA → SH → HASH** certificate includes the paper DOI/scope, model parameters, trace SHA roots, immutable 60 trajectories, GC retention policy cases, and independent published replay. Automatic post-GULP GC may release disposable summaries after durable commitment, while exact-replay temporal memory is retained until its complete future-state and reconstruction proof exist. This gate contains eligibility tests; it does not delete protected temporal state. The generator-aware baseline and full-model comparison do not by themselves establish predictive learning or quantum coherence.
+
+---
+
 ## All 40 original Omnibit operators on native mixed binary/ternary floors (November 18, 2026)
 
 The [40-operator mixed-floor protocol](native/OMNIBIT_40_OPERATOR_GATE.md) integrates the **exact original Rust source** from [Asolaria Omega Omnibit Tournament](https://github.com/JesseBrown1980/asolaria-omega-omnibit-tournament/tree/dad4647ad19a1b08ee90990c34aab1255f9a6046/reference/omega-operator-catalog-v0): 8 inherited **RNQ** operators, 12 chunk-rotation **TRI** operators and 20 icosahedral-face BFS **PI** operators. The source is imported byte-for-byte and checked against the frozen Git blob.

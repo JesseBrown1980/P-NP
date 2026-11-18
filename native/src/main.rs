@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
-    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate,
+    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +94,34 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-memory-attest") => {
+            let out = arguments.next().ok_or("missing TLS HBI/HBP output directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many TLS memory attest arguments");
+            }
+            let stats = tls_memory::attest(Path::new(&out))?;
+            if tls_memory::verify(Path::new(&out))? != stats {
+                return_fail("TLS independent replay statistics differed");
+            }
+            println!("PNP_TLS_MEMORY|doi=10.1103/j1r2-5ph7|model=CLASSICAL_FIXED_POINT_EULER|latent_cells=0_1_3_27_81|models=10|pairs={}|lag_cases={}|null_controls={}|coupled_separations={}|heldout_markov_squared_error={}|heldout_oracle_squared_error={}|trace_bytes={}|receipts={}|gc_exact_replay=HELD_UNLESS_STATE_RETAINED|physics_fit=NO|quantum_hardware=NO|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.paired_histories,stats.lag_cases,stats.control_passes,
+                stats.coupled_separations,stats.heldout_baseline_error,
+                stats.matched_error,stats.trace_bytes,stats.rows
+            );
+            Ok(())
+        }
+        Some("tls-memory-verify") => {
+            let out = arguments.next().ok_or("missing TLS source trace archive")?;
+            if arguments.next().is_some() {
+                return_fail("too many TLS memory verifier arguments");
+            }
+            let stats = tls_memory::verify(Path::new(&out))?;
+            println!("PNP_TLS_MEMORY_VERIFY|models=10|pairs={}|lag_cases={}|null_controls={}|coupled_separations={}|trace_bytes={}|records={}|source=FROZEN_DOI_REFERENCE|exact_trace=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.paired_histories,stats.lag_cases,stats.control_passes,
+                stats.coupled_separations,stats.trace_bytes,stats.rows
+            );
             Ok(())
         }
         Some("omni40-attest") => {
@@ -406,7 +434,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | tls-memory-attest OUT | tls-memory-verify OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
