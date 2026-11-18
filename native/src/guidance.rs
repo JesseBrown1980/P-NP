@@ -222,7 +222,7 @@ impl Guidance {
                     // Exact requested branch traverses 3-ary supervisors.
                     // Each node's signed child sums are frozen/reconstructed
                     // from actual matrix data; these values affect ordering.
-                    let wave = router.read((index % fanout) as usize)
+                    let wave = router.read(index % fanout)
                         .ok_or("on-demand ternary wave traversal rejected")?;
                     if !router.verify_read(&wave) {
                         return Err("wave reflection disagreed with fabric".to_owned());
