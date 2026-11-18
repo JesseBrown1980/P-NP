@@ -43,7 +43,8 @@ K = (
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 )
 
-CASES = {"nonce4":4, "nonce8":8, "nonce32":32}
+CASES = {"nonce4":4, "nonce8":8, "nonce32":32,
+         "merkle_nonce288":288}
 
 
 def initial_header():
@@ -199,12 +200,19 @@ class Circuit:
         bits = []
         for byte_index, byte in enumerate(header):
             for bit_position in range(7, -1, -1):
-                if byte_index >= 76 and (
-                        8 * (byte_index - 76) + bit_position < self.freebits):
+                index = None
+                if byte_index >= 76:
+                    nonce_index = 8 * (byte_index - 76) + bit_position
+                    if nonce_index < min(self.freebits, 32):
+                        index = nonce_index
+                elif self.freebits == 288 and 36 <= byte_index < 68:
+                    # Merkle-root input index is 32..287. These are
+                    # actual header byte-order bits, not a fake hash.
+                    index = 32 + 8 * (byte_index - 36) + bit_position
+                if index is not None:
                     variable = self.new_var()
                     bits.append(variable)
-                    self.nonce_lits.append((
-                        8 * (byte_index - 76) + bit_position, variable))
+                    self.nonce_lits.append((index, variable))
                 else:
                     bits.append(self.TRUE if (byte >> bit_position) & 1
                                 else self.FALSE)
@@ -224,10 +232,14 @@ class Circuit:
             self.clauses.append((literal if expected else -literal,))
         return twice
 
-    def model(self, nonce):
+    def model(self, nonce, merkle=None):
+        if merkle is None:
+            merkle = int.from_bytes(HEADER_PREFIX[36:68], "little")
         assignment = {1: False}
         for bit, v in self.nonce_lits:
-            assignment[v] = bool(nonce & (1 << bit))
+            source_value = (nonce >> bit) if bit < 32 else (
+                merkle >> (bit - 32))
+            assignment[v] = bool(source_value & 1)
         def read(literal):
             value = assignment[abs(literal)]
             return value if literal > 0 else not value
@@ -238,27 +250,38 @@ class Circuit:
         return assignment, read
 
     def verify_reference(self, output_bits):
-        mask = (1 << self.freebits) - 1
-        candidates = (GENESIS_NONCE,
-                      GENESIS_NONCE ^ 1,
-                      GENESIS_NONCE ^ mask,
-                      GENESIS_NONCE ^ (mask >> 1))
-        for nonce in dict.fromkeys(candidates):
-            values, evaluate = self.model(nonce)
+        merkle_original = int.from_bytes(HEADER_PREFIX[36:68], "little")
+        if self.freebits == 288:
+            candidates = (
+                (GENESIS_NONCE, merkle_original),
+                (GENESIS_NONCE ^ 1, merkle_original),
+                (GENESIS_NONCE, merkle_original ^ 1),
+                (GENESIS_NONCE ^ 3, merkle_original ^ 0x55))
+        else:
+            mask = (1 << self.freebits) - 1
+            candidates = tuple((nonce, merkle_original) for nonce in (
+                GENESIS_NONCE,
+                GENESIS_NONCE ^ 1,
+                GENESIS_NONCE ^ mask,
+                GENESIS_NONCE ^ (mask >> 1)))
+        for nonce, merkle in dict.fromkeys(candidates):
+            values, evaluate = self.model(nonce, merkle)
             digest = bytes(int("".join("1" if evaluate(bit) else "0"
                                        for bit in output_bits[j:j + 8]), 2)
                            for j in range(0, 256, 8))
-            actual_header = HEADER_PREFIX + nonce.to_bytes(4, "little")
+            actual_header = bytearray(
+                HEADER_PREFIX + nonce.to_bytes(4, "little"))
+            actual_header[36:68] = merkle.to_bytes(32, "little")
             independent = hashlib.sha256(hashlib.sha256(
                 actual_header).digest()).digest()
             assert digest == independent
-            if nonce == GENESIS_NONCE:
+            if nonce == GENESIS_NONCE and merkle == merkle_original:
                 assert digest[::-1].hex() == GENESIS_HASH
                 for clause in self.clauses:
                     assert any(evaluate(lit) for lit in clause)
         print("BTC_MODEL|nonce=" + str(GENESIS_NONCE) +
               "|evaluated_auxiliary=" + str(self.counter) +
-              "|alternate_nonces=" + str(len(set(candidates)) - 1) +
+              "|alternate_headers=" + str(len(set(candidates)) - 1) +
               "|all_original_clauses=SAT|double_sha256=PASS", flush=True)
 
     def format(self):
@@ -284,8 +307,13 @@ def main(folder):
         sha = hashlib.sha256(raw.encode("ascii")).hexdigest()
         manifest = {
             "name": name,
-            "nonce_free_bits": bits,
-            "nonce_variables": tuple(sorted(circuit.nonce_lits)),
+            "nonce_free_bits": min(bits, 32),
+            "merkle_free_bits": 256 if bits == 288 else 0,
+            "free_bits_total": bits,
+            "nonce_variables": tuple(sorted(
+                (i, v) for i, v in circuit.nonce_lits if i < 32)),
+            "merkle_variables": tuple(sorted(
+                (i - 32, v) for i, v in circuit.nonce_lits if i >= 32)),
             "variables": circuit.counter,
             "clauses": len(circuit.clauses),
             "gates": len(circuit.gates),
@@ -304,8 +332,9 @@ def main(folder):
               "|sha256=" + sha +
               "|elapsed_ns=" + str(monotonic_ns() - start) +
               "|reference_nonce_witness=PASS|status=PASS", flush=True)
-    print("BTC_SOURCE_FINAL|three_sources=PASS|SHA256d_genesis=PASS|"
-          "full_32_bit_nonce=ENCODED|SAT_reference_models=3|status=PASS")
+    print("BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|"
+          "full_32_bit_nonce=ENCODED|merkle_nonce_288_bits=ENCODED|"
+          "SAT_reference_models=4|status=PASS")
 
 
 if __name__ == "__main__":
