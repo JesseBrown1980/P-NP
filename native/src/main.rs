@@ -14,6 +14,25 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let result: Result<(), String> = (|| {
         match arguments.next().as_deref() {
+        Some("rime-disk-attest") => {
+            let path = arguments.next().ok_or("missing original four-axes GGUF path")?;
+            if arguments.next().is_some() {
+                return_fail("too many disk-play arguments");
+            }
+            let store = pnp_native::rime_disk::DiskRime::open_four_axes(Path::new(&path))?;
+            let comparisons = store.verify_three_paths()?;
+            let address = pnp_native::freeze::fischer_address(0, 0)
+                .ok_or("Fischer zero address missing")?;
+            let direct = store.read(0, 0, address)?;
+            let remote = pnp_native::rime_disk::loopback_once(&store, 0, 0)?;
+            if direct != remote { return_fail("HTTP-0 loopback differs from direct disk read"); }
+            store.verify_source()?;
+            println!("PNP_RIME_DISK|source_sha256={}|bytes={}|tensors={}|glyphs=27|rime_pairs={}|compared={}|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0",
+                pnp_native::rime_disk::FOUR_AXES_SHA256,
+                pnp_native::rime_disk::FOUR_AXES_BYTES,
+                store.tensor_count(), comparisons / 27, comparisons);
+            Ok(())
+        },
         Some("audit") => {
             let directory = arguments.next().unwrap_or_else(|| ".".to_owned());
             match policy::check_repository(Path::new(&directory)) {
