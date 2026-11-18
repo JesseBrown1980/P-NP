@@ -14,6 +14,15 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let result: Result<(), String> = (|| {
         match arguments.next().as_deref() {
+        Some("bitcoin-rime-bench") => {
+            let root = arguments.next().ok_or("missing original Bitcoin CNF source folder")?;
+            let gguf = arguments.next().ok_or("missing Constellation Four-Axes GGUF")?;
+            if arguments.next().is_some() { return_fail("too many Bitcoin test arguments"); }
+            for line in pnp_native::bitcoin_rime::benchmark(Path::new(&root), Path::new(&gguf))? {
+                println!("{line}");
+            }
+            Ok(())
+        },
         Some("rime-sat-bench") => {
             let path = arguments.next().ok_or("missing source-pinned four-axes GGUF")?;
             let rounds = arguments.next().unwrap_or_else(|| "5".to_owned())
