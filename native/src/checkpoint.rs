@@ -447,6 +447,67 @@ mod tests {
         assert_eq!(checksum_crc32(b""), 0);
     }
     #[test]
+    fn independent_standard_zip_round_trip_and_crc_tamper_rejection() {
+        fn write16(bytes: &mut Vec<u8>, value: u16) {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        fn write32(bytes: &mut Vec<u8>, value: u32) {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let name = b"sample/data.pkl";
+        let payload = b"sample-original-weights";
+        let crc = checksum_crc32(payload);
+        let mut archive = Vec::new();
+        write32(&mut archive, 0x0403_4b50);
+        write16(&mut archive, 20);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write32(&mut archive, crc);
+        write32(&mut archive, payload.len() as u32);
+        write32(&mut archive, payload.len() as u32);
+        write16(&mut archive, name.len() as u16);
+        write16(&mut archive, 0);
+        archive.extend_from_slice(name);
+        let payload_index = archive.len();
+        archive.extend_from_slice(payload);
+        let central_start = archive.len();
+        write32(&mut archive, 0x0201_4b50);
+        write16(&mut archive, 20);
+        write16(&mut archive, 20);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write32(&mut archive, crc);
+        write32(&mut archive, payload.len() as u32);
+        write32(&mut archive, payload.len() as u32);
+        write16(&mut archive, name.len() as u16);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write32(&mut archive, 0);
+        write32(&mut archive, 0);
+        archive.extend_from_slice(name);
+        let central_len = archive.len() - central_start;
+        write32(&mut archive, 0x0605_4b50);
+        write16(&mut archive, 0);
+        write16(&mut archive, 0);
+        write16(&mut archive, 1);
+        write16(&mut archive, 1);
+        write32(&mut archive, central_len as u32);
+        write32(&mut archive, central_start as u32);
+        write16(&mut archive, 0);
+        let decoded = read_zip(&archive).expect("independent ZIP");
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].payload, payload);
+        archive[payload_index] ^= 1;
+        assert!(read_zip(&archive).is_err());
+    }
+
+    #[test]
     fn nine_distinct_checkpoint_pins_are_in_source_ledger() {
         let mut ids = BTreeSet::new();
         for model in MODELS {
