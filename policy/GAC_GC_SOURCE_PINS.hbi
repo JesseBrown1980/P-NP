@@ -1,0 +1,6 @@
+HBIHEADER|schema=pnp.gc.gac.source.v1|seal=HBI-HBP-SHA-SH-HASH|json=0
+GC_PIN|id=gac_map|repo=gac|commit=4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4|path=MAP.md|git_blob=a126b8efa3ff3951d835ec165db26e8fd784194d|json=0
+GC_PIN|id=gac_readme|repo=gac|commit=4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4|path=README.md|git_blob=da163400d3bc12e38fb604d5de6698857feaceb8|json=0
+GC_PIN|id=gac_host8|repo=gac|commit=4def18c4bf103a7b5df54c3c0eca7f1d0135b7b4|path=HOST8-MIGRATION-MANIFEST-2026-06-24.hbp|git_blob=ed88c030947e36f8261d66b8c68799eb72a25282|json=0
+GC_PIN|id=omni_gc|repo=omni|commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|path=packages/omni-gulp-gc/src/gc.ts|git_blob=a0a5123a9eb35b985471d1787b15f6207048a561|json=0
+GC_PIN|id=omni_gulp|repo=omni|commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|path=packages/omni-gulp-gc/src/gulp.ts|git_blob=8275ab3249bb51210592d38844133eb07ac9ab69|json=0
