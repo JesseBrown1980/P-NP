@@ -4,7 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
-    http0_compute, microkernel_compute, full_matrix_fabric,
+    http0_compute, microkernel_compute, full_matrix_fabric, temporal_full_fabric,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -96,6 +96,33 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("temporal-fabric-attest") => {
+            let prior=arguments.next().ok_or("missing frozen PRL stochastic/matrix evidence")?;
+            let out=arguments.next().ok_or("missing temporal matrix evidence output")?;
+            if arguments.next().is_some(){return_fail("extra temporal fabric parameters");}
+            let stats=temporal_full_fabric::attest(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_TEMPORAL_FABRIC|case_pairs={}|source_events={}|crossings_per_pass={}|uncached_calls={}|cached_calls={}|cache_hits={}|coupled_ordered_gains={}|coupled_shuffle_reversals={}|iid_baseline_controls={}|uncached_wall_ns={}|cached_wall_ns={}|trained_gnn=HOLD|status=PASS|json=0",
+                stats.cases,stats.events,stats.crossings,stats.uncached_calls,stats.cached_calls,
+                stats.cache_hits,stats.coupled_gains,stats.shuffle_reversals,
+                stats.iid_controls,stats.uncached_ns,stats.cached_ns);
+            Ok(())
+        }
+        Some("temporal-fabric-verify") => {
+            let prior=arguments.next().ok_or("missing original temporal source evidence")?;
+            let out=arguments.next().ok_or("missing temporal matrix evidence archive")?;
+            if arguments.next().is_some(){return_fail("extra temporal fabric verifier arguments");}
+            let stats=temporal_full_fabric::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_TEMPORAL_FABRIC_VERIFY|pairs={}|source_events={}|full_replay=EXACT|ordered_vs_shuffled=VERIFIED|cache_hits={}|source=PRL_SYNTHETIC|status=PASS|json=0",
+                stats.cases,stats.events,stats.cache_hits);
+            Ok(())
+        }
+        Some("temporal-fabric-inspect") => {
+            let path=arguments.next().ok_or("missing temporal matrix result file")?;
+            if arguments.next().is_some(){return_fail("extra temporal inspect arguments");}
+            let cases=temporal_full_fabric::inspect(Path::new(&path))?;
+            println!("PNP_TEMPORAL_FABRIC_INSPECT|streams={cases}|archive=CANONICAL|checksum=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("full-matrix-attest") => {
