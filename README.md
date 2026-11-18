@@ -10,6 +10,40 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
+
+[Complete data-path protocol](native/FULL_MATRIX_GNN_FABRIC_PROTOCOL.md) · [native integration](native/src/full_matrix_fabric.rs) · [independent floor decoder](native/src/matrix_wire.rs)
+
+The native whole-matrix gate connects accepted source-derived ternary jobs to
+**all four genuine binary floors (64/256/1024/4096)**, **all 40 original
+Omnibit transforms (RNQ8/TRI12/PI20)**, Fischer modular room addresses,
+**backend-only HTTP-0**, actual independently computed 27-cell/243-tick
+matrix results, reversible worker/reflection/fabric third-seat checks,
+source-authenticated GAC 60D metadata and a genuine G4 neural state gate.
+The receiving process must reconstruct the original trits after the real
+operator inverse and independent base-three decode; it checks all 27
+source digits and 27 computed cell values, not just a hash.
+
+This creates **8,640 full-radix/operator crossings per arm** and
+**51,840 HTTP-0 independent worker requests** across the no-cache and
+source-keyed recall configurations at 3/27/81 room capacities. The same
+original 54 tasks and all source/bridge/Omnibit/multi-GNN/checkpoint
+receipts are reused. Cache arms must report 8,586 exact representation-
+independent hits per room-width and 54 physical calculations. Native
+60D tuples bind task metadata to source hashes; physical axis mapping
+remains separately gated.
+
+The nine published GNN model checkpoints and authentic four model-family
+roster are required provenance. **Trained GNN forward execution is held**
+until source-model outputs, tensor shape/graph semantics and native
+integer inference are independently matched. The original G4 logic
+must reject missing learned G1/G2/G3 input signals, without quietly
+substituting deterministic pseudo-neural predictions.
+
+**Status:** implementation in new native integration acceptance gate.
+Results and timing will be reported from hosted receipts after both jobs
+pass, with real measurements and a clearly stated neural-inference HOLD.
+
 ## Fischer function-room computation, actual recall and HRM-shape routing (November 18, 2026)
 
 [Exact native acceptance protocol](native/HTTP0_MICROKERNEL_COMPUTE_PROTOCOL.md) · [source-side reference](native/src/microkernel_compute.rs) · [separate native HTTP-0 worker](native/src/http0_compute.rs)
