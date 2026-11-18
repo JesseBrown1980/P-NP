@@ -10,6 +10,14 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Automatic GULP then garbage collection — verified knowledge retention (November 18, 2026)
+
+The original GULP/GC architecture now has a native **automatic compact → commit → verify → discard** path. The [GC recovery and post-GULP retention protocol](native/GC_ARCHIVE_RESTART_PROTOCOL.md) preserves original Git-pinned GAC/Omni sources and audit archives while allowing actual physical deletion of **owned temporary event batches** after their knowledge has been counted and source-linked HBI/HBP receipts have been flushed and independently checked. **No per-operation human approval** is required under the frozen policy.
+
+The native Rust 1.81 gate groups source-style events by kind and glyph, retaining mistakes and genius counts, records exact raw SHA-256 and the full **HBI → HBP → SHA → SH → HASH** chain, deletes the temporary raw file and its directory, and rejects malformed/uncommitted inputs, unexpected raw reappearance or altered receipts. This deliberately reclaims temporary working data rather than growing raw scratch archives indefinitely. Designated durable audit evidence and the nine original trained checkpoint files remain preserved. The first hosted acceptance uses an independently checkable ten-event, balanced-trit sample; direct original NDJSON ingestion and live log rotation remain separately tracked.
+
+---
+
 ## Exact COMB/PRISM matrix translation — BEHCS-256 ⇄ BEHCS-1024 (November 18, 2026)
 
 The next native [Q-PRISM source gate](native/PRISM_256_1024_PROTOCOL.md) restores the historical lossless, 40-bit matrix translation from [Q-PRISM Host-8](https://github.com/JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control/blob/b4a21a25381d6920b7aab92c94c3c3e1420fc9e4/host8/qprism_cube_host8.rs). Every five BEHCS-256 bytes correspond to four 10-bit BEHCS-1024 glyph indices. For a 3,200-byte source cube the native result is exactly 2,560 symbols, with the **full original SHA-256 identical after inversion**.
