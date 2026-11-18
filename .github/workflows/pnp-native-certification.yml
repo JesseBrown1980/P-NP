@@ -19,6 +19,22 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Checkout original trained model sources at frozen Git commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-train
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Checkout original scoring pipeline at frozen Git commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Shannon-and-the-gnns-stage
+          ref: 32f9670a648dbbd02d64524e91150efeec8e4d2c
+          path: source-stage
+          persist-credentials: false
+          fetch-depth: 1
       - name: Pin exact Rust 1.81, offline sources and Clippy
         run: |
           set -euo pipefail
@@ -44,7 +60,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -66,6 +82,47 @@ jobs:
           sha256sum PNP_MATRIX.hbp native/target/release/pnp-native > PNP_NATIVE_OUTPUT.sha256
           sha256sum -c PNP_NATIVE_OUTPUT.sha256
           echo 'PNP_DETERMINISM|byte_exact=PASS|replay=PASS|status=PASS|json=0'
+      - name: Source-authenticated HBI HBP SHA SH HASH trained model receipts
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native source-attest source-train source-stage evidence | tee SOURCE_ATTEST.hbp
+          native/target/release/pnp-native source-verify evidence | tee SOURCE_VERIFY.hbp
+          grep -Fq 'PNP_SOURCE_ATTEST|source_pins=23|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0' SOURCE_ATTEST.hbp
+          grep -Fq 'PNP_SOURCE_VERIFY|source_pins=23|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' SOURCE_VERIFY.hbp
+          printf '%s  %s\n' '6f82384ff2e313b1f34b48cca5c1c2bb3a8f9391bba54db7afbb36c5fda91ad5' 'source-train/models/gslgnn_w9_3_seq47.pt' | sha256sum -c -
+          printf '%s  %s\n' '9e50723b10c9de5c27baa5bc9386340bf72f76bcae2877064a47e4627a86602c' 'source-train/models/gslgnn_w9_3_seq47_v2.pt' | sha256sum -c -
+          cp evidence/PNP_TRAINED_SOURCE.hbp "$RUNNER_TEMP/original-source.hbp"
+          cp evidence/PNP_TRAINED_SOURCE.hbi "$RUNNER_TEMP/original-source.hbi"
+          cp evidence/PNP_TRAINED_SOURCE.anchor "$RUNNER_TEMP/original-source.anchor"
+          native/target/release/pnp-native source-attest source-train source-stage evidence > "$RUNNER_TEMP/repeated-attest.hbp"
+          cmp evidence/PNP_TRAINED_SOURCE.hbp "$RUNNER_TEMP/original-source.hbp"
+          cmp evidence/PNP_TRAINED_SOURCE.hbi "$RUNNER_TEMP/original-source.hbi"
+          cmp evidence/PNP_TRAINED_SOURCE.anchor "$RUNNER_TEMP/original-source.anchor"
+          ( cd evidence && sha256sum PNP_TRAINED_SOURCE.hbp PNP_TRAINED_SOURCE.hbi PNP_TRAINED_SOURCE.anchor > PNP_SOURCE_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_SOURCE_DIGESTS.sha256 )
+          echo 'PNP_SOURCE_REPLAY|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|replay=PASS|json=0'
+      - name: Source and index tamper negatives against native verifier
+        run: |
+          set -euo pipefail
+          for path in PNP_TRAINED_SOURCE.hbp PNP_TRAINED_SOURCE.hbi PNP_TRAINED_SOURCE.anchor; do
+            cp "evidence/$path" "$RUNNER_TEMP/$path"
+            printf 'X' >> "evidence/$path"
+            if native/target/release/pnp-native source-verify evidence > "$RUNNER_TEMP/source-tamper.hbp" 2>&1; then
+              echo "PNP_SOURCE_TAMPER_FAIL|file=$path|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$path" "evidence/$path"
+          done
+          cp source-train/models/gslgnn_w9_3_seq47_v2.pt "$RUNNER_TEMP/original-gsl.pt"
+          printf 'X' >> source-train/models/gslgnn_w9_3_seq47_v2.pt
+          if native/target/release/pnp-native source-attest source-train source-stage evidence > "$RUNNER_TEMP/checkpoint-tamper.hbp" 2>&1; then
+            echo 'PNP_SOURCE_TAMPER_FAIL|file=checkpoint|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/original-gsl.pt" source-train/models/gslgnn_w9_3_seq47_v2.pt
+          native/target/release/pnp-native source-verify evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_SOURCE_DIGESTS.sha256 )
+          echo 'PNP_SOURCE_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|checkpoint=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -138,10 +195,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -166,6 +223,16 @@ jobs:
           set -euo pipefail
           cd accepted
           sha256sum -c FINAL_MANIFEST.sha256 >/dev/null
+          sha256sum -c PNP_SOURCE_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_SOURCE_ATTEST|source_pins=23|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0' SOURCE_ATTEST.hbp
+          grep -Fq 'PNP_SOURCE_VERIFY|source_pins=23|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' SOURCE_VERIFY.hbp
+          test "$(grep -c '^HBI|' PNP_TRAINED_SOURCE.hbi)" -eq 23
+          test "$(grep -c '^MODEL_SOURCE|' PNP_TRAINED_SOURCE.hbp)" -eq 23
+          grep -Fq 'seal=HBI-HBP-SHA-SH-HASH' PNP_TRAINED_SOURCE.anchor
+          root_bp=$(sed -n 's/.*|root_hbp_sha256=\([0-9a-f]*\)|.*/\1/p' PNP_TRAINED_SOURCE.anchor)
+          root_bi=$(sed -n 's/.*|root_hbi_sha256=\([0-9a-f]*\)|.*/\1/p' PNP_TRAINED_SOURCE.anchor)
+          test "$root_bp" = "$(sha256sum PNP_TRAINED_SOURCE.hbp | cut -d' ' -f1)"
+          test "$root_bi" = "$(sha256sum PNP_TRAINED_SOURCE.hbi | cut -d' ' -f1)"
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|' PNP_MATRIX.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
