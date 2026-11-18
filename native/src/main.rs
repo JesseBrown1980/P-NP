@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc,
     guidance::{Guidance, Strategy},
-    policy, relic, scoring, source,
+    policy, prism, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -39,6 +39,25 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
+        Some("prism-attest") => {
+            let root = arguments.next().ok_or("missing frozen Q-PRISM Git checkout")?;
+            let out = arguments.next().ok_or("missing PRISM HBI/HBP receipt directory")?;
+            if arguments.next().is_some() { return_fail("too many PRISM attest arguments"); }
+            let count = prism::attest(Path::new(&root), Path::new(&out))?;
+            if prism::verify(Path::new(&root), Path::new(&out))? != count {
+                return_fail("PRISM inverse witness replay differed");
+            }
+            println!("PNP_PRISM|rung=256_1024|bits=40|bytes_per_block=5|glyphs_per_block=4|cube_bytes=3200|cube_glyphs=2560|cases={count}|source_git=VERIFIED|canonical_padding=PASS|inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|operator=HELD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("prism-verify") => {
+            let root = arguments.next().ok_or("missing original Q-PRISM checkout")?;
+            let out = arguments.next().ok_or("missing PRISM HBI/HBP archive")?;
+            if arguments.next().is_some() { return_fail("too many PRISM verify arguments"); }
+            let count = prism::verify(Path::new(&root), Path::new(&out))?;
+            println!("PNP_PRISM_VERIFY|cases={count}|original_source=VERIFIED|inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
         Some("fabric-gc-attest") => {
             let gac = arguments.next().ok_or("missing pinned GAC root")?;
             let neural = arguments.next().ok_or("missing pinned neural fabric root")?;
@@ -232,7 +251,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
