@@ -91,33 +91,33 @@ def main(arm, case, source_root, out_root):
     source = Path(source_root)
     out = Path(out_root)
     out.mkdir(parents=True, exist_ok=True)
-    cnf = source / (case + ".cnf")
+    cnf = source.joinpath(case + ".cnf")
     manifest = ast.literal_eval(
-        (source / (case + ".txt")).read_text(encoding="ascii"))
+        (source.joinpath(case + ".txt")).read_text(encoding="ascii"))
     assert manifest["name"] == case
     raw_sha = hashlib.sha256(cnf.read_bytes()).hexdigest()
     assert raw_sha == manifest["input_sha256"]
     begin = monotonic_ns()
     if arm in ARMS[:4]:
         command = [sys.executable, "-s", "-B",
-                   str(Path(__file__).resolve().parent / "arm.py"),
+                   str(Path(__file__).resolve().parent.joinpath("arm.py")),
                    arm, case, str(cnf),
-                   str(source / (case + ".txt"))]
+                   str(source.joinpath(case + ".txt"))]
         limit = LIMIT_NATIVE
     else:
         limit = LIMIT_EXTERNAL
         if arm == "minisat":
-            command = ["minisat", "-verb=0", str(cnf), str(out / "model.sol")]
+            command = ["minisat", "-verb=0", str(cnf), str(out.joinpath("model.sol"))]
         else:
             command = [arm, str(cnf)]
-    command = ["/usr/bin/time", "-f", "%M", "-o", str(out / "rss.txt"),
+    command = ["/usr/bin/time", "-f", "%M", "-o", str(out.joinpath("rss.txt")),
                "timeout", "--kill-after=3s", str(limit) + "s"] + command
     result = run(command, capture_output=True, check=False)
     elapsed = monotonic_ns() - begin
     stdout = result.stdout.decode("ascii", errors="replace")
     stderr = result.stderr.decode("ascii", errors="replace")
-    (out / "solver.stdout").write_text(stdout, encoding="utf-8")
-    (out / "solver.stderr").write_text(stderr, encoding="utf-8")
+    (out.joinpath("solver.stdout")).write_text(stdout, encoding="utf-8")
+    (out.joinpath("solver.stderr")).write_text(stderr, encoding="utf-8")
     status = "HOLD"
     solver_receipt = None
     nonce = "NONE"
@@ -138,7 +138,7 @@ def main(arm, case, source_root, out_root):
             nonce = solver_receipt["recovered_nonce"]
             witness_sha = solver_receipt["header_witness_sha256"]
     elif arm in ARMS[4:] and result.returncode == 10:
-        model = parse_model(arm, stdout, out / "model.sol",
+        model = parse_model(arm, stdout, out.joinpath("model.sol"),
                             manifest["variables"])
         nonce, witness_sha = original_model_check(case, manifest, cnf, model)
         status = "SAT"
@@ -149,7 +149,7 @@ def main(arm, case, source_root, out_root):
             "solver failed " + arm + " " + case +
             " rc=" + str(result.returncode) +
             " last stderr=" + stderr[-2000:])
-    memory_text = (out / "rss.txt").read_text(encoding="ascii").splitlines()
+    memory_text = (out.joinpath("rss.txt")).read_text(encoding="ascii").splitlines()
     memory = int(memory_text[-1]) if memory_text and memory_text[-1].isdigit() else -1
     summary = dict(arm=arm, case=case, status=status,
                    cnf_sha256=raw_sha, source_bits=manifest["nonce_free_bits"],
@@ -159,7 +159,7 @@ def main(arm, case, source_root, out_root):
                    memory_kib=memory, limit_seconds=limit,
                    recovered_nonce=nonce, witness_sha256=witness_sha,
                    source_receipt=solver_receipt)
-    (out / "receipt.txt").write_text(repr(summary) + "\n",
+    (out.joinpath("receipt.txt")).write_text(repr(summary) + "\n",
                                       encoding="ascii")
     print("BTC_COMPETITION|" + repr({
         k: v for k, v in summary.items() if k != "source_receipt"
