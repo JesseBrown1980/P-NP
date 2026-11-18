@@ -73,9 +73,9 @@ fn source_tasks(bytes:&[u8])->Result<Vec<Task>,String>{
 fn compute_primary(task:&Task)->[u64;CELLS]{
     let mut state=[0_u64;CELLS];
     let initial=task.seed%RIME_PRIME;
-    for i in 0..CELLS {
+    for (i,value) in state.iter_mut().enumerate() {
         let x=i as u64+1;
-        state[i]=(initial+13*x*x+17*u64::from(task.trits[i]))%RIME_PRIME;
+        *value=(initial+13*x*x+17*u64::from(task.trits[i]))%RIME_PRIME;
     }
     for step in 0..STEPS{
         let mut update=[0_u64;CELLS];
