@@ -23,7 +23,9 @@ use crate::triad::wave_cascade;
 
 const MAGIC:&[u8]=b"PNP-MATRIX-ALL40-V1\0";
 const SOURCE:&str="PNP_TLS_STOCHASTIC_TRACE.bin";
-const PRIOR_FILES:[&str;6]=[
+const PRIOR_FILES:[&str;8]=[
+    "PNP_TLS.hbp",
+    "PNP_TLS_STOCHASTIC.hbp",
     "PNP_BRIDGE.hbp",
     "PNP_OMNI40.hbp",
     "PNP_GNN_GATE.hbp",
@@ -137,6 +139,11 @@ fn source_and_roots(prior:&Path)->Result<(Vec<Task>,Vec<String>),String>{
         };
         if bytes.len()<80 || !bytes.starts_with(expected_header){
             return Err(format!("prior original plane missing: {filename}"));
+        }
+        if matches!(filename,"PNP_TLS.hbp"|"PNP_TLS_STOCHASTIC.hbp")
+            && !bytes.windows(b"doi=10.1103/j1r2-5ph7".len())
+                .any(|window|window==b"doi=10.1103/j1r2-5ph7"){
+            return Err(format!("PRL temporal-memory DOI evidence missing: {filename}"));
         }
         roots.push(hash_bytes(&bytes));
     }
@@ -311,13 +318,13 @@ fn execute(prior:&Path)->Result<(Bundle,Stats),String>{
     let mut hbi=HBI_HEAD.to_owned();
     let mut last=hash_bytes(b"PNP-FULL-MATRIX-FABRIC-GENESIS");
     add(&mut hbp,&mut hbi,&mut last,1,"MATRIX_SOURCE","pr43",
-        &format!("sha256={}|jobs=54|trits_per_job=27|ticks_per_kernel=243|prior_task_sha256={}|catalog=ORIGINAL40",roots[0],roots[6]));
+        &format!("sha256={}|jobs=54|trits_per_job=27|ticks_per_kernel=243|prior_task_sha256={}|catalog=ORIGINAL40",roots[0],roots[8]));
     for (i,name) in PRIOR_FILES.iter().enumerate(){
         add(&mut hbp,&mut hbi,&mut last,i+2,"MATRIX_PIN",
             name.trim_end_matches(".hbp").trim_end_matches(".bin"),
             &format!("sha256={}|source=PRIOR_ACCEPTED|checked=YES",roots[i+1]));
     }
-    let mut seq=8;
+    let mut seq=10;
     for arm in &arms{
         add(&mut hbp,&mut hbi,&mut last,seq,"MATRIX_ARM",
             &format!("mode{}_rooms{}",arm.mode,arm.arity),
@@ -335,7 +342,7 @@ fn execute(prior:&Path)->Result<(Bundle,Stats),String>{
         &format!("jobs=54|all40_operator_floor_crossings={}|independent_http0_calls={}|floor_counts=4|operator_families=RNQ8_TRI12_PI20|matrix_groups={matrix_triads}|backend=ONLY|recall_hits={}|verified_results_sha256={}|input=FROZEN|status=PASS",
             direct_all,arms.iter().map(|a|a.calls).sum::<usize>(),
             arms.iter().map(|a|a.hits).sum::<usize>(),hash_bytes(&output)));
-    if seq!=16{return Err("full matrix receipt count wrong".into());}
+    if seq!=18{return Err("full matrix receipt count wrong".into());}
     let basis=format!(
         "FULL_MATRIX_ANCHOR|rows={seq}|source_sha256={}|results_sha256={}|hbp_sha256={}|hbi_sha256={}|end_hash={last}|seal=HBI-HBP-SHA-SH-HASH",
         roots[0],hash_bytes(&output),hash_bytes(hbp.as_bytes()),hash_bytes(hbi.as_bytes())
