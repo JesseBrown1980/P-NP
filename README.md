@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Original trained checkpoints: native integer storage import (November 18, 2026)
+
+[PR #33](https://github.com/JesseBrown1980/P-NP/pull/33) extends the full multi-GNN rebuild from original model identities to **the real published tensor-storage bytes**. Its Rust 1.81 implementation authenticates all nine `.pt` checkpoint SHA-256 values against the source-frozen Gate A HBI/HBP archive, parses PyTorch ZIP64 without executing serialized pickles, validates ZIP checksums and storage boundaries, and converts accepted IEEE binary32 tensor storage bits to exact, deterministic signed Q20 integers by integer arithmetic only.
+
+The hosted model-byte analysis found **115 original tensor storage records comprising 191,661 Q20 coefficient values** across the nine published files (including the historical duplicate-run checkpoint filenames). The accepted storage format materializes one independently verified, self-describing `PNP_Q20_<model-id>.bin` byte stream per checkpoint, indexed by original storage path and count, with complete SHA-256 digests in **HBI → HBP → SHA → SH → HASH** receipts. Round-to-nearest-even gives a maximum per-coefficient conversion error of half one Q20 quantum for accepted finite values.
+
+[Real-checkpoint protocol](native/REAL_CHECKPOINT_Q20_PROTOCOL.md). **The forward inference gates remain open:** the native implementation must still extract exact tensor-to-layer mappings, port each architecture's message passing and activations, compare to independent original checkpoint outputs, and report class-balanced results. Verified weight bytes and quantization prepare those tests but do not replace them.
+
+---
+
 ## Multi-GNN restoration and G4 Tier-0 supervisor (November 18, 2026)
 
 [PR #32](https://github.com/JesseBrown1980/P-NP/pull/32) restores the complete source-identified **multi-GNN roster** rather than treating GSLGNN as the sole engine. The original ensemble contains **eight scoring signals** (L0 EdgeLevelGNN, L4 GSLGNN, G1 edge-mining, G2 forward-genius, G3 reverse-gain, G4 GLSM, OmniShannon and SHA fallback), while L1 PrototypeGNN and L2 ContrastiveGNN are additional trained model families. The new [10-family HBI inventory](native/fixtures/MULTI_GNN_FAMILIES.hbi) binds these to **four original neural architectures and nine published .pt checkpoints**.

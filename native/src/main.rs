@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, ensemble,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble,
     guidance::{Guidance, Strategy},
     policy, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -54,6 +54,37 @@ fn main() {
                 return_fail("source HBI/HBP acceptance count differed");
             }
             println!("PNP_SOURCE_ATTEST|source_pins={count}|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("checkpoint-attest") => {
+            let models = arguments.next().ok_or("missing original checkpoint directory")?;
+            let sources = arguments.next().ok_or("missing original source HBI/HBP archive")?;
+            let out = arguments.next().ok_or("missing checkpoint HBI/HBP archive output")?;
+            if arguments.next().is_some() {
+                return_fail("too many checkpoint attest arguments");
+            }
+            let count = checkpoint::attest(
+                Path::new(&models), Path::new(&sources), Path::new(&out),
+            )?;
+            if checkpoint::verify(
+                Path::new(&models), Path::new(&sources), Path::new(&out),
+            )? != count {
+                return_fail("checkpoint replay differs");
+            }
+            println!("PNP_CHECKPOINT_ATTEST|models={count}|source_shas=VERIFIED|torch_zip=VERIFIED|numeric_decode=INTEGER_ONLY|q20=PER_STORAGE|forward_parity=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("checkpoint-verify") => {
+            let models = arguments.next().ok_or("missing original checkpoint directory")?;
+            let sources = arguments.next().ok_or("missing original source HBI/HBP archive")?;
+            let out = arguments.next().ok_or("missing checkpoint HBI/HBP archive output")?;
+            if arguments.next().is_some() {
+                return_fail("too many checkpoint verify arguments");
+            }
+            let count = checkpoint::verify(
+                Path::new(&models), Path::new(&sources), Path::new(&out),
+            )?;
+            println!("PNP_CHECKPOINT_VERIFY|models={count}|source_shas=VERIFIED|torch_zip=VERIFIED|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("gnn-gate-attest") => {
@@ -165,7 +196,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
