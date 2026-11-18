@@ -1,0 +1,174 @@
+name: "P-NP SAT array — 14 instances x 6 competitors"
+on:
+  pull_request:
+    paths:
+      - 'experiments/array/**'
+      - '.github/workflows/sat-array-84.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contender:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [ym_fischer, rime_new, rime_original, minisat, cadical, picosat]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check frozen source and exact arithmetic policy
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/array/suite.py experiments/array/native.py experiments/array/external.py experiments/array/verify.py
+      - name: Generate 14 identical frozen CNFs
+        run: |
+          set -euo pipefail
+          mkdir -p "build/$ARM/cases"
+          python3 -s -B experiments/array/suite.py "build/$ARM/input" | tee "build/$ARM/SOURCE.hbp"
+          grep -Fq 'SAT_ARRAY_FINAL|cases=14|unsat=11|sat=3|arms=6|observations=84|' "build/$ARM/SOURCE.hbp"
+          test "$(find "build/$ARM/input" -name '*.cnf' -type f | wc -l)" -eq 14
+      - name: Install pinned standard SAT solvers and DRAT checker
+        if: ${{ matrix.arm == 'minisat' || matrix.arm == 'cadical' || matrix.arm == 'picosat' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2' time build-essential
+          dpkg-query -W minisat cadical picosat | tee "build/$ARM/SOLVER_VERSIONS.txt"
+          if [ "$ARM" = cadical ]; then
+            git clone --quiet https://github.com/marijnheule/drat-trim.git drat-trim-build
+            git -C drat-trim-build checkout --quiet 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+            test "$(git -C drat-trim-build rev-parse HEAD)" = 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+            make -C drat-trim-build drat-trim
+          fi
+      - name: Execute benchmark array with exact HOLD receipts
+        run: |
+          set -euo pipefail
+          cases='php3_2 php4_3 php5_4 php6_5 php8_7 php12_11 php21_20 php3_3 php4_4 php6_6 tseitin16 tseitin32 tseitin64 tseitin128'
+          for case in $cases; do
+            dir="build/$ARM/cases/$case"
+            mkdir -p "$dir"
+            if [[ "$ARM" == ym_fischer || "$ARM" == rime_new || "$ARM" == rime_original ]]; then
+              set +e
+              /usr/bin/time -f '%M' -o "$dir/process.rss" timeout --kill-after=3s 20s python3 -s -B experiments/array/native.py "$ARM" "$case" "build/$ARM/input/$case.cnf" > "$dir/solver.stdout" 2> "$dir/solver.stderr"
+              rc=$?
+              set -e
+              if [ "$rc" -eq 0 ]; then
+                python3 - "$dir/solver.stdout" "$dir/receipt.txt" <<'PY'
+          import ast
+          import pathlib
+          import sys
+          lines = pathlib.Path(sys.argv[1]).read_text(encoding="ascii").splitlines()
+          reports = [line for line in lines if line.startswith("SAT_ARRAY_NATIVE|")]
+          assert len(reports) == 1 and reports[0].endswith("|json=0")
+          record = ast.literal_eval(reports[0].split("|", 2)[1])
+          pathlib.Path(sys.argv[2]).write_text(repr(record) + "\n", encoding="ascii")
+          PY
+                echo COMPLETE > "$dir/RESULT.txt"
+              elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ] || [ "$rc" -eq 143 ]; then
+                echo HOLD_TIMEOUT > "$dir/RESULT.txt"
+              else
+                cat "$dir/solver.stderr"
+                exit 1
+              fi
+            else
+              checker=/usr/bin/false
+              if [ "$ARM" = cadical ]; then
+                checker=drat-trim-build/drat-trim
+              fi
+              python3 -s -B experiments/array/external.py "$ARM" "$case" "build/$ARM/input/$case.cnf" "$dir" "$checker" | tee "$dir/CASE.hbp"
+              echo COMPLETE > "$dir/RESULT.txt"
+            fi
+            if [ -s "$dir/receipt.txt" ]; then
+              python3 - "$dir/receipt.txt" <<'PY'
+          import ast
+          import pathlib
+          import sys
+          row = ast.literal_eval(pathlib.Path(sys.argv[1]).read_text(encoding="ascii"))
+          print("SAT_ARRAY_RESULT|arm=" + row["arm"] + "|case=" + row["case"] +
+                "|status=" + str(row.get("status", row.get("result"))) +
+                "|search_nodes=" + str(row.get("search_nodes", "NA")) +
+                "|elapsed_ns=" + str(row.get("total_ns", row.get("total_solver_ns"))),
+                flush=True)
+          PY
+            else
+              echo "SAT_ARRAY_RESULT|arm=$ARM|case=$case|status=HOLD_TIMEOUT"
+            fi
+          done
+          test "$(find "build/$ARM/cases" -name RESULT.txt -type f | wc -l)" -eq 14
+          ( cd "build/$ARM" && find input cases -type f -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256 )
+          ( cd "build/$ARM" && sha256sum -c MANIFEST.sha256 >/dev/null )
+      - name: Publish source and contender evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sat-array-${{ matrix.arm }}
+          path: build/${{ matrix.arm }}/
+          retention-days: 90
+          if-no-files-found: error
+  cleanroom-referee:
+    needs: contender
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sat-array-*
+          path: evidence
+          merge-multiple: false
+      - name: Independently compile source-pinned DRAT-trim
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/marijnheule/drat-trim.git array-drattrim
+          git -C array-drattrim checkout --quiet 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          test "$(git -C array-drattrim rev-parse HEAD)" = 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          make -C array-drattrim drat-trim
+      - name: Verify all 84 results and reconstruct original-source mathematical status
+        run: |
+          set -euo pipefail
+          for arm in ym_fischer rime_new rime_original minisat cadical picosat; do
+            ( cd "evidence/sat-array-$arm" && sha256sum -c MANIFEST.sha256 >/dev/null )
+          done
+          python3 -s -B experiments/array/verify.py evidence array-drattrim/drat-trim | tee SAT_ARRAY_ACCEPTANCE.hbp
+          grep -Fq 'SAT_ARRAY_FINAL|arms=6|cases=14|observations=84|' SAT_ARRAY_ACCEPTANCE.hbp
+          grep -Fq '|forged_witnesses_rejected=20|status=PASS' SAT_ARRAY_ACCEPTANCE.hbp
+          mkdir -p final-source
+          cp experiments/array/*.py final-source/
+          cp .github/workflows/sat-array-84.yml final-source/
+          sha256sum SAT_ARRAY_ACCEPTANCE.hbp evidence/REFEREE.txt evidence/SOURCE_HASHES.txt final-source/* > RESULT_MANIFEST.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sat-array-final-84-verified
+          path: |
+            SAT_ARRAY_ACCEPTANCE.hbp
+            RESULT_MANIFEST.sha256
+            evidence/REFEREE.txt
+            evidence/SOURCE_HASHES.txt
+            final-source/
+          retention-days: 90
+          if-no-files-found: error
+  archived-acceptance:
+    needs: cleanroom-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sat-array-final-84-verified
+          path: checked
+      - name: Verify published summary SHA manifest
+        run: |
+          set -euo pipefail
+          cd checked
+          test -s SAT_ARRAY_ACCEPTANCE.hbp
+          test -s evidence/REFEREE.txt
+          test -s evidence/SOURCE_HASHES.txt
+          grep -Fq 'SAT_ARRAY_FINAL|arms=6|cases=14|observations=84|' SAT_ARRAY_ACCEPTANCE.hbp
+          sha256sum -c RESULT_MANIFEST.sha256
+          echo 'SAT_ARRAY_ARCHIVE|observations=84|published=PASS|independent_math=PASS|sha=PASS'
