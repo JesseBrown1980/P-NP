@@ -227,19 +227,30 @@ fn render(source_digest: &str) -> Result<(String, String, String, usize), String
     let mut hbi = HBI_HEADER.to_owned();
     let mut predecessor = hash("PNP-MULTIGNN-G4-GENESIS-v1");
     let mut count = 0_usize;
-    for (id, record, family) in ROSTER.lines().skip(1).map(|row| {
+    for (id, record, verdict) in ROSTER.lines().skip(1).map(|row| {
         let f = fields(row).expect("static validated roster");
-        (field(&f, "id").expect("static id").to_owned(), row.to_owned(), true)
-    }).chain(cases.iter().map(|(id, _verdict, row)| {
-        (id.clone(), row.clone(), false)
+        (field(&f, "id").expect("static id").to_owned(), row.to_owned(), None)
+    }).chain(cases.iter().map(|(id, verdict, row)| {
+        (id.clone(), row.clone(), Some(*verdict))
     })) {
         count += 1;
         let sh_full = hash(&record);
         let sh = &sh_full[..16];
-        let kind = if family { "FAMILY" } else { "GLSM" };
+        let (kind, source_port, detail) = match verdict {
+            None => (
+                "FAMILY", "MULTIMODEL_HOLD",
+                "next=NOT_COMPUTED|emitted=0|tier0_block=0|operator_approval=HELD".to_owned()
+            ),
+            Some(gate) => (
+                "GLSM", "G4_INTEGER_TEST",
+                format!(
+                    "next={}|emitted={}|tier0_block={}|operator_approval=HELD",
+                    gate.next.label(), u8::from(gate.emitted), u8::from(gate.tier0_block)
+                )
+            ),
+        };
         let data = format!(
-            "GNN_GATE|seq={count}|kind={kind}|id={id}|source_hbp_sha256={source_digest}|record_sha256={sh_full}|sh={sh}|source_port={}|prev_hash={predecessor}",
-            if family { "MULTIMODEL_HOLD" } else { "G4_INTEGER_TEST" }
+            "GNN_GATE|seq={count}|kind={kind}|id={id}|source_hbp_sha256={source_digest}|record_sha256={sh_full}|sh={sh}|source_port={source_port}|{detail}|prev_hash={predecessor}"
         );
         let receipt_sha = hash(&data);
         let chain = hash(&format!("{predecessor}|{receipt_sha}"));
