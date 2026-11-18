@@ -258,6 +258,7 @@ struct StorageReport {
     storage_bytes: usize,
     quantized_words: usize,
     q20_sha: String,
+    q20_bytes: Vec<u8>,
     dtype: &'static str,
 }
 fn inspect(data: &[u8]) -> Result<StorageReport, String> {
@@ -305,12 +306,14 @@ fn inspect(data: &[u8]) -> Result<StorageReport, String> {
             }
         }
     }
+    let q20_sha = if float32_only { hash_bytes(&bytes) } else { "none".to_owned() };
     Ok(StorageReport {
         entries: entries.len(),
         storages: storages.len(),
         storage_bytes: total_bytes,
         quantized_words: words,
-        q20_sha: if float32_only { hash_bytes(&bytes) } else { "none".to_owned() },
+        q20_sha,
+        q20_bytes: bytes,
         dtype: if float32_only { "FLOAT32_ONLY_Q20" } else { "HOLD_DTYPE" },
     })
 }
@@ -358,11 +361,12 @@ fn original_checkpoint_sha(archive: &Path, pin_id: &str) -> Result<String, Strin
 }
 
 fn create(models: &Path, source_root: &str, source_archive: &Path)
-    -> Result<(String, String, String), String>
+    -> Result<(String, String, String, Vec<(String, Vec<u8>)>), String>
 {
     let mut hbp = HBP_HEADER.to_owned();
     let mut hbi = HBI_HEADER.to_owned();
     let mut prev = hash_bytes(b"PNP-ORIGINAL-TENSOR-STORAGE-GENESIS-v1");
+    let mut converted_files = Vec::new();
     for (index, filename) in MODELS.iter().enumerate() {
         let (id, blob) = find_pin(filename)?;
         let raw = fs::read(models.join(filename))
@@ -387,17 +391,20 @@ fn create(models: &Path, source_root: &str, source_archive: &Path)
         ));
         hbp.push_str(&row);
         prev = linked;
+        if storage.dtype == "FLOAT32_ONLY_Q20" {
+            converted_files.push((format!("PNP_Q20_{id}.bin"), storage.q20_bytes));
+        }
     }
     let head = format!(
         "CHECKPOINT_ANCHOR|count={}|source_hbp_sha256={source_root}|root_hbp_sha256={}|root_hbi_sha256={}|chain_hash={prev}|seal=HBI-HBP-SHA-SH-HASH",
         MODELS.len(), hash_bytes(hbp.as_bytes()), hash_bytes(hbi.as_bytes())
     );
     let anchor = format!("{head}|anchor_checksum={}|json=0\n",hash_bytes(head.as_bytes()));
-    Ok((hbp,hbi,anchor))
+    Ok((hbp,hbi,anchor,converted_files))
 }
 pub fn attest(models: &Path, source_archive: &Path, output: &Path) -> Result<usize, String> {
     let root = source_digest(source_archive)?;
-    let (hbp,hbi,anchor) = create(models, &root, source_archive)?;
+    let (hbp,hbi,anchor,converted_files) = create(models, &root, source_archive)?;
     fs::create_dir_all(output).map_err(|e| e.to_string())?;
     for (name,text) in [
         ("PNP_CHECKPOINT.hbp",hbp),("PNP_CHECKPOINT.hbi",hbi),("PNP_CHECKPOINT.anchor",anchor)
@@ -405,11 +412,15 @@ pub fn attest(models: &Path, source_archive: &Path, output: &Path) -> Result<usi
         fs::write(output.join(name),text)
             .map_err(|e| format!("write checkpoint {name}: {e}"))?;
     }
+    for (name, bytes) in converted_files {
+        fs::write(output.join(&name), bytes)
+            .map_err(|e| format!("write converted weights {name}: {e}"))?;
+    }
     Ok(MODELS.len())
 }
 pub fn verify(models: &Path, source_archive: &Path, output: &Path) -> Result<usize, String> {
     let root = source_digest(source_archive)?;
-    let (hbp,hbi,anchor) = create(models, &root, source_archive)?;
+    let (hbp,hbi,anchor,converted_files) = create(models, &root, source_archive)?;
     for (name,text) in [
         ("PNP_CHECKPOINT.hbp",hbp),("PNP_CHECKPOINT.hbi",hbi),("PNP_CHECKPOINT.anchor",anchor)
     ] {
@@ -417,6 +428,14 @@ pub fn verify(models: &Path, source_archive: &Path, output: &Path) -> Result<usi
             != text.as_bytes()
         {
             return Err(format!("checkpoint evidence mismatch: {name}"));
+        }
+    }
+    for (name, expected) in converted_files {
+        if fs::read(output.join(&name))
+            .map_err(|e| format!("converted weight file absent {name}: {e}"))?
+            != expected
+        {
+            return Err(format!("converted weight bytes differ: {name}"));
         }
     }
     Ok(MODELS.len())
