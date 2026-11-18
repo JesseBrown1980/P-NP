@@ -382,7 +382,6 @@ fn make_bundle(source_sha:&str,operator_sha:&str,inputs:&[Input],
     let mut baseline=0_usize;
     let mut route_counts=[[0_usize;3];2];
     let mut by_mode=[[0_usize;3];3];
-    let mut preceding_rows=Vec::with_capacity(54);
     let mut restored=Vec::with_capacity(54);
     for mode in 0..3_u8{
         for rep in 0..3_u8{
@@ -409,11 +408,9 @@ fn make_bundle(source_sha:&str,operator_sha:&str,inputs:&[Input],
                             }
                         }
                         if best.1!=0{per_nonidentity+=1;}
-                        if best.2.iter().filter(|v|**v==1).count()>0 {
-                            // A separate exact mode counter is kept by decoding
-                            // the first transformed bank's declared method.
-                            if best.2.get(1)==Some(&1){selected_rle+=1;}
-                        }
+                        // The first selected bank's mode byte is immediately
+                        // after its source-catalog selector.
+                        if best.2.get(1)==Some(&1){selected_rle+=1;}
                         let mut at=0_usize;
                         let decoded=decode_block(&best.2,&mut at,route)?;
                         if decoded!=window||at!=best.2.len(){
