@@ -103,7 +103,7 @@ jobs:
           native/target/release/pnp-native brown-ledger-attest | tee PNP_BROWN_LEDGER.hbp
           grep -Fq 'PNP_BROWN_LEDGER|schema=v1|rooms=120|verified_cells=3240|' PNP_BROWN_LEDGER.hbp
           grep -Fq '|tamper_rejections=244|prism_floor_roundtrips=120|' PNP_BROWN_LEDGER.hbp
-          grep -Fq '|fischer_null_outward=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_BROWN_LEDGER.hbp
+          grep -Fq '|fischer_null_outward=PASS|fischer_prime_towers=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_BROWN_LEDGER.hbp
       - name: Fetch and verify the original Constellation kernels, keys, master table, and disk GGUF
         shell: bash
         run: |
