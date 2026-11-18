@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc, gc_archive,
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -39,6 +39,35 @@ fn main() {
             }
             Err(error) => Err(error.to_owned()),
         },
+        Some("gc-archive-attest") => {
+            let gac = arguments.next().ok_or("missing original GAC source")?;
+            let neural = arguments.next().ok_or("missing original neural fabric source")?;
+            let omni = arguments.next().ok_or("missing original Omni GC source")?;
+            let out = arguments.next().ok_or("missing original GC archive output")?;
+            if arguments.next().is_some() { return_fail("too many GC archive arguments"); }
+            let count = gc_archive::attest(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
+            )?;
+            if gc_archive::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
+            )? != count {
+                return_fail("GC staged archive differs on readback");
+            }
+            println!("PNP_GC_ARCHIVE|original_bodies={count}|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|operator=HELD|live_rotation=HOLD|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("gc-archive-verify") => {
+            let gac = arguments.next().ok_or("missing original GAC source")?;
+            let neural = arguments.next().ok_or("missing original neural fabric source")?;
+            let omni = arguments.next().ok_or("missing original Omni GC source")?;
+            let out = arguments.next().ok_or("missing archive replay directory")?;
+            if arguments.next().is_some() { return_fail("too many GC archive verification arguments"); }
+            let count = gc_archive::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
+            )?;
+            println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
         Some("prism-attest") => {
             let root = arguments.next().ok_or("missing frozen Q-PRISM Git checkout")?;
             let out = arguments.next().ok_or("missing PRISM HBI/HBP receipt directory")?;
@@ -251,7 +280,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
