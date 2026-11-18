@@ -86,11 +86,13 @@ fn compute_independent(task:&Task)->[u64;CELLS]{
     current
 }
 #[derive(Default)]
+type MemoKey=(usize,u64,u8,u64,[u8;CELLS]);
+type Memo=BTreeMap<MemoKey,[u64;CELLS]>;
 struct Service{
     calls:usize,
     hits:usize,
     state:BTreeMap<(usize,u64),u64>,
-    memo:BTreeMap<(usize,u64,u8,u64,[u8;CELLS]),[u64;CELLS]>,
+    memo:Memo,
 }
 impl Service{
     fn calculate(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
