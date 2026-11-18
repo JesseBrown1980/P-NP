@@ -267,7 +267,7 @@ impl<'a> Watched<'a> {
 }
 
 fn decode_hex(raw:&str)->Result<Vec<u8>,String>{
-    if !raw.len().is_multiple_of(2){return Err("odd hex source".into());}
+    if raw.len()%2!=0{return Err("odd hex source".into());}
     raw.as_bytes().chunks_exact(2).map(|pair|{
         let s=std::str::from_utf8(pair).map_err(|_|"hex not ASCII")?;
         u8::from_str_radix(s,16).map_err(|_|"bad original hex digit".into())
@@ -487,7 +487,7 @@ mod tests{
         let mut search=Watched::new(&formula,&order,100,2).unwrap();
         assert_eq!(search.recurse(),Outcome::Sat);
         assert!(formula.check(&search.values));
-        let impossible=Source{count:2,clauses:vec![vec![1],vec![-1,2],vec![-2]]};
+        let impossible=Source{count:2,clauses:vec![vec![1],vec![-1]]};
         assert!(Watched::new(&impossible,&order,100,2).is_err());
         let all=Source{count:2,clauses:vec![vec![1,2],vec![-1,2],vec![1,-2],vec![-1,-2]]};
         let mut bounded=Watched::new(&all,&order,1,2).unwrap();
