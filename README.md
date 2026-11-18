@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Multi-GNN restoration and G4 Tier-0 supervisor (November 18, 2026)
+
+[PR #32](https://github.com/JesseBrown1980/P-NP/pull/32) restores the complete source-identified **multi-GNN roster** rather than treating GSLGNN as the sole engine. The original ensemble contains **eight scoring signals** (L0 EdgeLevelGNN, L4 GSLGNN, G1 edge-mining, G2 forward-genius, G3 reverse-gain, G4 GLSM, OmniShannon and SHA fallback), while L1 PrototypeGNN and L2 ContrastiveGNN are additional trained model families. The new [10-family HBI inventory](native/fixtures/MULTI_GNN_FAMILIES.hbi) binds these to **four original neural architectures and nine published .pt checkpoints**.
+
+The first source-matched native control is the **G4 GLSM five-state supervisor**. Its Rust 1.81 Q10,000 transition implementation verifies the original `DESCRIBED → EDGE_MINED → PATH_FOUND → MISTAKE_FLAGGED/CONVERGED` walk, exact 0.5 thresholds, absorbing CONVERGED, missing G1/G2/G3 antecedent handling and the **Fischer Tier-0 BLOCK when MISTAKE_FLAGGED**. Thirteen original-source-rule tests are recorded alongside ten family identities in **23 HBI/HBP receipts**, SHA-256, SH and linked HASH evidence. The operator-approval gate remains held. [Full multi-GNN Gate D protocol](native/MULTIGNN_GATE_D_PROTOCOL.md).
+
+**Per-family acceptance remains explicit:** L0/L1/L2/L4 checkpoint forward inference is HOLD pending original-weight tensor export, fixed-point/ternary quantization and balanced held-out parity; G1/G2 JL behavior and OmniShannon require their own tests; private G3 source remains HOLD_SOURCE. The SHA fallback passed separately in PR #31. The historical GSLGNN corpus contains only 40 benign examples among 315,249, so original headline accuracy cannot replace balanced testing.
+
+---
+
 ## Native ternary wave computation and original-source score port (November 18, 2026)
 
 [PR #31](https://github.com/JesseBrown1980/P-NP/pull/31) activates on-demand **3/9/27/81 ternary wave computation** from original frozen matrix data. It reconstructs signed children with exact center/difference checks and uses the observed room totals in native SAT candidate ordering. Across all 120 rooms, the certifier executes **426 selected path decisions** and validates **1,278 signed child contributions**, with altered reports and addresses rejected. SAT truth assignments continue to be exhaustively crosschecked in the independent 2,304-small-source suite.
