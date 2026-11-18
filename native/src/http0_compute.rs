@@ -3,7 +3,7 @@
 //! persistent result recall. No browser, external drive, network provider,
 //! learned HRM checkpoint, JavaScript, unsafe code or floating arithmetic.
 #![forbid(unsafe_code)]
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
