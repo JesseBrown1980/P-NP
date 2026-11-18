@@ -165,8 +165,8 @@ fn inspect_bytes(raw:&[u8])->Result<usize,String>{
         let variant=body[start+1];
         let floor=u16::from_le_bytes([body[start+2],body[start+3]]);
         let count=u16::from_le_bytes([body[start+4],body[start+5]]);
-        if case as usize!=index/8 || usize::from(variant)!=(index%8)/4
-            || floor!=FLOORS[index%4] || usize::from(count)!=EVENT_COUNT{
+        if case as usize!=index/8 || usize::from(variant)!=index%2
+            || floor!=FLOORS[(index%8)/2] || usize::from(count)!=EVENT_COUNT{
             return Err("temporal forecast case/floor ordering changed".into());
         }
         for sample in body[start+6..start+unit].chunks_exact(2){
@@ -331,7 +331,8 @@ fn execute(source_dir:&Path)->Result<(Bundle,Stats),String>{
         || report.len()!=3*PAIRS_PER_ARITY{
         return Err("causal full fabric record census wrong".into());
     }
-    frozen.extend_from_slice(hash_bytes(&frozen).as_bytes());
+    let forecast_digest=hash_bytes(&frozen);
+    frozen.extend_from_slice(forecast_digest.as_bytes());
     if inspect_bytes(&frozen)?!=STREAMS_PER_ARITY{
         return Err("temporal forecast archive cannot be independently scanned".into());
     }
@@ -434,7 +435,8 @@ mod tests{
                 }
             }
         }
-        data.extend_from_slice(hash_bytes(&data).as_bytes());
+        let digest=hash_bytes(&data);
+        data.extend_from_slice(digest.as_bytes());
         assert_eq!(inspect_bytes(&data).unwrap(),STREAMS_PER_ARITY);
         data[140]^=1;
         assert!(inspect_bytes(&data).is_err());
