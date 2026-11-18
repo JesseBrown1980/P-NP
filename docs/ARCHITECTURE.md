@@ -15,7 +15,7 @@ historical RIME/Fischer spheres frozen in this repository.
 
 ## Coupled execution and evidence planes
 
-    Original source / constrained problem / stored recall
+    PRL-informed temporal source / constrained problem / stored recall
                          |
            Frozen brain slices / HRM / MTP
                          |
@@ -61,6 +61,27 @@ HTTP-0 is a **backend transport** only; no browser, HTML page, Node
 runtime or frontend executes these kernels. C: and D: historically
 hosted pools/stored slices and may be persistence backends; neither
 disk designation is necessary to run the native hosted experiment.
+
+## Experimental temporal-memory source
+
+The full-matrix synthetic-event test has a genuine scientific
+antecedent: Nicolas Gosling et al.,
+[Probing the memory of a superconducting qubit environment](https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7)
+(PRL, accepted 2026-10-28; DOI 10.1103/j1r2-5ph7).
+The paper distinguishes long-lived two-level-system memory from
+Markovian bath behavior using non-Poissonian experimental quantum
+jump histories and Solomon-equation fits.
+
+The repository's two preceding acceptance experiments implement
+**classical synthetic analogues**: fixed-point Solomon-like latent
+population evolution, followed by unseen-event prediction and
+count-preserving shuffled controls. They generate the actual
+source-authenticated temporal trace that is fed through all
+four binary floors, 40 operators, the ternary matrix and HTTP-0.
+The mixed-radix HBI/HBP chain now explicitly includes the two
+DOI-bearing source roots PNP_TLS.hbp and
+PNP_TLS_STOCHASTIC.hbp. Synthetic data are not the paper's
+physical qubit measurements.
 
 ## Working binary/ternary bridge
 
