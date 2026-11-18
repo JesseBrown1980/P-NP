@@ -10,6 +10,35 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Exact PRL-inspired ordered-versus-shuffled temporal prediction across the full matrix fabric (November 18, 2026)
+
+[Full protocol](native/TEMPORAL_FULL_FABRIC_PREDICTION_PROTOCOL.md) · [original source-trace parser](native/src/tls_entropy_omnibit.rs) · [native execution](native/src/temporal_full_fabric.rs)
+
+The next gate runs the accepted Gosling-PRL-inspired **classical synthetic
+temporal-memory** experiments through the complete binary/ternary fabric.
+For each of nine independently seeded original cases, it trains the
+original observation-only TLS model on 8,000 training events, selects
+the predictor using only 4,000 validation events, then sends both
+the original 8,000 held-out events and their count-preserving shuffle
+through four binary floors (64/256/1024/4096), the original 40
+Omnibit operator catalog, Fischer-addressed native HTTP-0 rooms,
+independent 27-trit reconstruction, and 243-step exact matrix compute.
+
+The three matched execution passes make **64,152 real HTTP-0
+requests** and reassemble all **144,000 held-out/shuffled event
+outcomes** without altering their causal order. Original and
+independently reconstructed causal Brier predictions must agree
+exactly. Cache controls must show 37,422 source-verified reuse hits,
+including the repeated pass, while preserving the original
+train/validation model boundary. The acceptance gate requires the
+six coupled cases to gain on ordered observations and lose that
+gain on time-shuffled observations, while all three IID controls
+remain memoryless. Actual single-run latency is separately recorded
+and original GNN forward remains HOLD pending source parity.
+
+**Status:** new hosted verification pending; exact predictive
+measurements will be published from the accepted CI evidence.
+
 ## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
 
 **Experimental source lineage:** [Gosling et al., *Probing the memory of a superconducting qubit environment*](https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7) (PRL accepted October 28, 2026; DOI `10.1103/j1r2-5ph7`) inspired the original **classical** Solomon/TLS memory model and synthetic held-out non-Poissonian-versus-IID event experiments. Those accepted event traces are the actual inputs to the Omnibit40/entropy/Fischer HTTP-0/mixed-radix matrix stack. PRL hardware measurements are distinct from our precommitted synthetic event corpus. The full-matrix verifier now imports both original DOI-bearing `PNP_TLS.hbp` and `PNP_TLS_STOCHASTIC.hbp` roots directly into its HBI/HBP receipt ledger (eight prior-plane SHA roots total).
