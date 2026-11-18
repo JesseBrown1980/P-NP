@@ -71,7 +71,7 @@ fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
     }
     let mut children = Vec::new();
     if stop - start > 1 {
-        if !(stop - start).is_multiple_of(3) {
+        if !(stop - start) % 3 == 0 {
             return None;
         }
         let stride = (stop - start) / 3;
