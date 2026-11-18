@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
-    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory,
+    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +94,33 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-stochastic-attest") => {
+            let prior=arguments.next().ok_or("missing source-authenticated TLS pilot receipts")?;
+            let out=arguments.next().ok_or("missing stochastic TLS HBI/HBP destination")?;
+            if arguments.next().is_some(){return_fail("too many TLS stochastic attest arguments");}
+            let stats=tls_stochastic::attest(Path::new(&prior),Path::new(&out))?;
+            if tls_stochastic::verify(Path::new(&prior),Path::new(&out))?!=stats{
+                return_fail("source-independent stochastic TLS archived replay differed");
+            }
+            println!("PNP_TLS_STOCHASTIC|source=DOI_10.1103_j1r2-5ph7|scope=SYNTHETIC_HIDDEN_MARKOV|regimes=3|repetitions=3|traces={}|candidate_models={}|ternary_capacities=0_1_3_27_81|lag_records={}|null_baseline_selections={}|coupled_heldout_improvements={}|shuffle_reversals={}|retained_source_bytes={}|records={}|split=TRAIN_VALIDATION_TEST|metric=HELDOUT_BRIER|g2_physical=NOT_MEASURED|quantum_hardware=NO|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.traces,stats.models,stats.lag_records,
+                stats.null_baseline_selections,stats.coupled_heldout_improvements,
+                stats.shuffle_reversals,stats.source_bytes,stats.rows
+            );
+            Ok(())
+        }
+        Some("tls-stochastic-verify") => {
+            let prior=arguments.next().ok_or("missing original frozen TLS pilot source")?;
+            let out=arguments.next().ok_or("missing stochastic TLS receipts")?;
+            if arguments.next().is_some(){return_fail("too many TLS stochastic verifier arguments");}
+            let stats=tls_stochastic::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_TLS_STOCHASTIC_VERIFY|traces={}|models={}|lag_records={}|null_baseline={}|coupled_improved={}|shuffle_reversed={}|records={}|source=ORIGINAL_TLS_ACCEPTED|stochastic_replay=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0",
+                stats.traces,stats.models,stats.lag_records,
+                stats.null_baseline_selections,stats.coupled_heldout_improvements,
+                stats.shuffle_reversals,stats.rows
+            );
             Ok(())
         }
         Some("tls-memory-attest") => {
@@ -434,7 +461,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | tls-memory-attest OUT | tls-memory-verify OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | tls-stochastic-attest PRIOR OUT | tls-stochastic-verify PRIOR OUT | tls-memory-attest OUT | tls-memory-verify OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
