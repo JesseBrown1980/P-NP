@@ -12,7 +12,7 @@ permissions:
 jobs:
   original-genesis-bitcoin-constellation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Rust 1.81 native build and source-pinned GGUF
@@ -50,12 +50,17 @@ jobs:
         run: |
           set -euo pipefail
           export PNP_RIME_VALUES="$GITHUB_WORKSPACE/build/bitcoin-rime/VALUES.hbp"
+          export PNP_BITCOIN_NODE_CAP=50000
           for case in nonce4 nonce8 nonce32 merkle_nonce288; do
+            case "$case" in
+              nonce4|nonce8) budget=60 ;;
+              nonce32|merkle_nonce288) budget=180 ;;
+            esac
             for arm in constellation ym_fischer rime_new; do
-              echo "BTC_RIME_START|case=$case|arm=$arm|budget_seconds=20|node_cap=1024"
+              echo "BTC_RIME_START|case=$case|arm=$arm|budget_seconds=$budget|node_cap=$PNP_BITCOIN_NODE_CAP"
               start=$(date +%s%N)
               set +e
-              timeout --kill-after=2s 20s python3 -s -B experiments/bitcoin/arm.py \
+              timeout --kill-after=3s "${budget}s" python3 -s -B experiments/bitcoin/arm.py \
                 "$arm" "$case" "build/bitcoin-rime/source/$case.cnf" \
                 "build/bitcoin-rime/source/$case.txt" \
                 > "build/bitcoin-rime/$case-$arm.log" 2>&1
