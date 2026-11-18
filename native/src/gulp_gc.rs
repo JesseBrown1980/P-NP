@@ -3,7 +3,7 @@
 //! Original source files, trained weights and prior archive receipts are fixed.
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
