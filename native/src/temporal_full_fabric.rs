@@ -155,7 +155,7 @@ fn program(prior:&Path)->Result<(Bundle,Stats),String>{
         let trained=fit(&case.train)?;
         let selected=select(&score(&case.valid,&trained)?);
         let mut outcomes=[(0_u128,0_u128);2];
-        for arm in 0..2_usize{
+        for (arm,outcome) in outcomes.iter_mut().enumerate(){
             let source_events=if arm==0{&case.held}else{&case.shuffle};
             let stream=usize::from(case.mode)*6+usize::from(case.rep)*2+arm;
             // Every request has a distinct (stream,packet) key; model
@@ -180,10 +180,10 @@ fn program(prior:&Path)->Result<(Bundle,Stats),String>{
             }
             cached_hits+=hits_first+hits_second;
             total_calls+=calls_cache+calls_again;
-            outcomes[arm]=score_reconstructed(&recovered,selected,&trained)?;
+            *outcome=score_reconstructed(&recovered,selected,&trained)?;
             archive.extend_from_slice(&[case.mode,case.rep,arm as u8,selected as u8]);
-            archive.extend_from_slice(&outcomes[arm].0.to_le_bytes());
-            archive.extend_from_slice(&outcomes[arm].1.to_le_bytes());
+            archive.extend_from_slice(&outcome.0.to_le_bytes());
+            archive.extend_from_slice(&outcome.1.to_le_bytes());
             archive.extend_from_slice(hash_bytes(&recovered).as_bytes());
         }
         let ordered_gain=outcomes[0].0 as i128-outcomes[0].1 as i128;
