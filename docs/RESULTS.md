@@ -49,3 +49,8 @@ The 21 historical-versus-new elapsed samples sum to 508,575 ns and 437,453 ns wi
 ## Hard SAT six-arm comparison accepted (November 17, 2026)
 
 [Full original-source 24-case outcome table](HARD_SAT_SIX_WAY_20261117.md) and [hosted run #44206197812](https://github.com/JesseBrown1980/P-NP/actions/runs/44206197812): six contender jobs, exact source/receipt referee, real 100-flip corruption rejection and published-archive download PASS. PHP(21,20), 420 variables and 4,221 clauses: all three native adapters HOLD at 2,000 search nodes; MiniSat, CaDiCaL, PicoSAT HOLD at 50 seconds. A connected 128-vertex odd-charge Tseitin 3-CNF: three native exact XOR contradiction certificates at rank 127, zero search nodes; all three external solvers HOLD at 50 seconds. PHP(8,7): native HOLD, all three external UNSAT, with CaDiCaL emitting a separately verified DRAT proof. PHP(4,4): all six SAT, original-CNF witnesses checked. Distinct search-node and wall-clock budgets prevent equal-cost speed conclusions; P=NP OPEN.
+
+
+## 84-case SAT array accepted, November 17, 2026
+
+[Full 14-input × six-competitor result table](SAT_ARRAY_84_RESULTS_20261117.md); [hosted acceptance run #44208774230](https://github.com/JesseBrown1980/P-NP/actions/runs/44208774230): 84/84 original-CNF and receipt verifications, 66 completed decisions, 18 budget HOLDs, eight CaDiCaL DRAT certificate replays and 20 forged SAT-witness rejections. On the seven completed PHP tests, matched common DPLL kernel search nodes total 899 (Yang–Mills) versus 516 (new/historical Rime), 42.6% fewer for the Rime ordering. On four odd-charge Tseitin contradictions, all three research models certified exact rank inconsistencies with zero search nodes. P versus NP remains open.
