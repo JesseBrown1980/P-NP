@@ -11,7 +11,7 @@ use crate::rime_disk::{self, DiskRime};
 use crate::solver::{check_against_exhaustive, solve, Status};
 use crate::ternary::{Cnf, Trit};
 
-const ARM_COUNT: usize = 4;
+const ARM_COUNT: usize = 5;
 const CASE_SEEDS: usize = 10;
 
 #[derive(Clone, Copy)]
@@ -20,6 +20,7 @@ enum Arm {
     Fischer,
     FrozenDisk,
     PumpFunnel,
+    PumpFunnelBatch,
 }
 impl Arm {
     fn from_index(index: usize) -> Self {
@@ -27,7 +28,8 @@ impl Arm {
             0 => Self::Direct,
             1 => Self::Fischer,
             2 => Self::FrozenDisk,
-            _ => Self::PumpFunnel,
+            3 => Self::PumpFunnel,
+            _ => Self::PumpFunnelBatch,
         }
     }
     fn label(self) -> &'static str {
@@ -36,6 +38,7 @@ impl Arm {
             Self::Fischer => "FISCHER",
             Self::FrozenDisk => "FROZEN_DISK",
             Self::PumpFunnel => "PUMP_FUNNEL_HTTP0",
+            Self::PumpFunnelBatch => "PUMP_FUNNEL_BATCHED_HTTP0",
         }
     }
 }
@@ -139,6 +142,7 @@ fn rime_guidance(
     cnf: &Cnf,
     disk: &DiskRime,
     via_loopback: bool,
+    batched: bool,
 ) -> Result<(Guidance, u64), String> {
     let mut prepared = direct(cnf, Strategy::Base)?;
     let total_literals: usize = cnf.clauses.iter().map(Vec::len).sum();
@@ -149,10 +153,21 @@ fn rime_guidance(
         }
     }
     let mut priority = vec![0_i128; cnf.variables];
+    let addresses: Vec<(u8, u8)> = (0..cnf.variables)
+        .map(|i| (
+            ((i + total_literals) % disk.tensor_count()) as u8,
+            ((i + cnf.clauses.len()) % 27) as u8,
+        )).collect();
+    let batched_values = if batched {
+        Some(rime_disk::loopback_batch(disk, &addresses)?)
+    } else {
+        None
+    };
     for (i, item) in priority.iter_mut().enumerate() {
-        let tensor = ((i + total_literals) % disk.tensor_count()) as u8;
-        let glyph = ((i + cnf.clauses.len()) % 27) as u8;
-        let value = if via_loopback {
+        let (tensor, glyph) = addresses[i];
+        let value = if let Some(ref values) = batched_values {
+            values[i]
+        } else if via_loopback {
             rime_disk::loopback_once(disk, tensor, glyph)?
         } else {
             let req = rime_disk::request(tensor, glyph)?;
@@ -202,14 +217,16 @@ fn one_case(cnf: &Cnf, expected: Status, disk: &DiskRime, arm: Arm)
         Arm::Direct => vec![Strategy::Base],
         Arm::Fischer => vec![Strategy::Fischer],
         Arm::FrozenDisk => vec![Strategy::Base],
-        Arm::PumpFunnel => vec![Strategy::Base, Strategy::Fischer, Strategy::Base],
+        Arm::PumpFunnel | Arm::PumpFunnelBatch => vec![Strategy::Base, Strategy::Fischer, Strategy::Base],
     };
     let mut solutions = Vec::new();
     for (index, strategy) in strategies.into_iter().enumerate() {
         let needs_rime = matches!(arm, Arm::FrozenDisk)
-            || matches!(arm, Arm::PumpFunnel) && index == 2;
+            || matches!(arm, Arm::PumpFunnel | Arm::PumpFunnelBatch) && index == 2;
         let (guidance, reads) = if needs_rime {
-            rime_guidance(cnf, disk, matches!(arm, Arm::PumpFunnel))?
+            rime_guidance(cnf, disk,
+                matches!(arm, Arm::PumpFunnel | Arm::PumpFunnelBatch),
+                matches!(arm, Arm::PumpFunnelBatch))?
         } else {
             (direct(cnf, strategy)?, 0)
         };
@@ -228,7 +245,7 @@ fn one_case(cnf: &Cnf, expected: Status, disk: &DiskRime, arm: Arm)
     }
     // Funnel: all three independently checked routes must agree before
     // selecting a reusable source-specific result. No uncharged best-of-three.
-    if matches!(arm, Arm::PumpFunnel)
+    if matches!(arm, Arm::PumpFunnel | Arm::PumpFunnelBatch)
         && solutions.iter().any(|out| out.status != solutions[0].status)
     {
         return Err("Pump/Funnel routes do not agree".into());
