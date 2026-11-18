@@ -150,10 +150,8 @@ fn read_zip(data: &[u8]) -> Result<Vec<Entry<'_>>, String> {
             let begin = offset.checked_add(4).ok_or("ZIP extra overflow")?;
             let finish = begin.checked_add(len).ok_or("ZIP extra overflow")?;
             let contents = extra.get(begin..finish).ok_or("ZIP extra truncated")?;
-            if tag == 1 {
-                if zip64_extra.replace(contents).is_some() {
-                    return Err("duplicate ZIP64 extra".to_owned());
-                }
+            if tag == 1 && zip64_extra.replace(contents).is_some() {
+                return Err("duplicate ZIP64 extra".to_owned());
             }
             offset = finish;
         }
