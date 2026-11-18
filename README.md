@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Stochastic hidden-reservoir memory and truly held-out ternary prediction (November 18, 2026)
+
+The [TLS stochastic held-out protocol](native/TLS_STOCHASTIC_HELDOUT_PROTOCOL.md) is the next source-bound experiment after the accepted PRL DOI [10.1103/j1r2-5ph7](https://doi.org/10.1103/j1r2-5ph7) deterministic hidden-reservoir pilot. It generates **frozen, synthetic** Bernoulli event traces under three explicitly distinct regimes: an IID memoryless null, one persistent hidden TLS-like bit, and three persistent TLS-like bits. All generator probabilities and seeds are fixture-defined rather than inferred physical constants.
+
+Five actual trained-on-observations-only predictors use capacity **0, 1, 3, 27, 81**: constant prior, one hidden EMA accumulator, and three native ternary-history tables with 3/27/81 cells. A validation-only selector tests Brier scores with a predeclared complexity penalty; independent held-out events and count-preserving shuffled histories then assess genuine *temporal* predictive gain. The experiment carries original source DOI scope, fixed-seed specification, **117 new HBI → HBP → SHA → SH → HASH** receipts, full input and shuffle byte archives, lag-conditioned event rates and automatic GC retention eligibility without live human approval.
+
+This is classical stochastic modeling. It does not use hardware quantum-jump data or imply a physical g₂ measurement, qubit-state recovery or trained GNN inference parity. The original prior 196-receipt pilot and its source hashes must be accepted before this gate can publish results.
+
+---
+
 ## PRL-backed temporal-memory and hidden TLS reservoirs — source-scoped classical gate (November 18, 2026)
 
 The [TLS temporal-memory protocol](native/TLS_TEMPORAL_MEMORY_PROTOCOL.md) connects the experimentally measured memory of superconducting qubit environments in Gosling et al., [PRL DOI 10.1103/j1r2-5ph7](https://doi.org/10.1103/j1r2-5ph7), with a new **classical, exact fixed-point computational test** of the Asolaria matrix fabric. This is an independently verifiable simulation inspired by Solomon population equations, not a quantum-device measurement or a fitted physical model.
