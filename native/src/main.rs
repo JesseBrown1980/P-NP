@@ -4,7 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
-    http0_compute, microkernel_compute,
+    http0_compute, microkernel_compute, full_matrix_fabric,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -96,6 +96,38 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("full-matrix-attest") => {
+            let prior=arguments.next().ok_or("missing accepted prior source/evidence")?;
+            let out=arguments.next().ok_or("missing full matrix output")?;
+            if arguments.next().is_some(){return_fail("extra full matrix arguments");}
+            let stats=full_matrix_fabric::attest(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_FULL_MATRIX|jobs={}|binary_floors=4|original_operators=40|direct_crossings={}|independent_http0_requests={}|exact_matrix_triads={}|gac60_metadata={}|gnn_forward_holds={}|direct_all_wall_ns={}|direct_memo_wall_ns={}|trained_models=SOURCE_PINNED_FORWARD_HOLD|status=PASS|json=0",
+                stats.jobs,stats.crossings,stats.independent_calls,
+                stats.matrix_triads,stats.tuple_checks,stats.gnn_hold_checks,
+                stats.direct_all_ns,stats.direct_memo_ns);
+            for arm in stats.arms {
+                println!("PNP_FULL_MATRIX_ARM|mode={}|arity={}|calls={}|hits={}|physical_calculations={}|visited_rooms={}|wall_ns={}|floor_carry=INDEPENDENT|all40=EXECUTED|source_answer=EXACT|http0=BACKEND_ONLY|status=PASS|json=0",
+                    arm.mode,arm.arity,arm.calls,arm.hits,arm.calls-arm.hits,
+                    arm.rooms,arm.elapsed_ns);
+            }
+            Ok(())
+        }
+        Some("full-matrix-verify") => {
+            let prior=arguments.next().ok_or("missing frozen matrix original evidence")?;
+            let out=arguments.next().ok_or("missing matrix result archive")?;
+            if arguments.next().is_some(){return_fail("extra full matrix verifier argument");}
+            let stats=full_matrix_fabric::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_FULL_MATRIX_VERIFY|jobs={}|network_calls={}|operator_crossings={}|source_seat=PASS|reflection=PASS|fabric_seat=PASS|authentic_gnn_signal=HOLD|archive=BYTE_IDENTICAL|status=PASS|json=0",
+                stats.jobs,stats.independent_calls,stats.crossings);
+            Ok(())
+        }
+        Some("full-matrix-inspect") => {
+            let source=arguments.next().ok_or("missing full matrix result binary")?;
+            if arguments.next().is_some(){return_fail("extra matrix witness argument");}
+            let count=full_matrix_fabric::inspect(Path::new(&source))?;
+            println!("PNP_FULL_MATRIX_INSPECT|jobs={count}|integer_reconstruction=EXACT|source_witness=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("compute-fabric-serve") => {
