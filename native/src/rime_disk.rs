@@ -434,6 +434,7 @@ mod tests {
         assert!(store.read(0, 27, 1).is_err());
         let record = request(0, 0).expect("request");
         assert_eq!(store.reply(&record).expect("reply")[3..7], 1_u32.to_le_bytes());
+        assert_eq!(loopback_batch(&store, &[(0, 0), (0, 1)]), Ok(vec![1, 0]));
         let mut false_address = record;
         false_address[3] ^= 1;
         assert!(store.reply(&false_address).is_err());
