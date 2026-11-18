@@ -64,7 +64,7 @@ fn fabric(frozen: &FrozenMatrix, start: usize, stop: usize) -> Option<i128> {
 
 fn inspect(frozen: &FrozenMatrix, start: usize, stop: usize,
            level: usize, fault: Option<Fault>) -> Option<Verdict> {
-    if start >= stop || !frozen.verify() {
+    if start >= stop || (level == 0 && !frozen.verify()) {
         return None;
     }
     let mut children = Vec::new();
