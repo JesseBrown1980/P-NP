@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 
-CASES = ("nonce4", "nonce8", "nonce32")
+CASES = ("nonce4", "nonce8", "nonce32", "merkle_nonce288")
 ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original",
         "minisat", "cadical", "picosat")
 PREFIX = bytes.fromhex(
@@ -55,9 +55,13 @@ def main(root):
         assert manifest["input_sha256"] == sha
         assert manifest["name"] == case
         assert manifest["nonce_free_bits"] in (4, 8, 32)
+        assert manifest["merkle_free_bits"] in (0, 256)
+        assert manifest["free_bits_total"] == (
+            manifest["nonce_free_bits"] + manifest["merkle_free_bits"])
         assert manifest["expected_digest_display"] == HASH
         assert manifest["header_prefix_hex"] == PREFIX.hex()
         assert len(manifest["nonce_variables"]) == manifest["nonce_free_bits"]
+        assert len(manifest["merkle_variables"]) == manifest["merkle_free_bits"]
         assert manifest["variables"] > 256
         assert manifest["clauses"] > manifest["variables"]
         original[case] = sha
@@ -79,12 +83,19 @@ def main(root):
                 assert isinstance(recovered, int)
                 assert 0 <= recovered < 1 << 32
                 assert (recovered ^ NONCE) >> manifest["nonce_free_bits"] == 0
-                candidate = header(recovered)
+                candidate = bytearray(header(recovered))
+                merkle_hex = receipt["recovered_merkle_raw_hex"]
+                assert isinstance(merkle_hex, str) and len(merkle_hex) == 64
+                if manifest["merkle_free_bits"]:
+                    candidate[36:68] = bytes.fromhex(merkle_hex)
+                else:
+                    assert merkle_hex == PREFIX[36:68].hex()
                 assert sha256d(candidate)[::-1].hex() == HASH
                 assert receipt["witness_sha256"] == hashlib.sha256(
                     candidate).hexdigest()
             else:
                 assert receipt["recovered_nonce"] == "NONE"
+                assert receipt["recovered_merkle_raw_hex"] == "NONE"
                 assert receipt["witness_sha256"] == "NONE"
             if status == "HOLD_BUDGET":
                 assert arm in ARMS[:4]
@@ -95,7 +106,7 @@ def main(root):
                   "|status=" + status +
                   "|source_sha256=" + sha +
                   "|independent_nonce_hash=PASS", flush=True)
-    assert len(original) == 3 and len(set(original.values())) == 3
+    assert len(original) == 4 and len(set(original.values())) == 4
     # Negative controls: a wrong candidate nonce may not pass the full
     # double SHA256 equality to this published Bitcoin source.
     rejected = 0
@@ -103,16 +114,22 @@ def main(root):
         for n in (NONCE ^ 1, NONCE ^ 2, NONCE ^ 3, NONCE ^ 4):
             assert sha256d(header(n))[::-1].hex() != HASH
             rejected += 1
-    assert rejected == 12
+    assert rejected == 16
+    for flip in (1, 2, 3, 4):
+        changed = bytearray(header(NONCE))
+        changed[36] ^= flip
+        assert sha256d(changed)[::-1].hex() != HASH
+        rejected += 1
+    assert rejected == 20
     for arm in ARMS:
         complete = totals[arm]["SAT"]
         hold = totals[arm]["HOLD_BUDGET"] + totals[arm]["HOLD_TIME"]
         assert complete + hold == len(CASES)
         print("BTC_AGGREGATE|arm=" + arm + "|sat=" + str(complete) +
-              "|hold=" + str(hold) + "|cases=3", flush=True)
-    print("BTC_REFEREE_FINAL|arms=7|cases=3|observations=21|"
+              "|hold=" + str(hold) + "|cases=4", flush=True)
+    print("BTC_REFEREE_FINAL|arms=7|cases=4|observations=28|"
           "original_sha256d=PASS|full_gate_reference_model=PASS|"
-          "all_source_hashes=PASS|wrong_nonce_rejections=12|"
+          "all_source_hashes=PASS|wrong_header_rejections=20|"
           "all_claimed_models=PASS|status=PASS")
     (base / "FINAL_RESULTS.txt").write_text(
         repr(totals) + "\n", encoding="ascii")
