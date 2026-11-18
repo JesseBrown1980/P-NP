@@ -38,9 +38,9 @@ The original HRM predictive weights are not loaded by this particular
 routing experiment. It measures Fischer dispatch overhead rather than
 claiming a new predictor or proof.
 
-**Status:** implementation staged for Rust 1.81 hosted acceptance; the
-continuous-stream byte total and transport timing must be taken from
-the passing hosted receipts, not estimated.
+**Hosted acceptance PASS:** [run #44338318876](https://github.com/JesseBrown1980/P-NP/actions/runs/44338318876) completed both jobs, including the independent published-archive checksum review. **Continuous entropy = 54,200 B** including the 228 B serialized model snapshots, against **54,725 B fully framed bitpack**: **525 B / 0.959% saved** on these 54 synthetic frames. Relative to the previous **95,149 B** blockwise entropy archive, continuous coding saves **40,949 B / 43.04%**. The separate unframed 54,000 B bitpack reference is **200 B smaller** than the new continuous archive.
+
+All **324 backend-only HTTP-0** reconstructed-event messages passed at widths 3/27/81, with the independent worker process delivering all 8,000 original event bytes on each request. Recorded group wall times for **108 calls per width**, including backend transport and decoding, were **22,286,116 / 22,024,929 / 22,414,411 ns** respectively; their small differences do not establish a stable optimal width. All 103 native unit tests, strict Clippy, mutation controls, deterministic archive comparison and protected-source/GULP gates passed. Full native executable **1,683,096 B**, so entropy archive plus executable **1,737,296 B**; external evidence is accounted separately. This tests Fischer addressing and native microkernel routing, with trained HRM codex inference separately held.
 
 ## Temporal probability entropy × Omnibit40: first hosted blockwise gate (November 18, 2026)
 
