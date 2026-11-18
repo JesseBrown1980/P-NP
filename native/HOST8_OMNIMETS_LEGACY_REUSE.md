@@ -144,6 +144,21 @@ path penalty and use retained hot mailboxes or batched I/O.
   original authorization and policy. Ordinary verified routing
   need not wait for per-message human approval.
 
+## Distributed leaf extension
+
+The original Host8 spinner/room cycle also has an accepted hosted
+sibling: [GitRAM twenty-leaf plus backend HTTP0 wave contract](GITRAM_HTTP0_TWENTY_LEAF_WAVE_PROTOCOL.md).
+[Original GitRAM run #43024237445](https://github.com/JesseBrown1980/GitRAM/actions/runs/43024237445)
+passed 20 independent Host8 synthetic 300 GB source-stream shard
+jobs plus an all-20 fan-in. It used a deterministic bounded source
+generator, not 300 GB of physical operator storage. [P-NP run
+#44345372419](https://github.com/JesseBrown1980/P-NP/actions/runs/44345372419)
+separately passed the native backend HTTP0 Fischer-addressed room
+compute and recall acceptance, 1,458 checked messages. These are
+distinct components. Authenticated two-wave leaf-to-leaf feedback,
+a live cross-runner HTTP transport and an operator-local C:/D:
+archive importer require their own independent gates.
+
 ## Status
 
 This document reconciles source contracts and measured receipts.
