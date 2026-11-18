@@ -70,6 +70,21 @@ fn start(q: i64, cells: usize, high: bool) -> Population {
 fn predict_markov(q: i64) -> i64 {
     ((SCALE - GAMMA_Q) * q + GAMMA_Q * BACKGROUND) / SCALE
 }
+/// Independent net-flux form of the visible-state update. This does not
+/// call the simulator's `step` function or use its expanded coefficients.
+fn predict_with_hidden(pop: &Population, coupled: i64) -> Result<i64, String> {
+    check_population(pop)?;
+    let mut flux = GAMMA_Q * (BACKGROUND - pop.q);
+    for (index, &reservoir) in pop.tls.iter().enumerate() {
+        flux += rate_for(index, pop.tls.len(), coupled) * (reservoir - pop.q);
+    }
+    // Round once after summing all signed fluxes, as the direct simulator does.
+    let numerator = SCALE * pop.q + flux;
+    if numerator < 0 {
+        return Err("independent hidden-population flux became negative".to_owned());
+    }
+    Ok(numerator / SCALE)
+}
 fn check_population(pop: &Population) -> Result<(), String> {
     if !(0..=SCALE).contains(&pop.q)
         || pop.tls.len() > 81
@@ -142,7 +157,7 @@ fn pair(q: i64, count: usize, coupling: i64) -> Result<Pair, String> {
         let high_after = step(high_before, coupling)?;
         for (old, new) in [(low_before, &low_after), (high_before, &high_after)] {
             let markov_delta = new.q - predict_markov(old.q);
-            let matched_delta = new.q - step(old, coupling)?.q;
+            let matched_delta = new.q - predict_with_hidden(old, coupling)?;
             markov_error += (markov_delta * markov_delta) as u128;
             matched_error += (matched_delta * matched_delta) as u128;
         }
@@ -364,6 +379,27 @@ mod tests {
                 assert!(coupled.baseline_error > 0);
                 assert_eq!(coupled.full_error, 0);
             }
+        }
+    }
+    #[test]
+    fn shuffled_hidden_reservoir_reverses_conditioned_return() {
+        for cells in [1_usize, 3, 27, 81] {
+            let low = start(5_000, cells, false);
+            let high = start(5_000, cells, true);
+            assert_eq!(low.q, high.q);
+            let expected_low = predict_with_hidden(&low, COUPLED).unwrap();
+            let expected_high = predict_with_hidden(&high, COUPLED).unwrap();
+            assert_eq!(expected_low, step(&low, COUPLED).unwrap().q);
+            assert_eq!(expected_high, step(&high, COUPLED).unwrap().q);
+            assert!(expected_high > expected_low);
+            // Rebinding the history rather than the visible state swaps
+            // the predicted return: a key that forgets hidden state fails.
+            let wrong_low = predict_with_hidden(&high, COUPLED).unwrap();
+            let wrong_high = predict_with_hidden(&low, COUPLED).unwrap();
+            assert_eq!(wrong_low, expected_high);
+            assert_eq!(wrong_high, expected_low);
+            assert_ne!(wrong_low, expected_low);
+            assert_eq!(predict_markov(low.q), predict_markov(high.q));
         }
     }
     #[test]
