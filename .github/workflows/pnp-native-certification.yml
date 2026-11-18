@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -905,11 +905,63 @@ jobs:
           rm intent_new_runtime.py
           native/target/release/pnp-native audit . >"$RUNNER_TEMP/RESTORE.hbp"
           echo 'PNP_NEGATIVE_CONTROLS|legacy_source_tamper=REJECTED|new_nonrust_runtime=REJECTED|restored=PASS|json=0'
+      - name: Temporal probability entropy × Omnibit40 full framed acceptance
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f 'PNP_TLS_ENTROPY_RESOURCE|wall_elapsed_seconds=%e|max_rss_kib=%M|scope=ATTEST_PLUS_REVERIFY|json=0' -o PNP_TLS_ENTROPY_RESOURCE.hbp native/target/release/pnp-native tls-entropy-attest source-omnibit evidence evidence | tee PNP_TLS_ENTROPY_ATTEST.hbp
+          native/target/release/pnp-native tls-entropy-verify source-omnibit evidence evidence | tee PNP_TLS_ENTROPY_VERIFY.hbp
+          native/target/release/pnp-native tls-entropy-decode evidence/PNP_TLS_ENTROPY_SELECTED.bin "$RUNNER_TEMP/redecoded-entropy.bin" | tee PNP_TLS_ENTROPY_DECODE.hbp
+          cmp evidence/PNP_TLS_ENTROPY_RESTORED.bin "$RUNNER_TEMP/redecoded-entropy.bin"
+          grep -Fq 'PNP_TLS_ENTROPY|frames=54|rows=81|' PNP_TLS_ENTROPY_ATTEST.hbp
+          grep -Fq '|trained=PR43_TRAIN_ONLY|selector=VALIDATION_FRAMED_COST|bitpack54_unframed=54000|baseline_omni40_bytes=294615|source_independent_replay=PASS|' PNP_TLS_ENTROPY_ATTEST.hbp
+          grep -Fq 'PNP_TLS_ENTROPY_VERIFY|frames=54|rows=81|' PNP_TLS_ENTROPY_VERIFY.hbp
+          grep -Fq '|external_model=NONE|source_generator=NOT_USED|original_operators=40|events=EXACT|' PNP_TLS_ENTROPY_DECODE.hbp
+          test "$(grep -c '^HBI|' evidence/PNP_TLS_ENTROPY.hbi)" -eq 81
+          test "$(grep -c '^TLS_ENTROPY_FRAME|' evidence/PNP_TLS_ENTROPY.hbp)" -eq 54
+          test "$(grep -c '^TLS_ENTROPY_MODEL|' evidence/PNP_TLS_ENTROPY.hbp)" -eq 9
+          test "$(grep -c '^TLS_ENTROPY_PAIR|' evidence/PNP_TLS_ENTROPY.hbp)" -eq 9
+          cp evidence/PNP_TLS_ENTROPY_SELECTED.bin "$RUNNER_TEMP/entropy-original.bin"
+          cp evidence/PNP_TLS_ENTROPY.hbp "$RUNNER_TEMP/entropy-original.hbp"
+          cp evidence/PNP_TLS_ENTROPY.hbi "$RUNNER_TEMP/entropy-original.hbi"
+          cp evidence/PNP_TLS_ENTROPY.anchor "$RUNNER_TEMP/entropy-original.anchor"
+          cp evidence/PNP_TLS_ENTROPY_RESTORED.bin "$RUNNER_TEMP/entropy-original-replay.bin"
+          native/target/release/pnp-native tls-entropy-attest source-omnibit evidence evidence > "$RUNNER_TEMP/entropy-repeat.log"
+          cmp evidence/PNP_TLS_ENTROPY_SELECTED.bin "$RUNNER_TEMP/entropy-original.bin"
+          cmp evidence/PNP_TLS_ENTROPY.hbp "$RUNNER_TEMP/entropy-original.hbp"
+          cmp evidence/PNP_TLS_ENTROPY.hbi "$RUNNER_TEMP/entropy-original.hbi"
+          cmp evidence/PNP_TLS_ENTROPY.anchor "$RUNNER_TEMP/entropy-original.anchor"
+          cmp evidence/PNP_TLS_ENTROPY_RESTORED.bin "$RUNNER_TEMP/entropy-original-replay.bin"
+      - name: Temporal entropy corruption negatives and physical owned GULP deletion
+        run: |
+          set -euo pipefail
+          for name in PNP_TLS_ENTROPY_SELECTED.bin PNP_TLS_ENTROPY.hbp PNP_TLS_ENTROPY.hbi PNP_TLS_ENTROPY.anchor PNP_TLS_ENTROPY_RESTORED.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/safe-$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native tls-entropy-verify source-omnibit evidence evidence > "$RUNNER_TEMP/entropy-negative.log" 2>&1; then
+              echo "PNP_TLS_ENTROPY_NEGATIVE_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/safe-$name" "evidence/$name"
+          done
+          cp evidence/PNP_TLS_ENTROPY_SELECTED.bin "$RUNNER_TEMP/corrupt-entropy.bin"
+          printf X >> "$RUNNER_TEMP/corrupt-entropy.bin"
+          if native/target/release/pnp-native tls-entropy-decode "$RUNNER_TEMP/corrupt-entropy.bin" "$RUNNER_TEMP/rejected-entropy.bin" > "$RUNNER_TEMP/entropy-negative-decode.log" 2>&1; then
+            echo 'PNP_TLS_ENTROPY_NEGATIVE_FAIL|decoder_accepted_tamper|json=0'
+            exit 1
+          fi
+          native/target/release/pnp-native tls-entropy-gulp-discard source-omnibit evidence evidence | tee PNP_TLS_ENTROPY_GULP.hbp
+          grep -Fq 'PNP_TLS_ENTROPY_GULP|owned_scratch_deleted_bytes=144000|' PNP_TLS_ENTROPY_GULP.hbp
+          test ! -e evidence/PNP_TLS_ENTROPY_GULP_OWNED.tmp
+          test -s evidence/PNP_TLS_STOCHASTIC_TRACE.bin
+          test -s evidence/PNP_TLS_ENTROPY_GC.hbp
+          ( cd evidence && sha256sum PNP_TLS_ENTROPY.hbp PNP_TLS_ENTROPY.hbi PNP_TLS_ENTROPY.anchor PNP_TLS_ENTROPY_SELECTED.bin PNP_TLS_ENTROPY_RESTORED.bin PNP_TLS_ENTROPY_GC.hbp > PNP_TLS_ENTROPY_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_TLS_ENTROPY_DIGESTS.sha256 )
+          echo 'PNP_TLS_ENTROPY_NEGATIVE|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|model_archive=REJECTED|restored=REJECTED|owned_gc=PASS|status=PASS|json=0'
       - name: Source-provenance and immutable HBP evidence archive
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi native/fixtures/TLS_STOCHASTIC_CORPUS.hbi > evidence/SOURCE_PINS.sha256
@@ -951,6 +1003,13 @@ jobs:
           sha256sum -c PNP_TLS_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_TLS_STOCH_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_TLS_OMNI40_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_TLS_ENTROPY_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_TLS_ENTROPY|frames=54|rows=81|' PNP_TLS_ENTROPY_ATTEST.hbp
+          grep -Fq 'PNP_TLS_ENTROPY_GULP|owned_scratch_deleted_bytes=144000|' PNP_TLS_ENTROPY_GULP.hbp
+          test "$(grep -c '^HBI|' PNP_TLS_ENTROPY.hbi)" -eq 81
+          test "$(grep -c '^TLS_ENTROPY_FRAME|' PNP_TLS_ENTROPY.hbp)" -eq 54
+          grep -Fq '|source_generator=NOT_USED|original_operators=40|events=EXACT|' PNP_TLS_ENTROPY_DECODE.hbp
+          grep -Fq '|scratch_absent=PASS|original_source=RETAINED|' PNP_TLS_ENTROPY_GC.hbp
           grep -Fq 'PNP_TLS_OMNI40|original_operators=40|routes=BINARY64_TERNARY256_MIXED256_PLUS64|heldout_and_shuffle_streams=18|candidate_trials=381600|hbi_rows=72|' PNP_TLS_OMNI40_ATTEST.hbp
           grep -Fq 'PNP_TLS_OMNI40_VERIFY|candidate_trials=381600|rows=72|' PNP_TLS_OMNI40_VERIFY.hbp
           grep -Fq 'PNP_TLS_OMNI40_GULP|owned_scratch_deleted_bytes=144000|' PNP_TLS_OMNI40_GULP.hbp
