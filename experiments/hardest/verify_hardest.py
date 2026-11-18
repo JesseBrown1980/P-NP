@@ -70,7 +70,8 @@ def verify_php(case, n, clauses):
     if case == "php21":
         assert (n, len(alo), len(binary), len(clauses)) == (420, 21, 4200, 4221)
     if case == "php4sat":
-        witness = {(i * holes + i + 1): True for i in range(pigeons)}
+        witness = {(i * holes + j + 1): (i == j)
+                   for i in range(pigeons) for j in range(holes)}
         assert all(any(witness.get(abs(v)) == (v > 0)
                        for v in clause if abs(v) in witness)
                    for clause in clauses)
@@ -289,8 +290,10 @@ def main(evidence, checker):
                           verify_external(arm, case, n, clauses,
                                           row, folder, base / "input" /
                                           (case + ".cnf"), checker))
-                assert ((result == "SAT") == (truth == "SAT")) if result == "SAT" else True
                 assert result != "SAT" or truth == "SAT"
+                assert truth != "SAT" or result not in (
+                    "UNSAT_DPLL", "UNSAT_XOR", "UNSAT_CERTIFIED",
+                    "UNSAT_UNCERTIFIED", "HOLD_UNSAT_PROOF")
             results[case] = result
             print("HARD_VERIFIED|arm=" + arm + "|case=" + case +
                   "|truth=" + truth + "|result=" + result +
