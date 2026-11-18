@@ -138,7 +138,7 @@ fn family_roster() -> Result<(usize, usize, usize), String> {
         }
         let f = fields(row)?;
         let id = field(&f, "id")?;
-        if !valid.contains(id) || !seen.insert(id) || field(&f, "json")? != "0" {
+        if !valid.contains(id) || !seen.insert(id.to_owned()) || field(&f, "json")? != "0" {
             return Err("duplicate/unknown GNN family".to_owned());
         }
         let kind = field(&f, "kind")?;
@@ -174,7 +174,7 @@ fn family_roster() -> Result<(usize, usize, usize), String> {
             }
         }
         if ["L0","L4","G1","G2","G3","G4","SHANNON","SHA"].contains(&id) {
-            signals.insert(id);
+            signals.insert(id.to_owned());
         }
     }
     if seen.len() != 10 || models.len() != 9 || neural != 4 || signals.len() != 8 {
