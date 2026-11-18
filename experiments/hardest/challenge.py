@@ -20,7 +20,7 @@ def source_sha(raw):
 
 
 def php(p, h):
-    assert p == h + 1
+    assert p in (h, h + 1)
     clauses = [tuple(i * h + j + 1 for j in range(h))
                for i in range(p)]
     clauses.extend((-(i * h + j + 1), -(k * h + j + 1))
@@ -91,6 +91,8 @@ def original(case):
         variables, clauses = php(21, 20)
     elif case == "php8":
         variables, clauses = php(8, 7)
+    elif case == "php4sat":
+        variables, clauses = php(4, 4)
     else:
         assert case == "tseitin128"
         variables, clauses, _, _ = tseitin()
@@ -137,7 +139,7 @@ def parse(raw):
 def build(out):
     path = Path(out)
     path.mkdir(parents=True, exist_ok=True)
-    for case in ("php21", "php8", "tseitin128"):
+    for case in ("php21", "php8", "tseitin128", "php4sat"):
         raw = dimacs(case)
         actual = parse(raw)
         assert actual == original(case)
@@ -150,6 +152,8 @@ def build(out):
     assert len(c) == 4221
     _, c = php(8, 7)
     assert len(c) == 204
+    _, c = php(4, 4)
+    assert len(c) == 28
     n, c, edges, attempts = tseitin()
     assert n == 192 and len(c) == 512 and len(edges) == 192
     print("HARD_GENERATOR|php21_pigeon_ALO=21|php21_hole_AMO=4200|"
