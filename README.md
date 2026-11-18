@@ -6,7 +6,17 @@
 
 **All 44 historical Python executable files and all 10 prior CI workflows are `FAIL_NATIVE_ACCEPTANCE` as software under this new standard**, including earlier Fischer/HXF, SAT-array, Bitcoin, RIME, MTP and N-Nest prototypes. Their original source blobs and independently replayable research results remain preserved. Historical GREEN benchmark receipts mean the archived tests passed their *original* requirements; they are not Yang–Mills-grade software approval. Pending Python-first drafts also require Rust-native recertification.
 
-The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pinned legacy inventory](policy/LEGACY_PINNED.hbp) define the cutover. The native Rust `native/` acceptance pilot covers universal 27-cell matrix addressing, 2D shadow freeze/play and the matrix-as-third-fabric-witness cascade. The complete trained GNN/FNN, Omni/Host-8, hotel, tournament, and SAT-solving architecture is **HOLD pending its own native implementation and tests**. [Native CI workflow](.github/workflows/pnp-native-certification.yml).
+The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pinned legacy inventory](policy/LEGACY_PINNED.hbp) define the cutover. The native Rust `native/` acceptance pilot covers universal 27-cell matrix addressing, 2D shadow freeze/play and the matrix-as-third-fabric-witness cascade. The native ternary SAT kernel and its verified matrix/wave controls are operational; **historical trained GNN/FNN forward functions, Omni/Host-8 hotels, tournaments, and original solver-equivalence ports remain HOLD** for their own native implementations and checks. [Native CI workflow](.github/workflows/pnp-native-certification.yml).
+
+---
+
+## Native ternary wave computation and original-source score port (November 18, 2026)
+
+[PR #31](https://github.com/JesseBrown1980/P-NP/pull/31) activates on-demand **3/9/27/81 ternary wave computation** from original frozen matrix data. It reconstructs signed children with exact center/difference checks and uses the observed room totals in native SAT candidate ordering. Across all 120 rooms, the certifier executes **426 selected path decisions** and validates **1,278 signed child contributions**, with altered reports and addresses rejected. SAT truth assignments continue to be exhaustively crosschecked in the independent 2,304-small-source suite.
+
+The same step restores the original, deterministic **SHA baseline and reverse-gain** functions from the authenticated [historical Shannon scoring source](https://github.com/JesseBrown1980/Shannon-and-the-gnns-stage/blob/32f9670a648dbbd02d64524e91150efeec8e4d2c/pipeline/asolaria-score.mjs). The exact integer Q10,000 implementation matches [nine pinned source-derived reference inputs](native/fixtures/SOURCE_SCORE_VECTORS.hbi), including Unicode and signed-trit cases. Every score is recorded in **HBI → HBP → SHA → SH → HASH** receipts tied to the 23-file original-source bundle; source-score output/index/anchor and golden-input corruption are rejected.
+
+The initial hosted [full Rust 1.81, Clippy, SHA-replay and independent archive check](https://github.com/JesseBrown1980/P-NP/actions/runs/44281392444) passed both jobs. [Native scoring and wave protocol](native/TERNARY_SCORE_PROTOCOL.md). The trained GNN/FNN checkpoint-forward parity and full Omni/Host-8 integration remain the next explicit verification gates in [issue #28](https://github.com/JesseBrown1980/P-NP/issues/28).
 
 ---
 
