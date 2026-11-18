@@ -10,6 +10,38 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Continuous entropy and native backend-only HTTP-0 fabric witness (November 18, 2026)
+
+[Full exact protocol](native/HTTP0_CONTINUOUS_STREAM_FABRIC_PROTOCOL.md) · [stream comparator](native/src/tls_stream_fabric.rs) · [independent worker-process witness](native/src/http0_fabric_witness.rs)
+
+Following the accepted 95,149-byte blockwise entropy archive, the new
+separate research gate compares **fully framed bitpack** against **one
+continuous causal arithmetic stream per 8,000-event frame**. All 54
+frame identities, original 18 distinct source streams, original frozen
+nine validation-selected models and protected SHA sources are
+preserved. The correct fully framed bitpack reference is **54,725 B**
+(54 × (12 B metadata + 1,000 B data) + 8 B magic + 3 B arm/version +
+2 B frame count + 64 B source checksum), separately from 54,000 B
+unframed bitpack. The continuous archive must charge all nine
+serialized models as stored.
+
+The actual third fabric witness uses the prior **Host8 microkernel
+room** concept with **HTTP-0 strictly as a backend communication
+transport**: native Rust TCP loopback, no browser/front-end and no
+physical C:/D: requirement. A separate process independently parses
+the model, reconstructs 8,000 events and returns the actual event
+bytes for comparison with the authenticated original. Original native
+Fischer addresses route through real widths 3/27/81 with persistent
+eight-byte function-room state. This tests 324 independent HTTP-0
+reconstruction messages across both codecs and three routing widths.
+The original HRM predictive weights are not loaded by this particular
+routing experiment. It measures Fischer dispatch overhead rather than
+claiming a new predictor or proof.
+
+**Hosted acceptance PASS:** [run #44338318876](https://github.com/JesseBrown1980/P-NP/actions/runs/44338318876) completed both jobs, including the independent published-archive checksum review. **Continuous entropy = 54,200 B** including the 228 B serialized model snapshots, against **54,725 B fully framed bitpack**: **525 B / 0.959% saved** on these 54 synthetic frames. Relative to the previous **95,149 B** blockwise entropy archive, continuous coding saves **40,949 B / 43.04%**. The separate unframed 54,000 B bitpack reference is **200 B smaller** than the new continuous archive.
+
+All **324 backend-only HTTP-0** reconstructed-event messages passed at widths 3/27/81, with the independent worker process delivering all 8,000 original event bytes on each request. Recorded group wall times for **108 calls per width**, including backend transport and decoding, were **22,286,116 / 22,024,929 / 22,414,411 ns** respectively; their small differences do not establish a stable optimal width. All 103 native unit tests, strict Clippy, mutation controls, deterministic archive comparison and protected-source/GULP gates passed. Full native executable **1,683,096 B**, so entropy archive plus executable **1,737,296 B**; external evidence is accounted separately. This tests Fischer addressing and native microkernel routing, with trained HRM codex inference separately held.
+
 ## Temporal probability entropy × Omnibit40: first hosted blockwise gate (November 18, 2026)
 
 The [native entropy acceptance protocol](native/TLS_ENTROPY_OMNIBIT_ACCEPTANCE_PROTOCOL.md) now has a **hosted, independently verified first implementation** in [Actions run #44328356455](https://github.com/JesseBrown1980/P-NP/actions/runs/44328356455). The code reuses the authenticated PR #43 train-only temporal Q10,000 predictors at **0/1/3/27/81** capacity and the unchanged 40 Omnibit operator functions, compares a causal arithmetic/range-coded block against all 40 reversible predicted-residual transform candidates, and stores the exact selected mode, payload, framing, and model snapshot. All **54 frames** (three encodings of 18 unique frozen synthetic held-out/shuffled event streams) independently reconstruct their complete event histories without the original generator or external fitted model.

@@ -3,7 +3,7 @@ use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
-    tls_entropy_omnibit,
+    tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -95,6 +95,40 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("stream-fabric-serve") => {
+            if arguments.next().is_some() {
+                return_fail("HTTP-0 fabric service takes no source or UI arguments");
+            }
+            http0_fabric_witness::serve()
+        }
+        Some("stream-fabric-attest") => {
+            let prior=arguments.next().ok_or("missing sealed temporal source")?;
+            let out=arguments.next().ok_or("missing stream fabric destination")?;
+            if arguments.next().is_some(){return_fail("too many stream fabric arguments");}
+            let measured=tls_stream_fabric::attest(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_TLS_STREAM_FABRIC|frames={}|bitpack_framed_bytes={}|continuous_range_framed_bytes={}|old_hybrid_bytes={}|model_bytes={}|http0_calls={}|fischer_routing=3,27,81|backend_worker=SEPARATE_PROCESS|reconstructed=EXACT|full_decoder_bytes={}|arity3_wall_ns={}|arity27_wall_ns={}|arity81_wall_ns={}|status=PASS|json=0",
+                measured.frames,measured.bitpack_bytes,measured.range_bytes,
+                measured.former_hybrid_bytes,measured.model_bytes,measured.http0_calls,
+                measured.decoder_bytes,measured.wall_ns_by_arity[0],
+                measured.wall_ns_by_arity[1],measured.wall_ns_by_arity[2]);
+            Ok(())
+        }
+        Some("stream-fabric-verify") => {
+            let prior=arguments.next().ok_or("missing sealed temporal source")?;
+            let out=arguments.next().ok_or("missing stream fabric archive")?;
+            if arguments.next().is_some(){return_fail("too many stream fabric verify arguments");}
+            let measured=tls_stream_fabric::verify(Path::new(&prior),Path::new(&out))?;
+            println!("PNP_TLS_STREAM_FABRIC_VERIFY|frames={}|bitpack_framed_bytes={}|continuous_range_framed_bytes={}|http0_calls={}|independent_source_free_inverse=PASS|status=PASS|json=0",
+                measured.frames,measured.bitpack_bytes,measured.range_bytes,measured.http0_calls);
+            Ok(())
+        }
+        Some("stream-fabric-inspect") => {
+            let path=arguments.next().ok_or("missing framed archive")?;
+            if arguments.next().is_some(){return_fail("too many stream archive arguments");}
+            let (frames,events)=tls_stream_fabric::verify_archive(Path::new(&path))?;
+            println!("PNP_TLS_STREAM_INSPECT|frames={frames}|events={events}|canonical=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("tls-entropy-attest") => {

@@ -252,7 +252,7 @@ fn range_encode(events: &[u8], m: &Model, ctx: &mut stochastic::Context) -> Resu
     Ok(bits.finish())
 }
 fn range_decode(data: &[u8], count: usize, m: &Model, ctx: &mut stochastic::Context) -> Result<Vec<u8>, String> {
-    if data.len() < 4 || count == 0 || count > 160 {
+    if data.len() < 4 || count == 0 || count > 8_000 {
         return Err("invalid range coder block extent".into());
     }
     let old = *ctx;
@@ -705,5 +705,98 @@ mod tests {
         model[0] = 9;
         assert!(parse_model(&model).is_err());
         assert!(decode_archive(b"wrong").is_err());
+    }
+}
+
+
+/// Historical PR45 source format, ordered canonically; used to give the new
+/// frame benchmark the exact same 18 streams without a second generator.
+pub(crate) type SourceEventFrame = (u8, u8, u8, Vec<u8>);
+
+pub(crate) fn source_event_frames(source: &[u8])
+    -> Result<Vec<SourceEventFrame>, String>
+{
+    let mut out = Vec::with_capacity(18);
+    for case in cases(source)? {
+        out.push((case.mode, case.rep, 0, case.held));
+        out.push((case.mode, case.rep, 1, case.shuffle));
+    }
+    Ok(out)
+}
+
+/// Only read the nine previously selected, immutable serialized snapshots.
+/// No validation or held-out optimization occurs in the streaming gate.
+pub(crate) fn frozen_model_snapshots(archive: &[u8])
+    -> Result<Vec<Vec<u8>>, String>
+{
+    if archive.len() < MAGIC.len() + 64 || !archive.starts_with(MAGIC) {
+        return Err("original entropy archive header missing".to_owned());
+    }
+    let (body, digest) = archive.split_at(archive.len() - 64);
+    if hash_bytes(body).as_bytes() != digest {
+        return Err("original entropy archive checksum mismatch".to_owned());
+    }
+    // Validate every original frame and its predictor snapshot before reuse.
+    if decode_archive(archive)?.len() != 54 {
+        return Err("original entropy archive frame count changed".to_owned());
+    }
+    let mut at = MAGIC.len();
+    let mut result = Vec::with_capacity(9);
+    for mode in 0..3_u8 {
+        for rep in 0..3_u8 {
+            if body.len().saturating_sub(at) < 4 || body[at..at + 2] != [mode, rep] {
+                return Err("original model identity changed".to_owned());
+            }
+            at += 2;
+            let n = u16_read(body, &mut at)?;
+            if body.len().saturating_sub(at) < n {
+                return Err("original model was truncated".to_owned());
+            }
+            parse_model(&body[at..at + n])?;
+            result.push(body[at..at + n].to_vec());
+            at += n;
+        }
+    }
+    Ok(result)
+}
+
+/// Previously accepted PR45 arithmetic coder, now with one causal context
+/// and one termination across all 8,000 source events.
+pub(crate) fn encode_continuous(events: &[u8], snapshot: &[u8])
+    -> Result<Vec<u8>, String>
+{
+    if events.len() != EVENTS {
+        return Err("continuous coder needs exactly 8000 events".to_owned());
+    }
+    let model = parse_model(snapshot)?;
+    range_encode(events, &model, &mut stochastic::Context::new())
+}
+
+pub(crate) fn decode_continuous(payload: &[u8], snapshot: &[u8])
+    -> Result<Vec<u8>, String>
+{
+    let model = parse_model(snapshot)?;
+    range_decode(payload, EVENTS, &model, &mut stochastic::Context::new())
+}
+
+#[cfg(test)]
+mod continuous_tests {
+    use super::*;
+
+    #[test]
+    fn one_continuous_causal_stream_uses_exact_existing_models() {
+        let training: Vec<u8> = (0..8_000)
+            .map(|i| u8::from(i % 11 == 0 || i % 17 < 2)).collect();
+        let fit = stochastic::fit(&training).expect("training corpus");
+        let data: Vec<u8> = (0..8_000)
+            .map(|i| u8::from(i % 5 < 2)).collect();
+        for choice in 0..5 {
+            let snapshot = model_bytes(&Model { choice, fit: fit.clone() });
+            let encoded = encode_continuous(&data, &snapshot).expect("full stream");
+            assert_eq!(decode_continuous(&encoded, &snapshot).unwrap(), data);
+            let mut appended = encoded.clone();
+            appended.push(0);
+            assert!(decode_continuous(&appended, &snapshot).is_err());
+        }
     }
 }
