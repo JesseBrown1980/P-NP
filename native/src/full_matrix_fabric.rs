@@ -269,7 +269,8 @@ fn execute(prior:&Path)->Result<(Bundle,Stats),String>{
         for mode in [4_u8,5]{
             let child=Client::start()?;
             let negative=matrix_wire::encode(&tasks[0],64,0)?;
-            if child.matrix_negative(arity,&negative)?!=3{
+            let negative256=matrix_wire::encode(&tasks[0],256,0)?;
+            if child.matrix_negative(arity,&negative,&negative256)?!=5{
                 return Err("independent backend rejected fewer than 3 negative controls".into());
             }
             let started=Instant::now();
