@@ -183,6 +183,9 @@ jobs:
           test "$(grep -c '^GNN_GATE|' evidence/PNP_GNN_GATE.hbp)" -eq 23
           test "$(grep -c '^HBI|' evidence/PNP_GNN_GATE.hbi)" -eq 23
           grep -Fq '|source_port=G4_INTEGER_TEST|' evidence/PNP_GNN_GATE.hbp
+          grep -Fq '|next=MISTAKE_FLAGGED|emitted=1|tier0_block=1|operator_approval=HELD|' evidence/PNP_GNN_GATE.hbp
+          grep -Fq '|next=CONVERGED|emitted=1|tier0_block=0|operator_approval=HELD|' evidence/PNP_GNN_GATE.hbp
+          test "$(grep -c '|tier0_block=1|' evidence/PNP_GNN_GATE.hbp)" -eq 1
           grep -Fq '|source_port=MULTIMODEL_HOLD|' evidence/PNP_GNN_GATE.hbp
           cp evidence/PNP_GNN_GATE.hbp "$RUNNER_TEMP/original-gnn.hbp"
           cp evidence/PNP_GNN_GATE.hbi "$RUNNER_TEMP/original-gnn.hbi"
@@ -317,6 +320,8 @@ jobs:
           test "$(grep -c '^HBI|' PNP_GNN_GATE.hbi)" -eq 23
           grep -Fq '|neural_forward=HOLD|' PNP_MULTIGNN_ATTEST.hbp
           grep -Fq '|operator_approval=HELD|' PNP_MULTIGNN_ATTEST.hbp
+          grep -Fq '|next=MISTAKE_FLAGGED|emitted=1|tier0_block=1|operator_approval=HELD|' PNP_GNN_GATE.hbp
+          test "$(grep -c '|tier0_block=1|' PNP_GNN_GATE.hbp)" -eq 1
           grep -Fq 'PNP_SOURCE_SCORE|cases=9|source_pins=23|source_blob=VERIFIED|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_ATTEST.hbp
           grep -Fq 'PNP_SCORE_VERIFY|cases=9|sha_baseline=EXACT|reverse_gain=EXACT|' PNP_SCORE_REPLAY.hbp
           test "$(grep -c '^SCORE|' PNP_SCORE.hbp)" -eq 9
