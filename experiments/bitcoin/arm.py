@@ -13,6 +13,7 @@ independently recomputing the original Bitcoin block's double SHA256.
 """
 import ast
 import hashlib
+import os
 import sys
 from pathlib import Path
 from time import monotonic_ns
@@ -21,7 +22,7 @@ import genesis
 import watched
 
 ROOT = Path(__file__).resolve().parents[2]
-ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original")
+ARMS = ("hxf4", "ym_fischer", "rime_new", "rime_original", "constellation")
 
 
 def parse(raw):
@@ -72,6 +73,39 @@ def get_order(arm, clauses, n, nonce_bits):
     sha = original_engine.source_fingerprint(clauses)
     started = monotonic_ns()
     nav_ops = 0
+    if arm == "constellation":
+        values_file = Path(os.environ["PNP_RIME_VALUES"])
+        lines = values_file.read_text(encoding="ascii").splitlines()
+        assert lines[0] == (
+            "PNP_RIME_VALUES|schema=v1|tensors=24|glyphs=27|"
+            "source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735"
+        )
+        assert len(lines) == 25
+        tensors = []
+        for index, line in enumerate(lines[1:]):
+            parts = line.split("|")
+            assert parts[:2] == ["TENSOR", str(index)]
+            assert len(parts) == 29
+            tensor = tuple(map(int, parts[2:]))
+            assert all(0 <= v < 1000081 for v in tensor)
+            tensors.append(tensor)
+        # Source-independent GGUF coordinate guide, identical source CNF
+        # and shared watched DPLL kernel to the historical Fischer arms.
+        # The published Rime tensors are not SAT-trained weights.
+        counts = {}
+        for clause in subset:
+            for lit in clause:
+                if abs(lit) in touched:
+                    counts[abs(lit)] = counts.get(abs(lit), 0) + 1
+        ranked = []
+        for bit, index in enumerate(indices):
+            var = index + 1
+            glyph = (bit + len(subset)) % 27
+            tensor = (bit + len(clauses)) % 24
+            score = counts.get(var, 0) * 2048 + tensors[tensor][glyph]
+            ranked.append((-score, bit, var))
+            nav_ops += 1
+        result = tuple(var - 1 for _, _, var in sorted(ranked))
     if arm == "ym_fischer":
         meter = {"fischer_literal_scores": 0}
         result = original_engine.branch_order(
