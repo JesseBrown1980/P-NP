@@ -1,4 +1,4 @@
-name: P-NP SAT array: 14 instances x 6 competitors
+name: "P-NP SAT array — 14 instances x 6 competitors"
 on:
   pull_request:
     paths:
