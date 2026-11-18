@@ -342,7 +342,7 @@ impl Client{
             reconstructed,
         })
     }
-    pub fn matrix_negative(&self,arity:usize,framed:&[u8])
+    pub fn matrix_negative(&self,arity:usize,framed:&[u8],floor256:&[u8])
         ->Result<usize,String>{
         let mut rejected=0;
         let correct=fischer_address(0,0).ok_or("room zero address")?;
@@ -356,6 +356,20 @@ impl Client{
         let mut tampered=framed.to_vec();
         tampered[0]=9;
         let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&tampered)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        // Source-independent reserved five-trit code, rejected in the backend.
+        let mut reserved=floor256.to_vec();
+        reserved[14]=243;
+        reserved[15]=0;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&reserved)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        // The final five-trit chunk contains three mandatory zero-trit
+        // padding symbols. Replacing it with all '-' must be rejected.
+        let mut bad_padding=floor256.to_vec();
+        let end=bad_padding.len();
+        bad_padding[end-2]=0;
+        bad_padding[end-1]=0;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&bad_padding)?;
         if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
         Ok(rejected)
     }
