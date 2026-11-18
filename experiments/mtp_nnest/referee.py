@@ -138,7 +138,7 @@ def main(root):
                 assert prep["mtp_freeze_ns"]>=0
                 assert prep["fischer_ns"]>=0
                 assert prep["nest_ns"]>=0
-                expected_nodes=(3**(depth+1)-1)//2 if leaves else 0
+                expected_nodes=(pow(3,depth+1)-1)//2 if leaves else 0
                 assert prep["coordination_nodes"]==expected_nodes
                 assert prep["watcher_checks"]==expected_nodes
                 if leaves:
