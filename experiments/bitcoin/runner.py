@@ -79,11 +79,17 @@ def original_model_check(case, manifest, cnf, model):
     recovered = sum(1 << bit for bit, var in manifest["nonce_variables"]
                     if model.get(var) is True)
     nonce = (genesis.GENESIS_NONCE & ~nonce_mask) | recovered
-    header = genesis.HEADER_PREFIX + nonce.to_bytes(4, "little")
+    header = bytearray(
+        genesis.HEADER_PREFIX + nonce.to_bytes(4, "little"))
+    if manifest["merkle_free_bits"]:
+        merkle = sum(1 << bit for bit, var in
+                     manifest["merkle_variables"] if model.get(var) is True)
+        header[36:68] = merkle.to_bytes(32, "little")
     digest = hashlib.sha256(hashlib.sha256(
         header).digest()).digest()[::-1].hex()
     assert digest == genesis.GENESIS_HASH
-    return nonce, hashlib.sha256(header).hexdigest()
+    return nonce, bytes(header[36:68]).hex(), hashlib.sha256(
+        header).hexdigest()
 
 
 def main(arm, case, source_root, out_root):
@@ -122,6 +128,7 @@ def main(arm, case, source_root, out_root):
     solver_receipt = None
     nonce = "NONE"
     witness_sha = "NONE"
+    merkle_hex = "NONE"
     if result.returncode == 124:
         status = "HOLD_TIME"
     elif arm in ARMS[:4] and result.returncode == 0:
@@ -137,10 +144,12 @@ def main(arm, case, source_root, out_root):
         if status == "SAT":
             nonce = solver_receipt["recovered_nonce"]
             witness_sha = solver_receipt["header_witness_sha256"]
+            merkle_hex = solver_receipt["recovered_merkle_raw_hex"]
     elif arm in ARMS[4:] and result.returncode == 10:
         model = parse_model(arm, stdout, out.joinpath("model.sol"),
                             manifest["variables"])
-        nonce, witness_sha = original_model_check(case, manifest, cnf, model)
+        nonce, merkle_hex, witness_sha = original_model_check(
+            case, manifest, cnf, model)
         status = "SAT"
     elif arm in ARMS[4:] and result.returncode == 20:
         raise AssertionError("external UNSAT contradicts independently known SAT genesis nonce")
@@ -157,7 +166,9 @@ def main(arm, case, source_root, out_root):
                    clauses=manifest["clauses"],
                    solver_exit=result.returncode, elapsed_ns=elapsed,
                    memory_kib=memory, limit_seconds=limit,
-                   recovered_nonce=nonce, witness_sha256=witness_sha,
+                   recovered_nonce=nonce,
+                   recovered_merkle_raw_hex=merkle_hex,
+                   witness_sha256=witness_sha,
                    source_receipt=solver_receipt)
     (out.joinpath("receipt.txt")).write_text(repr(summary) + "\n",
                                       encoding="ascii")
