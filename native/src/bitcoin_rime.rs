@@ -273,6 +273,16 @@ fn decode_hex(raw:&str)->Result<Vec<u8>,String>{
         u8::from_str_radix(s,16).map_err(|_|"bad original hex digit".into())
     }).collect()
 }
+
+fn encode_hex(bytes:&[u8])->String{
+    const DIGITS:&[u8;16]=b"0123456789abcdef";
+    let mut result=String::with_capacity(bytes.len()*2);
+    for &byte in bytes{
+        result.push(char::from(DIGITS[usize::from(byte>>4)]));
+        result.push(char::from(DIGITS[usize::from(byte&15)]));
+    }
+    result
+}
 fn verify_bitcoin_header(values:&[i8],free_bits:usize)->Result<u32,String>{
     let mut header=vec![0_u8;80];
     header[0]=1;
@@ -281,7 +291,7 @@ fn verify_bitcoin_header(values:&[i8],free_bits:usize)->Result<u32,String>{
     header[72..76].copy_from_slice(&0x1d00ffff_u32.to_le_bytes());
     header[76..80].copy_from_slice(&GENESIS_NONCE.to_le_bytes());
     let mut variable=2_usize;
-    for byte in 0..80 {
+    for (byte, value) in header.iter_mut().enumerate() {
         for bit in (0..8).rev(){
             let nonce_bit=if byte>=76 {Some(8*(byte-76)+bit)}else{None};
             let free_nonce=nonce_bit.is_some_and(|n|n<free_bits.min(32));
@@ -290,7 +300,7 @@ fn verify_bitcoin_header(values:&[i8],free_bits:usize)->Result<u32,String>{
             let state=*values.get(variable).ok_or("original Bitcoin source input not assigned")?;
             if state==0{return Err("unassigned Bitcoin free input in SAT model".into());}
             let mask=1_u8<<bit;
-            if state==1{header[byte]|=mask;}else{header[byte]&=!mask;}
+            if state==1{*value|=mask;}else{*value&=!mask;}
             variable+=1;
         }
     }
@@ -298,7 +308,7 @@ fn verify_bitcoin_header(values:&[i8],free_bits:usize)->Result<u32,String>{
     let once=decode_hex(&hash_bytes(&header))?;
     let mut twice=decode_hex(&hash_bytes(&once))?;
     twice.reverse();
-    let digest=twice.iter().map(|byte|format!("{byte:02x}")).collect::<String>();
+    let digest=encode_hex(&twice);
     if digest!=EXPECTED_DIGEST {
         return Err(format!("Bitcoin SHA256d witness mismatch: {digest}"));
     }
@@ -465,8 +475,6 @@ mod tests{
     use super::*;
     #[test]
     fn known_bitcoin_reference_sha256d(){
-        let mut values=vec![0_i8;6];
-        values[2..=5].copy_from_slice(&[1,1,-1,1]);
         // Exact-bit test uses the full public header separately:
         let mut header=vec![0_u8;80];
         header[0]=1;
@@ -477,7 +485,7 @@ mod tests{
         let first=decode_hex(&hash_bytes(&header)).unwrap();
         let mut second=decode_hex(&hash_bytes(&first)).unwrap();
         second.reverse();
-        let rendered=second.iter().map(|b|format!("{b:02x}")).collect::<String>();
+        let rendered=encode_hex(&second);
         assert_eq!(rendered,EXPECTED_DIGEST);
     }
     #[test]
