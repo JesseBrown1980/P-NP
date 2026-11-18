@@ -22,7 +22,7 @@ struct Pin<'a> {
     expected_sha: &'a str,
 }
 
-fn fields<'a>(line: &'a str) -> Result<BTreeMap<&'a str, &'a str>, String> {
+fn fields(line: &str) -> Result<BTreeMap<&str, &str>, String> {
     let mut out = BTreeMap::new();
     for part in line.split('|').skip(1) {
         let (key, value) = part.split_once('=').ok_or("invalid HBI/HBP field")?;
@@ -230,7 +230,7 @@ pub fn verify(out: &Path) -> Result<usize, String> {
             || field(&b, "path")? != pin.path
             || field(&b, "git_blob")? != pin.blob
             || !is_digest(field(&b, "sha256")?, 64)
-            || field(&b, "sh")? != &field(&b, "sha256")?[..16]
+            || field(&b, "sh")? != field(&b, "sha256")?[..16]
             || field(&i, "sh")? != field(&b, "sh")?
             || field(&b, "prev_hash")? != predecessor
             || field(&b, "receipt_sha")? != receipt_sha
