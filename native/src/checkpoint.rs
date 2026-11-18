@@ -26,6 +26,9 @@ fn read16(data: &[u8], pos: usize) -> Option<u16> {
 fn read32(data: &[u8], pos: usize) -> Option<u32> {
     Some(u32::from_le_bytes(data.get(pos..pos.checked_add(4)?)?.try_into().ok()?))
 }
+fn read64(data: &[u8], pos: usize) -> Option<u64> {
+    Some(u64::from_le_bytes(data.get(pos..pos.checked_add(8)?)?.try_into().ok()?))
+}
 fn checksum_crc32(data: &[u8]) -> u32 {
     let mut crc = !0_u32;
     for &byte in data {
@@ -58,23 +61,69 @@ fn read_zip(data: &[u8]) -> Result<Vec<Entry<'_>>, String> {
                     .and_then(|p| p.checked_add(usize::from(comment))) == Some(data.len())
             })
     }).ok_or("checkpoint central-directory terminator absent")?;
-    let disk = read16(data, eocd + 4).ok_or("disk count")?;
-    let cd_disk = read16(data, eocd + 6).ok_or("central disk")?;
-    let this_entries = read16(data, eocd + 8).ok_or("local entries")?;
-    let total_entries = read16(data, eocd + 10).ok_or("total entries")?;
-    let cd_len = usize::try_from(read32(data, eocd + 12).ok_or("directory length")?)
-        .map_err(|_| "directory length overflow")?;
-    let cd_start = usize::try_from(read32(data, eocd + 16).ok_or("directory offset")?)
-        .map_err(|_| "directory position overflow")?;
-    if disk != 0 || cd_disk != 0 || this_entries != total_entries
-        || total_entries == 0 || total_entries > 1000
-        || cd_start.checked_add(cd_len) != Some(eocd)
-    {
-        return Err("unsupported split/ZIP64/directory checkpoint".to_owned());
+    let (cd_start, cd_len, total_entries, directory_end) =
+        if eocd >= 20 && read32(data, eocd - 20) == Some(0x0706_4b50) {
+            // Original PyTorch serialization commonly emits ZIP64 metadata
+            // even when the archive itself is only a few kilobytes.
+            let locator = eocd - 20;
+            if read32(data, locator + 4) != Some(0)
+                || read32(data, locator + 16) != Some(1)
+            {
+                return Err("invalid ZIP64 locator".to_owned());
+            }
+            let zoff = usize::try_from(read64(data, locator + 8)
+                .ok_or("ZIP64 directory offset")?)
+                .map_err(|_| "ZIP64 location overflow")?;
+            if read32(data, zoff) != Some(0x0606_4b50) {
+                return Err("ZIP64 directory missing".to_owned());
+            }
+            let zlen = usize::try_from(read64(data, zoff + 4)
+                .ok_or("ZIP64 record size")?).map_err(|_| "ZIP64 size overflow")?;
+            if zlen < 44 || zoff.checked_add(12).and_then(|p| p.checked_add(zlen))
+                != Some(locator)
+                || read32(data, zoff + 16) != Some(0)
+                || read32(data, zoff + 20) != Some(0)
+            {
+                return Err("invalid ZIP64 directory header".to_owned());
+            }
+            let on_disk = read64(data, zoff + 24).ok_or("ZIP64 entries on disk")?;
+            let total = read64(data, zoff + 32).ok_or("ZIP64 total entries")?;
+            if on_disk != total || total == 0 || total > 1000 {
+                return Err("unsupported ZIP64 checkpoint count".to_owned());
+            }
+            (
+                usize::try_from(read64(data, zoff + 48).ok_or("ZIP64 start")?)
+                    .map_err(|_| "ZIP64 directory offset overflow")?,
+                usize::try_from(read64(data, zoff + 40).ok_or("ZIP64 length")?)
+                    .map_err(|_| "ZIP64 directory length overflow")?,
+                usize::try_from(total).map_err(|_| "ZIP64 entry count overflow")?,
+                zoff,
+            )
+        } else {
+            let disk = read16(data, eocd + 4).ok_or("disk count")?;
+            let cd_disk = read16(data, eocd + 6).ok_or("central disk")?;
+            let this_entries = read16(data, eocd + 8).ok_or("local entries")?;
+            let total_entries = read16(data, eocd + 10).ok_or("total entries")?;
+            if disk != 0 || cd_disk != 0 || this_entries != total_entries
+                || total_entries == 0 || total_entries > 1000
+            {
+                return Err("unsupported split checkpoint".to_owned());
+            }
+            (
+                usize::try_from(read32(data, eocd + 16).ok_or("directory offset")?)
+                    .map_err(|_| "directory position overflow")?,
+                usize::try_from(read32(data, eocd + 12).ok_or("directory length")?)
+                    .map_err(|_| "directory length overflow")?,
+                usize::from(total_entries),
+                eocd,
+            )
+        };
+    if cd_start.checked_add(cd_len) != Some(directory_end) {
+        return Err("checkpoint central-directory extent mismatch".to_owned());
     }
 
     let mut pos = cd_start;
-    let mut entries = Vec::with_capacity(usize::from(total_entries));
+    let mut entries = Vec::with_capacity(total_entries);
     let mut seen = BTreeSet::new();
     for _ in 0..total_entries {
         if read32(data, pos) != Some(0x0201_4b50) {
@@ -83,23 +132,52 @@ fn read_zip(data: &[u8]) -> Result<Vec<Entry<'_>>, String> {
         let flags = read16(data, pos + 8).ok_or("ZIP flags")?;
         let method = read16(data, pos + 10).ok_or("ZIP compression method")?;
         let expected_crc = read32(data, pos + 16).ok_or("ZIP CRC")?;
-        let compressed = usize::try_from(read32(data, pos + 20).ok_or("ZIP length")?)
-            .map_err(|_| "ZIP length overflow")?;
-        let original = usize::try_from(read32(data, pos + 24).ok_or("ZIP original length")?)
-            .map_err(|_| "ZIP length overflow")?;
+        let compressed32 = read32(data, pos + 20).ok_or("ZIP length")?;
+        let original32 = read32(data, pos + 24).ok_or("ZIP original length")?;
         let name_len = usize::from(read16(data, pos + 28).ok_or("ZIP filename length")?);
         let extra_len = usize::from(read16(data, pos + 30).ok_or("ZIP extra length")?);
         let comment_len = usize::from(read16(data, pos + 32).ok_or("ZIP comment length")?);
-        let local = usize::try_from(read32(data, pos + 42).ok_or("ZIP local offset")?)
-            .map_err(|_| "ZIP offset overflow")?;
+        let local32 = read32(data, pos + 42).ok_or("ZIP local offset")?;
+        let name_start = pos.checked_add(46).ok_or("ZIP offset")?;
+        let name_end = name_start.checked_add(name_len).ok_or("ZIP offset")?;
+        let extra_end = name_end.checked_add(extra_len).ok_or("ZIP extra extent")?;
+        let extra = data.get(name_end..extra_end).ok_or("ZIP extra absent")?;
+        let mut offset = 0_usize;
+        let mut zip64_extra = None;
+        while offset < extra.len() {
+            let tag = read16(extra, offset).ok_or("ZIP extra header")?;
+            let len = usize::from(read16(extra, offset + 2).ok_or("ZIP extra size")?);
+            let begin = offset.checked_add(4).ok_or("ZIP extra overflow")?;
+            let finish = begin.checked_add(len).ok_or("ZIP extra overflow")?;
+            let contents = extra.get(begin..finish).ok_or("ZIP extra truncated")?;
+            if tag == 1 {
+                if zip64_extra.replace(contents).is_some() {
+                    return Err("duplicate ZIP64 extra".to_owned());
+                }
+            }
+            offset = finish;
+        }
+        let mut extra_pos = 0_usize;
+        let mut expand = |raw: u32| -> Result<usize, String> {
+            if raw != u32::MAX {
+                return usize::try_from(raw).map_err(|_| "ZIP offset out of range".to_owned());
+            }
+            let more = zip64_extra.ok_or("ZIP64 extra required")?;
+            let value = read64(more, extra_pos).ok_or("ZIP64 value truncated")?;
+            extra_pos += 8;
+            usize::try_from(value).map_err(|_| "ZIP64 value overflow".to_owned())
+        };
+        // ZIP64 values occur in exactly this order when the 32-bit
+        // central-directory fields contain sentinel values.
+        let original = expand(original32)?;
+        let compressed = expand(compressed32)?;
+        let local = expand(local32)?;
         if flags & 1 != 0 || method != 0 || compressed != original
             || read32(data, local) != Some(0x0403_4b50)
             || read16(data, local + 8) != Some(method)
         {
             return Err("unsupported encrypted/compressed/broken checkpoint ZIP".to_owned());
         }
-        let name_start = pos.checked_add(46).ok_or("ZIP offset")?;
-        let name_end = name_start.checked_add(name_len).ok_or("ZIP offset")?;
         let name_raw = data.get(name_start..name_end).ok_or("ZIP path")?;
         let name = std::str::from_utf8(name_raw).map_err(|_| "non-UTF8 ZIP path")?;
         if name.is_empty() || name.starts_with('/')
@@ -125,7 +203,7 @@ fn read_zip(data: &[u8]) -> Result<Vec<Entry<'_>>, String> {
         pos = name_end.checked_add(extra_len).and_then(|p| p.checked_add(comment_len))
             .ok_or("ZIP record overflow")?;
     }
-    if pos != eocd || entries.is_empty() {
+    if pos != directory_end || entries.is_empty() {
         return Err("checkpoint ZIP directory length mismatch".to_owned());
     }
     Ok(entries)
