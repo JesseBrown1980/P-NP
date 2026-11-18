@@ -9,6 +9,7 @@ use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use crate::freeze::fischer_address;
 use crate::matrix_wire;
+use crate::temporal_fabric::TemporalService;
 
 const PRIME: u64 = 1_000_081;
 const GENERATOR: u64 = 7;
@@ -94,9 +95,13 @@ struct Service{
     hits:usize,
     state:BTreeMap<(usize,u64),u64>,
     memo:Memo,
+    temporal:TemporalService,
 }
 impl Service{
     fn calculate(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        if route.starts_with("/temporal/"){
+            return self.temporal.handle(route,body);
+        }
         if route.starts_with("/matrix/") {
             return self.calculate_matrix(route,body);
         }
@@ -206,7 +211,8 @@ fn receive(socket:&mut TcpStream)->Result<(String,Vec<u8>),String>{
     }
     if !ended{return Err("unterminated HTTP-0 headers".into());}
     let length=content_length.ok_or("missing content length")?;
-    if length>128{return Err("compute request size exceeded".into());}
+    let maximum=if route.starts_with("/temporal/load/"){12_002}else{128};
+    if length>maximum{return Err("compute request size exceeded".into());}
     let mut message=vec![0_u8;length];
     reader.read_exact(&mut message).map_err(|e|e.to_string())?;
     Ok((route,message))
@@ -227,8 +233,13 @@ pub fn serve()->Result<(),String>{
         let mut socket=stream.map_err(|e|e.to_string())?;
         match receive(&mut socket){
             Ok((route,_)) if route=="/stop"=>{
-                let info=format!("COMPUTE_STOP|calls={}|hits={}|rooms={}|entries={}|status=PASS|json=0\n",
-                    service.calls,service.hits,service.state.len(),service.memo.len());
+                if service.temporal.models()>0{
+                    service.temporal.validate_complete()?;
+                }
+                let info=format!("COMPUTE_STOP|calls={}|hits={}|rooms={}|entries={}|temporal_models={}|temporal_streams={}|temporal_calls={}|temporal_events={}|status=PASS|json=0\n",
+                    service.calls,service.hits,service.state.len(),service.memo.len(),
+                    service.temporal.models(),service.temporal.streams(),
+                    service.temporal.calls(),service.temporal.events());
                 reply(&mut socket,"200 OK",info.as_bytes())?;
                 break;
             }
@@ -246,7 +257,7 @@ pub fn serve()->Result<(),String>{
 pub struct Client{process:Child,port:u16}
 pub struct ResultFrame{pub values:[u64;CELLS],pub hit:bool}
 pub struct MatrixFrame{pub computed:ResultFrame,pub reconstructed:[u8;CELLS]}
-pub struct Stop{pub calls:usize,pub hits:usize,pub rooms:usize,pub entries:usize}
+pub struct Stop{pub calls:usize,pub hits:usize,pub rooms:usize,pub entries:usize,pub temporal_models:usize,pub temporal_streams:usize,pub temporal_calls:usize,pub temporal_events:usize}
 impl Client{
     pub fn start()->Result<Self,String>{
         let mut process=Command::new(std::env::current_exe()
@@ -403,6 +414,10 @@ impl Client{
             hits:get("hits=")?,
             rooms:get("rooms=")?,
             entries:get("entries=")?,
+            temporal_models:get("temporal_models=")?,
+            temporal_streams:get("temporal_streams=")?,
+            temporal_calls:get("temporal_calls=")?,
+            temporal_events:get("temporal_events=")?,
         };
         if !self.process.wait().map_err(|e|e.to_string())?.success(){
             return Err("compute worker failed process exit".into());
