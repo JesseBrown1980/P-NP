@@ -22,7 +22,7 @@ struct Pin<'a> {
     expected_sha: &'a str,
 }
 
-fn fields(line: &str) -> Result<BTreeMap<&str, &str>, String> {
+fn fields<'a>(line: &'a str) -> Result<BTreeMap<&'a str, &'a str>, String> {
     let mut out = BTreeMap::new();
     for part in line.split('|').skip(1) {
         let (key, value) = part.split_once('=').ok_or("invalid HBI/HBP field")?;
@@ -33,7 +33,7 @@ fn fields(line: &str) -> Result<BTreeMap<&str, &str>, String> {
     Ok(out)
 }
 
-fn field<'a>(map: &'a BTreeMap<&str, &str>, key: &str) -> Result<&'a str, String> {
+fn field<'a>(map: &BTreeMap<&'a str, &'a str>, key: &str) -> Result<&'a str, String> {
     map.get(key).copied().ok_or_else(|| format!("missing field {key}"))
 }
 
