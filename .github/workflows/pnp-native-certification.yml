@@ -219,6 +219,7 @@ jobs:
           grep -Fq 'PNP_CHECKPOINT_ATTEST|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|numeric_decode=INTEGER_ONLY|q20=PER_STORAGE|forward_parity=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_CHECKPOINT_ATTEST.hbp
           grep -Fq 'PNP_CHECKPOINT_VERIFY|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0' PNP_CHECKPOINT_VERIFY.hbp
           test "$(grep -c '^CHECKPOINT|' evidence/PNP_CHECKPOINT.hbp)" -eq 9
+          grep '^CHECKPOINT|' evidence/PNP_CHECKPOINT.hbp
           test "$(grep -c '^HBI|' evidence/PNP_CHECKPOINT.hbi)" -eq 9
           grep -Fq '|forward_parity=HOLD|' evidence/PNP_CHECKPOINT.hbp
           cp evidence/PNP_CHECKPOINT.hbp "$RUNNER_TEMP/original-checkpoint.hbp"
