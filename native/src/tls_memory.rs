@@ -97,7 +97,7 @@ fn check_population(pop: &Population) -> Result<(), String> {
 fn step(pop: &Population, coupled: i64) -> Result<Population, String> {
     check_population(pop)?;
     let cells = pop.tls.len();
-    if coupled < 0 || coupled > COUPLED
+    if !(0..=COUPLED).contains(&coupled)
         || GAMMA_Q + coupled > SCALE
         || GAMMA_TLS_BATH + coupled > SCALE
     {
