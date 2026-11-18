@@ -1,5 +1,5 @@
 //! Durable, lossless GC archive staging for original Omni files.
-//! The source and archive both remain intact; live rotation requires authority.
+//! Source and archive are retained; policy acts automatically after exact checks.
 #![forbid(unsafe_code)]
 
 use std::fs::{self, OpenOptions};
@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::{fabric_gc, sha256::hash_bytes};
 
 const HBP_HEADER: &str =
-    "HBPHEADER|schema=pnp.gc.archive.v1|mode=STAGE_ONLY|seal=HBI-HBP-SHA-SH-HASH|operator=HELD|json=0\n";
+    "HBPHEADER|schema=pnp.gc.archive.v1|mode=AUTO_STAGE|seal=HBI-HBP-SHA-SH-HASH|authorization=FROZEN_POLICY|manual_approval=NOT_REQUIRED|json=0\n";
 const HBI_HEADER: &str =
     "HBIHEADER|schema=pnp.gc.archive.index.v1|for=PNP_GC_ARCHIVE.hbp|seal=HBI-HBP-SHA-SH-HASH|json=0\n";
 const ARCHIVE_DIR: &str = "PNP_GC_BODIES";
@@ -97,7 +97,7 @@ fn build_receipts(omni: &Path, out: &Path, upstream_sha: &str)
         }
         let sh = &original_sha[..16];
         let entry = format!(
-            "GC_ARCHIVE|seq={}|id={id}|source_path={source_rel}|archive_path={ARCHIVE_DIR}/{archive_name}|source_hbp_sha256={upstream_sha}|source_sha256={original_sha}|archive_sha256={archive_sha}|bytes={}|sh={sh}|source_intact=1|archive_intact=1|operator_approval=HELD|live_rotation=HOLD|gc=NEVER_DELETE|gulp_feedback=HELD|prev_hash={predecessor}",
+            "GC_ARCHIVE|seq={}|id={id}|source_path={source_rel}|archive_path={ARCHIVE_DIR}/{archive_name}|source_hbp_sha256={upstream_sha}|source_sha256={original_sha}|archive_sha256={archive_sha}|bytes={}|sh={sh}|source_intact=1|archive_intact=1|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|gc=NEVER_DELETE|gulp_feedback=HELD|prev_hash={predecessor}",
             index + 1, original.len()
         );
         let receipt_sha = fingerprint(entry.as_bytes());
@@ -111,7 +111,7 @@ fn build_receipts(omni: &Path, out: &Path, upstream_sha: &str)
         predecessor = chain;
     }
     let anchor_payload = format!(
-        "GC_ARCHIVE_ANCHOR|count=2|upstream_hbp_sha256={upstream_sha}|root_hbp_sha256={}|root_hbi_sha256={}|hash={predecessor}|source_intact=1|archive_intact=1|live_rotation=HOLD|seal=HBI-HBP-SHA-SH-HASH",
+        "GC_ARCHIVE_ANCHOR|count=2|upstream_hbp_sha256={upstream_sha}|root_hbp_sha256={}|root_hbi_sha256={}|hash={predecessor}|source_intact=1|archive_intact=1|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|seal=HBI-HBP-SHA-SH-HASH",
         fingerprint(hbp.as_bytes()), fingerprint(hbi.as_bytes())
     );
     let anchor = format!(
@@ -179,7 +179,13 @@ mod tests {
         assert_ne!(a,b);
     }
     #[test]
-    fn archive_identities_are_distinct_and_relpaths_stable() {
+    fn proof_policy_is_immediate_without_human_approval() {
+        assert!(HBP_HEADER.contains("authorization=FROZEN_POLICY|manual_approval=NOT_REQUIRED"));
+        assert!(!HBP_HEADER.contains("operator=HELD"));
+        assert_eq!(ORIGINALS.len(), 2);
+    }
+    #[test]
+        fn archive_identities_are_distinct_and_relpaths_stable() {
         assert_eq!(ORIGINALS.len(), 2);
         assert_ne!(ORIGINALS[0].0, ORIGINALS[1].0);
         assert_ne!(ORIGINALS[0].2, ORIGINALS[1].2);
