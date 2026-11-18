@@ -1,0 +1,136 @@
+name: "RIME wind/unwind SAT — 18 cases x 3 representations x 7 engines"
+on:
+  pull_request:
+    paths:
+      - "experiments/rime_sat/**"
+      - ".github/workflows/rime-wind-sat-378.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freeze-sources:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Confirm original historical kernel unchanged
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/rime_sat/transform.py experiments/rime_sat/arm.py experiments/rime_sat/contest.py experiments/rime_sat/referee.py
+          python3 -m py_compile experiments/rime_sat/*.py
+      - name: Freeze all 14 SAT-array and 4 Bitcoin SHA256d original inputs
+        run: |
+          set -euo pipefail
+          mkdir -p build/source/array build/source/bitcoin
+          python3 -s -B experiments/array/suite.py build/source/array | tee build/source/SAT_ARRAY.hbp
+          python3 -s -B experiments/bitcoin/genesis.py build/source/bitcoin | tee build/source/BITCOIN.hbp
+          grep -Fq 'SAT_ARRAY_FINAL|cases=14|unsat=11|sat=3|arms=6|observations=84|' build/source/SAT_ARRAY.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' build/source/BITCOIN.hbp
+          test "$(find build/source -name '*.cnf' | wc -l)" -eq 18
+          ( cd build/source && find . -type f ! -name SOURCE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > SOURCE_MANIFEST.sha256 )
+          ( cd build/source && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rime-sat-18-original-sources
+          path: build/source/
+          retention-days: 90
+          if-no-files-found: error
+  contender:
+    needs: freeze-sources
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [hxf4, ym_fischer, rime_new, rime_original, minisat, cadical, picosat]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: rime-sat-18-original-sources
+          path: source
+      - name: Install exact pinned external SAT solvers
+        if: ${{ matrix.arm == 'minisat' || matrix.arm == 'cadical' || matrix.arm == 'picosat' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2'
+          dpkg-query -W minisat cadical picosat
+      - name: Run three original-source-equivalent representations on all 18 tests
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+          python3 -s -B experiments/rime_sat/contest.py "$ARM" source build/arms | tee "RIME_$ARM.hbp"
+          grep -Fq "RIME_SAT_ARM_FINAL|arm=$ARM|cases=18|modes=3|observations=54|unwind=54|status=PASS" "RIME_$ARM.hbp"
+          test "$(find "build/arms/$ARM" -name receipt.txt | wc -l)" -eq 54
+          cp "RIME_$ARM.hbp" "build/arms/$ARM/EXECUTION.hbp"
+          ( cd build/arms && find "$ARM" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
+          ( cd build/arms && sha256sum -c "$ARM/MANIFEST.sha256" >/dev/null )
+      - name: Preserve all contender receipts, source hashes and SAT witness models
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rime-sat-${{ matrix.arm }}-54-results
+          path: build/arms/
+          retention-days: 90
+          if-no-files-found: error
+  independent-referee:
+    needs: contender
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: rime-sat-18-original-sources
+          path: evidence/source
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rime-sat-*-54-results
+          path: evidence/arms
+          merge-multiple: true
+      - name: Independently recompute all 378 exact inverse CNFs and replay SAT witnesses
+        run: |
+          set -euo pipefail
+          ( cd evidence/source && sha256sum -c SOURCE_MANIFEST.sha256 >/dev/null )
+          for arm in hxf4 ym_fischer rime_new rime_original minisat cadical picosat; do
+            ( cd evidence/arms && sha256sum -c "$arm/MANIFEST.sha256" >/dev/null )
+          done
+          python3 -I -B experiments/rime_sat/referee.py evidence | tee RIME_378_REFEREE.hbp
+          grep -Fq 'RIME_SAT_FINAL|arms=7|cases=18|modes=3|observations=378|independent_inverse=378|' RIME_378_REFEREE.hbp
+          grep -Fq '|status=PASS' RIME_378_REFEREE.hbp
+          cp RIME_378_REFEREE.hbp evidence/
+          mkdir -p evidence/source-code
+          cp experiments/rime_sat/*.py evidence/source-code/
+          cp .github/workflows/rime-wind-sat-378.yml evidence/source-code/
+          ( cd evidence && find . -type f ! -name FINAL_SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > FINAL_SHA256SUMS )
+          ( cd evidence && sha256sum -c FINAL_SHA256SUMS >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rime-sat-378-independent-accepted
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+  archived-reverification:
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rime-sat-378-independent-accepted
+          path: checked
+      - name: Recheck published hashes and all proof receipts
+        run: |
+          set -euo pipefail
+          cd checked
+          test "$(find arms -name receipt.txt | wc -l)" -eq 378
+          test "$(find source -name '*.cnf' | wc -l)" -eq 18
+          grep -Fq 'RIME_SAT_FINAL|arms=7|cases=18|modes=3|observations=378|' RIME_378_REFEREE.hbp
+          sha256sum -c FINAL_SHA256SUMS >/dev/null
+          echo 'RIME_SAT_ARCHIVE|cases=18|arms=7|modes=3|records=378|sha256=PASS|status=PASS'
