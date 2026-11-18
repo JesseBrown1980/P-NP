@@ -48,8 +48,8 @@ glyphs from their plain eight-bit ordinal representation.
 
 ## Executable first gate
 
-The separate GitHub Actions
-\`.github/workflows/constellation-masterkey-preflight.yml\` downloads
+The existing locked GitHub Actions
+\`.github/workflows/pnp-native-certification.yml\` downloads
 all seven original inputs and Rust decoder from the fixed upstream
 Git commit, checks each published SHA-256 and length, and verifies
 the small GGUF magic. It decompresses the original master table,
@@ -79,4 +79,4 @@ read, decoder work, HTTP transport, and independent verification.
 CPU-only fast address lookup should be compared against
 an uncached source decoder and ordinary SAT baselines.
 
-**Acceptance status: PENDING hosted run for this new gate.**
+**First hosted source-only result:** initial separate run [#44408882617](https://github.com/JesseBrown1980/P-NP/actions/runs/44408882617) passed all original source hashes and 4,194,304 decoded source bytes. The native mandatory audit correctly rejected adding a new workflow file, so the same checks have been moved into the preexisting approved native workflow; final hosted native acceptance is pending.
