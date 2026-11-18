@@ -60,7 +60,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -76,6 +76,7 @@ jobs:
           grep -Fq 'PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms=120|played_cells=3240|omega_centers=120|' PNP_MATRIX.hbp
           grep -Fq '|planted_faults_rejected=42|operator_approval=HELD|json=0' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|per_address_compare=PASS|signed_differences=EXACT|status=PASS|json=0' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WAVE|rooms=120|path_decisions=426|signed_children=1278|center=1|addressed_lazy=PASS|third_seat=PASS|altered_paths=REJECTED|status=PASS|json=0' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           native/target/release/pnp-native certify > PNP_MATRIX_REPEAT.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
@@ -235,6 +236,7 @@ jobs:
           test "$root_bi" = "$(sha256sum PNP_TRAINED_SOURCE.hbi | cut -d' ' -f1)"
           grep -Fq 'PNP_NATIVE_FINAL|rust=1.81.0|integer_only=PASS|' PNP_MATRIX.hbp
           grep -Fq 'PNP_NATIVE_WITNESS|ordered_triples=1080|balanced_faults_rejected=42|coordinated_reports_rejected=14|' PNP_MATRIX.hbp
+          grep -Fq 'PNP_NATIVE_WAVE|rooms=120|path_decisions=426|signed_children=1278|center=1|addressed_lazy=PASS|' PNP_MATRIX.hbp
           cmp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp
           cmp PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp
           cmp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp
