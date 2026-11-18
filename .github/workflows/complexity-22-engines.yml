@@ -1,0 +1,139 @@
+name: "P-NP completion versus scaling — 22 SAT engines"
+on:
+  pull_request:
+    paths:
+      - "experiments/complexity/**"
+      - ".github/workflows/complexity-22-engines.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  freeze-completion-and-scaling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: SHA-authenticate historical solver and policy source
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/complexity/cases.py experiments/complexity/adapter.py experiments/complexity/contest.py experiments/complexity/referee.py
+          python3 -m py_compile experiments/complexity/*.py
+      - name: Generate original CNFs and independent known Bitcoin witnesses
+        run: |
+          set -euo pipefail
+          mkdir -p build/original
+          python3 -s -B experiments/complexity/cases.py build/original | tee BUILD_COMPLEXITY_SOURCES.hbp
+          grep -Fq 'SCALE_SOURCES_FINAL|completion=7|scaling=9|cases=16|old_engines=7|combined_arms=15|total=352|status=PASS' BUILD_COMPLEXITY_SOURCES.hbp
+          test "$(find build/original -maxdepth 1 -name '*.cnf' | wc -l)" -eq 16
+          test "$(find build/original/bitcoin_reference -maxdepth 1 -name '*.cnf' | wc -l)" -eq 4
+          cp BUILD_COMPLEXITY_SOURCES.hbp build/original/
+          ( cd build/original && find . -type f ! -name ORIGINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > ORIGINAL_MANIFEST.sha256 )
+          ( cd build/original && sha256sum -c ORIGINAL_MANIFEST.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: complexity-16-original-CNFs
+          path: build/original/
+          retention-days: 90
+          if-no-files-found: error
+  twenty-two-engines:
+    needs: freeze-completion-and-scaling
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [hxf4, ym_fischer, rime_new, rime_original, baseline, mtp, fischer, nest3, nest9, nest27, nest81, mtp_nest3, mtp_nest9, mtp_nest27, mtp_nest81, all3, all9, all27, all81, minisat, cadical, picosat]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: complexity-16-original-CNFs
+          path: original
+      - name: Source SHA-256 verified
+        run: |
+          set -euo pipefail
+          ( cd original && sha256sum -c ORIGINAL_MANIFEST.sha256 >/dev/null )
+      - name: Install pinned external SAT solvers
+        if: ${{ matrix.arm == 'minisat' || matrix.arm == 'cadical' || matrix.arm == 'picosat' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2'
+          dpkg-query -W minisat cadical picosat
+      - name: Execute node-uncapped seven-case completion and nine-case scaling
+        run: |
+          set -euo pipefail
+          mkdir -p "build/arms/$ARM"
+          python3 -s -B experiments/complexity/contest.py "$ARM" original build/arms | tee "build/arms/$ARM/EXECUTION.hbp"
+          grep -Fq "COMPLEXITY_ARM_FINAL|arm=$ARM|cases=16|" "build/arms/$ARM/EXECUTION.hbp"
+          test "$(find "build/arms/$ARM" -name receipt.txt | wc -l)" -eq 16
+          ( cd build/arms && find "$ARM" -type f ! -name MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > "$ARM/MANIFEST.sha256" )
+          ( cd build/arms && sha256sum -c "$ARM/MANIFEST.sha256" >/dev/null )
+      - name: Publish all complete model witnesses, censored HOLDs, timing receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-arm-${{ matrix.arm }}-16-results
+          path: build/arms/
+          retention-days: 90
+          if-no-files-found: error
+  independent-referee:
+    needs: twenty-two-engines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          name: complexity-16-original-CNFs
+          path: evidence/original
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: complexity-arm-*-16-results
+          path: evidence/arms
+          merge-multiple: true
+      - name: Source-identical 352 observations, mathematical UNSAT and every SAT witness
+        run: |
+          set -euo pipefail
+          ( cd evidence/original && sha256sum -c ORIGINAL_MANIFEST.sha256 >/dev/null )
+          for arm in hxf4 ym_fischer rime_new rime_original baseline mtp fischer nest3 nest9 nest27 nest81 mtp_nest3 mtp_nest9 mtp_nest27 mtp_nest81 all3 all9 all27 all81 minisat cadical picosat; do
+            ( cd evidence/arms && sha256sum -c "$arm/MANIFEST.sha256" >/dev/null )
+          done
+          python3 -I -B experiments/complexity/referee.py evidence | tee ACCEPTED_COMPLEXITY.hbp
+          grep -Fq 'COMPLEXITY_FINAL|engines=22|cases=16|observations=352|completion_unbounded=154/154|' ACCEPTED_COMPLEXITY.hbp
+          grep -Fq '|independent_hash_models=PASS|source_mutations_rejected=16|status=PASS' ACCEPTED_COMPLEXITY.hbp
+          cp ACCEPTED_COMPLEXITY.hbp evidence/
+          mkdir -p evidence/implementation
+          cp experiments/complexity/*.py evidence/implementation/
+          cp .github/workflows/complexity-22-engines.yml evidence/implementation/
+          ( cd evidence && find . -type f ! -name FINAL_SHA256_MANIFEST -print0 | sort -z | xargs -0 sha256sum > FINAL_SHA256_MANIFEST )
+          ( cd evidence && sha256sum -c FINAL_SHA256_MANIFEST >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: complexity-22engines-352-accepted-evidence
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+  published-reverification:
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: complexity-22engines-352-accepted-evidence
+          path: verified
+      - name: Re-audit delivered completed and resource-censored experiments
+        run: |
+          set -euo pipefail
+          cd verified
+          test "$(find arms -name receipt.txt | wc -l)" -eq 352
+          test "$(find original -maxdepth 1 -name '*.cnf' | wc -l)" -eq 16
+          grep -Fq 'COMPLEXITY_FINAL|engines=22|cases=16|observations=352|' ACCEPTED_COMPLEXITY.hbp
+          sha256sum -c FINAL_SHA256_MANIFEST >/dev/null
+          echo 'COMPLEXITY_ARCHIVE|engines=22|cases=16|results=352|sha256=PASS|status=PASS'
