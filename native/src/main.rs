@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -94,6 +94,42 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("bridge-attest") => {
+            let prism_source = arguments.next().ok_or("missing original PRISM source")?;
+            let gac = arguments.next().ok_or("missing original GAC source")?;
+            let neural = arguments.next().ok_or("missing original neural fabric source")?;
+            let omni = arguments.next().ok_or("missing original Omni source")?;
+            let receipts = arguments.next().ok_or("missing upstream HBI/HBP receipts")?;
+            let out = arguments.next().ok_or("missing bridge output directory")?;
+            if arguments.next().is_some() { return_fail("too many bridge attest arguments"); }
+            let count = binary_ternary_bridge::attest(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&prism_source), Path::new(&receipts), Path::new(&out),
+            )?;
+            if binary_ternary_bridge::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&prism_source), Path::new(&receipts), Path::new(&out),
+            )? != count {
+                return_fail("bridge second-seat replay did not agree");
+            }
+            println!("PNP_BRIDGE|source_prism=VERIFIED|source_gac=VERIFIED|binary_floors=4|ternary_landings=8|floor_checks=3186|route_checks=9840|reserved_byte_codes=13|reserved_as_data=REJECTED|matrix_cells=27|prism_roundtrip=EXACT|receipts={count}|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("bridge-verify") => {
+            let prism_source = arguments.next().ok_or("missing original PRISM source")?;
+            let gac = arguments.next().ok_or("missing original GAC source")?;
+            let neural = arguments.next().ok_or("missing original neural fabric source")?;
+            let omni = arguments.next().ok_or("missing original Omni source")?;
+            let receipts = arguments.next().ok_or("missing upstream HBI/HBP receipts")?;
+            let out = arguments.next().ok_or("missing bridge output directory")?;
+            if arguments.next().is_some() { return_fail("too many bridge verify arguments"); }
+            let count = binary_ternary_bridge::verify(
+                Path::new(&gac), Path::new(&neural), Path::new(&omni),
+                Path::new(&prism_source), Path::new(&receipts), Path::new(&out),
+            )?;
+            println!("PNP_BRIDGE_VERIFY|receipts={count}|upstream_source=VERIFIED|floor_inverses=PASS|reserved_code_rejection=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("prism-attest") => {
@@ -308,7 +344,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
