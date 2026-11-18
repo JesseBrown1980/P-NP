@@ -40,8 +40,12 @@ a 2D shadow alone.
    reverse by subtraction. Enforce both independently reconstructed
    endpoints and reject changed payloads.
 4. Address zero cell 13 first, then six face, twelve edge and eight
-   corner cells using the original Fischer modular address function.
-   This is exact null-outward ordering, not a new discrete-log solver.
+   corner cells using original Fischer modular addresses. Recover
+   each endpoint through the historical smooth-group Pohlig–Hellman
+   digit cascade (prime-power towers 16/27/5/463), CRT-recombine,
+   and verify the canonical room/glyph against the independent forward
+   modular exponentiation. The inverse is exact for the pinned
+   1,000,080-order group, not a general discrete-log breakthrough.
 5. Replay eight trits through the 256+64 binary floor and inverse.
    Replay canonical binary bytes through the original Q-PRISM
    256↔1024 representation and exact inverse.
