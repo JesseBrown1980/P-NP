@@ -1,6 +1,6 @@
 # Temporal-memory probability coding × Omnibit40: precommitted acceptance gate
 
-Status: **protocol / implementation pending**. The base is merged P-NP PR #44, commit `62682cabfcb5cbc0cf6700b7cabb2469af12a35e`. This protocol freezes the accounting and acceptance rules before examining a new entropy-coded result.
+Status: **first blockwise hybrid implementation and hosted acceptance PASS; extended arm-by-arm comparisons remain open**. The base is merged P-NP PR #44, commit `62682cabfcb5cbc0cf6700b7cabb2469af12a35e`. The precommitted design and denominators below were recorded before the first hosted run.
 
 ## Purpose and exact population
 
@@ -82,4 +82,30 @@ Accept only if:
 
 ## Results discipline
 
-This document specifies a **new test**, not a claimed entropy-coding measurement. Native implementation, hosted run, negative controls, and independently replayed output must all be completed before changing the result boxes in `README.md`. The observed outcome may establish payload gain, additional operator–prediction benefit, self-contained gain, or a valid null result. Record every outcome without changing the frozen success definitions after seeing held-out bytes.
+The first implementation stage completed hosted acceptance and independent replay; the precommitted broader arm-by-arm comparison is retained for future gating. Results recorded below correspond to the actual archived blockwise hybrid and exact PR #44 baseline, not an unrun continuous-stream or separately archived range-only/residual-only comparison. The observed outcomes are retained without changing the original success definitions.
+
+## First hosted implementation and measurements — November 18, 2026
+
+The **first implementation gate passed** in [GitHub Actions run #44328356455](https://github.com/JesseBrown1980/P-NP/actions/runs/44328356455): strict Rust 1.81, locked/offline, Clippy, byte-exact source-independent inverse, canonical arithmetic-code checks, full regenerated HBI/HBP receipt comparison, planted corruption rejection, actual owned scratch removal, and a separate published-artifact independent SHA-256 verification job. This validates the implemented **blockwise hybrid** and its historical baseline, with the additional arm-by-arm continuous-stream and framed bitpack investigation retained as follow-on work.
+
+| Measured quantity | Hosted result |
+|---|---:|
+| Original unique streams / independent coded frames | 18 / 54 |
+| Original Omnibit40 candidate evaluations | 381,600 |
+| Framed blockwise hybrid archive (includes trained-state and all selector costs) | **95,149 bytes** |
+| Embedded selected model snapshots across all nine scenarios | **246 bytes** |
+| Range-coded selected blocks | **9,540** |
+| Original Omnibit-residual selected blocks | **0** |
+| Accepted original Omnibit40 54-frame archive | **294,615 bytes** |
+| Exact reduction versus Omnibit40 | **199,466 bytes (67.70%)** |
+| Unframed one-bit-per-event 54-frame reference | **54,000 bytes** |
+| Extra hybrid archive bytes relative to unframed bit packing | **41,149 bytes** |
+| Full newly compiled native executable | **1,539,624 bytes** |
+| Hybrid archive + full compiled executable | **1,634,773 bytes** |
+| HBI/HBP receipt rows | **81** |
+| Owned post-GULP disposable scratch physically removed | **144,000 bytes** |
+| Complete standalone reconstructed 54-frame witness | **432,462 bytes**, with route metadata |
+
+The encoder runs the probability range candidate and all 40 original operator residual candidates per block; every chosen block was the probability-range arm. The measured saving is therefore **temporal probability coding versus the previous literal/RLE Omnibit archive**, not a positive combination/synergy result. The selected range coder resets at each 20-, 100- or 160-event block and incurs per-block framing costs. Its 95,149-byte archive remains **76.20% larger** than the 54,000-byte unframed bitpacked source reference; this gate records that outcome explicitly. The compiled binary is also fully charged once, not excluded to improve the result.
+
+The 54 route frames represent three repeat encodings of each of 18 unique streams. They are not 54 independently sampled sequences. The 18-stream bitpacked reference remains 18,000 unframed bytes. A follow-on comparison can test continuous-stream range coding and full standalone framed bitpacking, with new precommitted rules and independent controls. The original train/validation/held-out split and synthetic classical scope are unchanged.
