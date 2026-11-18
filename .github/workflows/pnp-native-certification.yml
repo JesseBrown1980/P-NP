@@ -139,6 +139,14 @@ jobs:
           xz -dc "$root/master-key/masterkey.xz" > "$root/master-key/key.raw"
           test "$(wc -c < "$root/master-key/key.raw")" -eq 33554432
           echo 'CONSTELLATION_SOURCE|kernels=2_DISTINCT|constellation_key=3174|master_xz=549112|master_raw=33554432|small_gguf=4908|original_source=GIT_PINNED|sha256=PASS|json=0'
+      - name: Play published four-axes Rime GGUF from disk with three exact CPU paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/constellation"
+          native/target/release/pnp-native rime-disk-attest "$root/ggufs/gguf__axes__ASOLARIA-FOUR-AXES-RIME.gguf" | tee "$root/RIME_DISK.hbp"
+          grep -Fq 'PNP_RIME_DISK|source_sha256=9fe92da2b064e39ad52b389fb92d0c59739e1fd7d9db5b82c6d25c0ebf8fa735|' "$root/RIME_DISK.hbp"
+          grep -Fq '|tensors=24|glyphs=27|rime_pairs=12|compared=324|path1=STORED|path2=FORWARD|path3=INVERSE|fischer=PASS|http0_loopback=PASS|source_witness=PASS|gpu=0|status=PASS|json=0' "$root/RIME_DISK.hbp"
       - name: Use original 256-outcome Rust decoder with real master table
         shell: bash
         run: |
