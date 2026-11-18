@@ -21,6 +21,7 @@ fn main() {
             }
             let store = pnp_native::rime_disk::DiskRime::open_four_axes(Path::new(&path))?;
             let comparisons = store.verify_three_paths()?;
+            let shadow_cubes = store.verify_cube_shadows()?;
             let address = pnp_native::freeze::fischer_address(0, 0)
                 .ok_or("Fischer zero address missing")?;
             let direct = store.read(0, 0, address)?;
