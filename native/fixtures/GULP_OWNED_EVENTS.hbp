@@ -1,0 +1,11 @@
+HBPHEADER|schema=pnp.gulp.owned-events.v1|seal=HBI-HBP-SHA-SH-HASH|source=OMNI_GULP_GC|json=0
+EVENT|seq=1|kind=MISTAKE|glyph=MINUS|json=0
+EVENT|seq=2|kind=GENIUS|glyph=PLUS|json=0
+EVENT|seq=3|kind=MISTAKE|glyph=MINUS|json=0
+EVENT|seq=4|kind=ROUTE|glyph=PLUS|json=0
+EVENT|seq=5|kind=GENIUS|glyph=PLUS|json=0
+EVENT|seq=6|kind=MISTAKE|glyph=ZERO|json=0
+EVENT|seq=7|kind=GENIUS|glyph=MINUS|json=0
+EVENT|seq=8|kind=ROUTE|glyph=ZERO|json=0
+EVENT|seq=9|kind=MISTAKE|glyph=MINUS|json=0
+EVENT|seq=10|kind=NEUTRAL|glyph=ZERO|json=0
