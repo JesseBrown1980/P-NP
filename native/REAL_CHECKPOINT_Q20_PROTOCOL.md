@@ -20,6 +20,8 @@ When the inert `data.pkl` metadata is limited to the original `FloatStorage` cla
 
 For any accepted finite weight, rounding error is at most **half a Q20 quantum** per coefficient. A valid ZIP with unrecognized tensor types is recorded `HOLD_DTYPE` rather than mislabeled as quantized. A valid archive still requires forward-inference acceptance.
 
+The conversion also materializes one **native binary `PNP_Q20_<model-id>.bin` file per supported checkpoint**, with a domain-separated header, bounded storage count, per-storage canonical original path, explicit word count and consecutive signed `i64` Q20 little-endian values. `decode_q20_stream` reconstructs each original storage's integer array and rejects truncated, duplicate or malformed records. All nine original files in the hosted measurement have only recognized 32-bit floating storages: **115 storage records and 191,661 Q20 values** across the nine checkpoint files (including independently named historical run duplicates). Every converted byte file is SHA-256 checked, separately archived and subject to planted corruption controls.
+
 The stored sequence is not yet a neural forward implementation: Python/PyTorch pickled tensor **names, shapes, strides, graph operators and activations** require separate source-authenticated decoding and independent reference-output parity before any `TRAINED_FORWARD_PASS` label.
 
 ## Verification commands
@@ -30,7 +32,7 @@ native/target/release/pnp-native checkpoint-attest source-train/models evidence 
 native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence
 ```
 
-Outputs: `PNP_CHECKPOINT.hbp`, `PNP_CHECKPOINT.hbi`, and `PNP_CHECKPOINT.anchor`. Each checkpoint row carries its original model identity, original SHA-256, Git blob, source-HBP root, exact ZIP and storage byte counts, conversion status, Q20 hash if valid, and a `forward_parity=HOLD` decision. HBI indexes exact row offsets and digests. SHA and 16-character SH prefixes feed the linked HASH chain. The anchor is an integrity commitment relative to pinned public Git sources and independently published archive digests, not a third-party signature.
+Outputs: `PNP_CHECKPOINT.hbp`, `PNP_CHECKPOINT.hbi`, `PNP_CHECKPOINT.anchor`, and nine actual `PNP_Q20_*.bin` weight files. Each checkpoint row carries its original model identity, original SHA-256, Git blob, source-HBP root, exact ZIP and storage byte counts, conversion status, Q20 hash if valid, and a `forward_parity=HOLD` decision. HBI indexes exact row offsets and digests. SHA and 16-character SH prefixes feed the linked HASH chain. The anchor is an integrity commitment relative to pinned public Git sources and independently published archive digests, not a third-party signature.
 
 Hosted Rust 1.81 CI verifies all nine original files, source and checkpoint hash identity, byte-exact reruns, planted original model/HBI/HBP/anchor tamper rejection, source-only static checks, compiled integer-only IR, zero-warning Clippy, and an independently uploaded archive replay. This stage does not require Python, Node, JS, V8, JSON execution or external Rust crates.
 
