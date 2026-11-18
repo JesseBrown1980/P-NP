@@ -255,7 +255,30 @@ fn find_pin(filename: &str) -> Result<(&'static str, &'static str), String> {
     }
     Err(format!("unknown published checkpoint: {filename}"))
 }
-fn create(models: &Path, source_root: &str) -> Result<(String, String, String), String> {
+fn original_checkpoint_sha(archive: &Path, pin_id: &str) -> Result<String, String> {
+    let text = fs::read_to_string(archive.join("PNP_TRAINED_SOURCE.hbp"))
+        .map_err(|e| format!("source HBP unreadable: {e}"))?;
+    let selected: Vec<&str> = text.lines()
+        .filter(|line| {
+            line.starts_with("MODEL_SOURCE|")
+                && line.contains(&format!("|id={pin_id}|"))
+        }).collect();
+    if selected.len() != 1 {
+        return Err(format!("missing unique original checkpoint: {pin_id}"));
+    }
+    let match_line = selected[0];
+    let sha = match_line.split('|')
+        .find_map(|piece| piece.strip_prefix("sha256="))
+        .ok_or("original checkpoint digest absent")?;
+    if sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("invalid original checkpoint SHA".to_owned());
+    }
+    Ok(sha.to_owned())
+}
+
+fn create(models: &Path, source_root: &str, source_archive: &Path)
+    -> Result<(String, String, String), String>
+{
     let mut hbp = HBP_HEADER.to_owned();
     let mut hbi = HBI_HEADER.to_owned();
     let mut prev = hash_bytes(b"PNP-ORIGINAL-TENSOR-STORAGE-GENESIS-v1");
@@ -263,8 +286,11 @@ fn create(models: &Path, source_root: &str) -> Result<(String, String, String), 
         let (id, blob) = find_pin(filename)?;
         let raw = fs::read(models.join(filename))
             .map_err(|e| format!("checkpoint file missing {filename}: {e}"))?;
-        let storage = inspect(&raw)?;
         let original_sha = hash_bytes(&raw);
+        if original_sha != original_checkpoint_sha(source_archive, id)? {
+            return Err(format!("real checkpoint differs from source-attested original: {id}"));
+        }
+        let storage = inspect(&raw)?;
         let sh = &original_sha[..16];
         let payload = format!(
             "CHECKPOINT|seq={}|id={id}|filename={filename}|git_blob={blob}|source_hbp_sha256={source_root}|original_sha256={original_sha}|sh={sh}|zip_entries={}|storage_count={}|storage_bytes={}|quantized_words={}|dtype={}|q20_sha256={}|q20_error_bound=HALF_QUANTUM_IF_ACCEPTED|forward_parity=HOLD|prev_hash={prev}",
@@ -290,7 +316,7 @@ fn create(models: &Path, source_root: &str) -> Result<(String, String, String), 
 }
 pub fn attest(models: &Path, source_archive: &Path, output: &Path) -> Result<usize, String> {
     let root = source_digest(source_archive)?;
-    let (hbp,hbi,anchor) = create(models, &root)?;
+    let (hbp,hbi,anchor) = create(models, &root, source_archive)?;
     fs::create_dir_all(output).map_err(|e| e.to_string())?;
     for (name,text) in [
         ("PNP_CHECKPOINT.hbp",hbp),("PNP_CHECKPOINT.hbi",hbi),("PNP_CHECKPOINT.anchor",anchor)
@@ -330,7 +356,8 @@ mod tests {
         assert!(binary32_to_q20(0x7f7f_ffff).is_err());
         // Quarter Q20 unit rounds to zero, exact half unit uses even tie.
         assert_eq!(binary32_to_q20(0x3480_0000), Ok(0));
-        assert_eq!(binary32_to_q20(0x3500_0000), Ok(1));
+        assert_eq!(binary32_to_q20(0x3500_0000), Ok(0));
+        assert_eq!(binary32_to_q20(0x3580_0000), Ok(1));
     }
     #[test]
     fn crc32_has_independent_standard_vector() {
