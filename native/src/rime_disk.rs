@@ -244,6 +244,23 @@ impl DiskRime {
         Ok(checked)
     }
 
+    /// Independently reconstruct every original tensor as a 3x3x3 cube.
+    /// Three orthogonal 9-cell shadows plus eight corner residuals recover
+    /// all 27 original coordinates without approximation or further data.
+    pub fn verify_cube_shadows(&self) -> Result<usize, String> {
+        self.verify_source()?;
+        for tensor in 0..TENSORS {
+            let mut values = [0_u64; GLYPHS];
+            for (index, value) in values.iter_mut().enumerate() {
+                *value = self.value(tensor, index)?;
+            }
+            crate::shadow3::ThreeShadows::certify_u64(&values)
+                .map_err(|err| format!("three-shadow tensor {tensor}: {err}"))?;
+        }
+        self.verify_source()?;
+        Ok(TENSORS)
+    }
+
     /// Fixed-size HTTP-0-inspired loopback record: version, tensor, glyph,
     /// Fischer address. Source identity is established at store admission.
     pub fn reply(&self, request: &[u8]) -> Result<[u8; REPLY_BYTES], String> {
