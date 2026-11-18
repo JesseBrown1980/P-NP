@@ -12,6 +12,10 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
 
+**Experimental source lineage:** [Gosling et al., *Probing the memory of a superconducting qubit environment*](https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7) (PRL accepted October 28, 2026; DOI `10.1103/j1r2-5ph7`) inspired the original **classical** Solomon/TLS memory model and synthetic held-out non-Poissonian-versus-IID event experiments. Those accepted event traces are the actual inputs to the Omnibit40/entropy/Fischer HTTP-0/mixed-radix matrix stack. PRL hardware measurements are distinct from our precommitted synthetic event corpus. The full-matrix verifier now imports both original DOI-bearing `PNP_TLS.hbp` and `PNP_TLS_STOCHASTIC.hbp` roots directly into its HBI/HBP receipt ledger (eight prior-plane SHA roots total).
+
+
+
 [Complete data-path protocol](native/FULL_MATRIX_GNN_FABRIC_PROTOCOL.md) · [native integration](native/src/full_matrix_fabric.rs) · [independent floor decoder](native/src/matrix_wire.rs)
 
 The native whole-matrix gate connects accepted source-derived ternary jobs to
