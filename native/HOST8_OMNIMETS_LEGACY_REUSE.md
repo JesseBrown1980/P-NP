@@ -11,6 +11,10 @@ byte-for-byte parity before promoting a replacement.
 
 ### Primary historical artifacts
 
+- [Brown–Hilbert canonical root](https://github.com/JesseBrown1980/asolaria-behcs-256/blob/main/BROWN-HILBERT.md) and [operating model](https://github.com/JesseBrown1980/asolaria-behcs-256/blob/main/brown-hilbert/03-operating-model.md): existing-system first, scoped envelopes, source authority, and scan -> seek -> find. The root is constitutional agent/address law; it is not the standalone 200-ns rotor benchmark.
+- [Original single-thread 200-nanosecond emitter](https://github.com/JesseBrown1980/Asolaria-the-full-works-200-nanoseconds-agent-emitter-plus-/blob/main/README.md) and [revolver implementation](https://github.com/JesseBrown1980/Asolaria-the-full-works-200-nanoseconds-agent-emitter-plus-/blob/main/emitter/pid-chain-revolver.mjs): `PIDChainRevolver.next()` advances a counter, chooses `primeAt(i % 1000)`, lane `LANE_CYCLE[i % 7]`, actor `i % alphabet`, and mints a Brown–Hilbert PID from the anchored input. The repository calls this a measured ~200 ns **PID generation** unit, ~5 million PIDs/s on its original single-thread source path. The prime index wraps every 1,000; `next()` mints successive unique PID signals from state, not necessarily the next unbounded mathematical prime.
+- [Original 10,000-room C: file manager](https://github.com/JesseBrown1980/Asolaria-the-full-works-200-nanoseconds-agent-emitter-plus-/blob/main/emitter/project-room-router.mjs): the Node-slice `roomIdFromPid` computes a 32-bit rolling factor-31 hash of the PID string then `% 10000`, creates a room-swap plan, and plans the D: Q-PRISM output with the reverse-gain GNN aggregation lane. The router is a pure planner; the file-system executor performs the actual rename/load/flush. This is a **many-to-one routing bucket**, not an injective 8-byte Host8 physical stub identity.
+- [Emitter claim-scope audit](https://github.com/JesseBrown1980/Asolaria-the-full-works-200-nanoseconds-agent-emitter-plus-/blob/main/TRILATERAL-EMITTER-CLAIM-SCOPE-2026-07-11.md): separate measured address emission, historical operator-reported 100-billion PID run, and unverified multiplied-agent throughput. Do not equate IDs with completed work or independently measured disk performance.
 - [Original Host8 Rooms on Storage technical audit](https://github.com/JesseBrown1980/Asolaria/blob/main/docs/HOST8-ROOMS-ON-STORAGE.md).
 - [Original Host8 Rust room-maker](https://github.com/JesseBrown1980/Asolaria/blob/main/docs/handoffs/acer-host8-rooms-guide-2026-10-19/host8rooms/src/main.rs):
   `TritWord` from `tribit/mod.rs`, 8-byte `SplitMix64`-finalizer
@@ -50,16 +54,28 @@ byte-for-byte parity before promoting a replacement.
 ### Architecture to reuse
 
 ```
-source pulse / prime-cylinder spinner
-  -> Brown-Hilbert tuple + exact Host8 address
-  -> original disk sector-offset / preallocated ROOMSTUB
-  -> [EMPTY -> LOAD -> RUN -> COLLECT -> EJECT -> EMPTY]
-  -> immutable, verified output envelope + chosen next-shell tuple
-  -> next shell / drive receiver address
+one CPU thread: revolver.next(anchor, counter, cyclic primeAt)
+  -> one new Brown-Hilbert PID signal (~200 ns original source unit)
+  -> bounded lock-free/low-overhead queue / routing manager
+  -> Node-slice route: rolling-hash PID % 10000 C: project-room bucket
+  -> Host8: validate exact 8-byte stub against 27-trit physical address
+  -> C: [EMPTY -> LOAD -> RUN -> COLLECT -> EJECT -> EMPTY]
+  -> committed source-identity receipt + Q-PRISM representation change
+  -> D: another addressed room / representation and archive stage
   -> Hookwall + real trained GNN score (when loaded) + Shannon
+  -> reverse-gain proposals / independent verifier
   -> white-room KEEP/COMPACT and paid HBI/HBP/GULP
   -> optional freeze / arbitrary-center Fischer inverse + rewind
 ```
+
+The rotating C: PID/project-room bucket and direct 8-byte disk-stub
+address are two distinct historical routings. Source and destination
+drive names in the original implementation express **two stages of
+transformation and retention**, not an automatic requirement to make
+two physical drives execute tensor operations. The GNN observer must
+see the original incoming tuple, transformed outgoing tuple, and
+their identity/replay witnesses. GC clears only the temporary room;
+the verified D: product and model state retain their own policy.
 
 Temporary scratch is discarded after committed output. Archival
 signatures, source bodies required for recovery, trained weights
@@ -76,10 +92,17 @@ sufficient closure/shadows supply the missing information.
 
 ### Timing and data movement: separate three clocks
 
-1. Spinner *issue interval* (operator recalls 200 nanoseconds):
-   record on CPU with actual implementation, thread count and
-   scheduler. Historical documents checked here have not
-   authenticated a 200-nanosecond end-to-end storage transaction.
+1. **Per-thread PID generation:** original revolver README labels
+   `PIDChainRevolver.next()` ~200 ns MEASURED on its original source
+   unit (~5 million virtual-pointer PID emissions per second).
+   This operation chooses from a bounded cycling prime table and
+   mints the next anchored identity; it is independent of C:/D:
+   file I/O, GNN inference and process creation. Reproduce on each
+   target CPU with the same `primeAt`/mintPID path, report median,
+   p99, warmup and number of worker threads. N simultaneous
+   emitters need unique anchor/counter ownership.
+   **Routing queue insertion and draining are separate clocks.**
+   This repository did not rerun the original 200-ns benchmark.
 2. Room *resident cache* time: original ACER receipt reports
    299,885 reads/second (3,334 ns) on warmed D: sector; one cloud
    `pread` benchmark reported ~554-658 ns per hot room.
@@ -104,7 +127,11 @@ path penalty and use retained hot mailboxes or batched I/O.
   signal, keyed by original RoomStub and idempotency key.
 - Three-seat MTP/Fischer/Fabric verifies the committed envelope
   before forwarding C-drive -> D-drive or equivalent distinct tiers.
-- Compare 1/4/16/64 threads, 50-message cleanup batch and
+- Source-pin and independently parity-check `PIDChainRevolver.next()`:
+  original alphabet, 7-lane rotation, `primeAt(i % 1000)`, anchored
+  mintPID and 10,000-slot rolling-hash C: router. Prove deterministic
+  PID/slot/route agreement for the original bounded fixtures.
+- Compare 1/4/16/64 threads, queue depth, 50-message cleanup batch and
   immediate scratch clearing, and hot/cold cache behavior.
   Report pulse rate, completed transactions/sec, p50/p99,
   write amplification and durable bytes separately.
