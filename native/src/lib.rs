@@ -37,6 +37,8 @@ pub mod matrix_wire;
 pub mod full_matrix_fabric;
 pub mod temporal_fabric;
 pub mod prl_temporal_fabric;
+pub mod asolaria_pump;
+pub mod asolaria_pump_fabric;
 pub mod triad;
 pub mod wave;
 

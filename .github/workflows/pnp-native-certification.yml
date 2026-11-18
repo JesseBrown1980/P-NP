@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric,temporal_fabric,prl_temporal_fabric}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric,temporal_fabric,prl_temporal_fabric,asolaria_pump,asolaria_pump_fabric}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -1103,11 +1103,44 @@ jobs:
           ( cd evidence && sha256sum PNP_PRL_MEMORY_FORECAST.bin PNP_PRL_MEMORY_FABRIC.hbp PNP_PRL_MEMORY_FABRIC.hbi PNP_PRL_MEMORY_FABRIC.anchor > PNP_PRL_CAUSAL_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_PRL_CAUSAL_DIGESTS.sha256 )
           echo 'PNP_PRL_CAUSAL_NEGATIVE|future_event_leakage=REJECTED|wrong_fischer_route=REJECTED|unknown_operator=REJECTED|frame_reorder=REJECTED|invalid_forecast_bytes=REJECTED|hbi_tamper=REJECTED|iid_false_memory=REJECTED|gnn_untrained=HELD|status=PASS|json=0'
+      - name: Source-pinned Asolaria 27-point Rime spherical pump across mixed-radix Omnibit HTTP-0 fabric
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f 'PNP_ASOLARIA_PUMP_RESOURCE|wall_elapsed_seconds=%e|max_rss_kib=%M|scope=SOURCE_RIME_PUMP_ATTEST|json=0' -o PNP_ASOLARIA_PUMP_RESOURCE.hbp native/target/release/pnp-native asolaria-pump-attest evidence evidence | tee PNP_ASOLARIA_PUMP_ATTEST.hbp
+          native/target/release/pnp-native asolaria-pump-verify evidence evidence | tee PNP_ASOLARIA_PUMP_VERIFY.hbp
+          native/target/release/pnp-native asolaria-pump-inspect evidence/PNP_ASOLARIA_PUMP_TRACE.bin | tee PNP_ASOLARIA_PUMP_INSPECT.hbp
+          grep -Fq 'PNP_ASOLARIA_PUMP|jobs=54|phases_per_job=3|backend_http0_calls=25920|' PNP_ASOLARIA_PUMP_ATTEST.hbp
+          grep -Fq 'PNP_ASOLARIA_PUMP_VERIFY|jobs=54|calls=25920|archive=BYTE_IDENTICAL|independent_ij_spectra=EXACT|source=FROZEN|' PNP_ASOLARIA_PUMP_VERIFY.hbp
+          grep -Fq 'PNP_ASOLARIA_PUMP_INSPECT|jobs=54|phases=3|RIME_PRISM=SOURCE_EQUIVALENT|spectral_roundtrip=EXACT|' PNP_ASOLARIA_PUMP_INSPECT.hbp
+          test "$(grep -c '^HBI|' evidence/PNP_ASOLARIA_PUMP.hbi)" -eq 64
+          test "$(grep -c '^PUMP_REFREEZE|' evidence/PNP_ASOLARIA_PUMP.hbp)" -eq 54
+          test "$(grep -c '^PUMP_HTTP0|' evidence/PNP_ASOLARIA_PUMP.hbp)" -eq 3
+          for arity in 3 27 81; do
+            grep -Eq "PNP_ASOLARIA_PUMP_ARM\\|arity=$arity\\|calls=8640\\|physical_rooms=" PNP_ASOLARIA_PUMP_ATTEST.hbp
+          done
+          cp evidence/PNP_ASOLARIA_PUMP_TRACE.bin "$RUNNER_TEMP/pump-original.bin"
+          cp evidence/PNP_ASOLARIA_PUMP.hbp "$RUNNER_TEMP/pump-original.hbp"
+          cp evidence/PNP_ASOLARIA_PUMP.hbi "$RUNNER_TEMP/pump-original.hbi"
+          cp evidence/PNP_ASOLARIA_PUMP.anchor "$RUNNER_TEMP/pump-original.anchor"
+          native/target/release/pnp-native asolaria-pump-attest evidence evidence > "$RUNNER_TEMP/pump-replay.hbp"
+          cmp evidence/PNP_ASOLARIA_PUMP_TRACE.bin "$RUNNER_TEMP/pump-original.bin"
+          cmp evidence/PNP_ASOLARIA_PUMP.hbp "$RUNNER_TEMP/pump-original.hbp"
+          cmp evidence/PNP_ASOLARIA_PUMP.hbi "$RUNNER_TEMP/pump-original.hbi"
+          cmp evidence/PNP_ASOLARIA_PUMP.anchor "$RUNNER_TEMP/pump-original.anchor"
+          printf X >> evidence/PNP_ASOLARIA_PUMP_TRACE.bin
+          if native/target/release/pnp-native asolaria-pump-inspect evidence/PNP_ASOLARIA_PUMP_TRACE.bin > "$RUNNER_TEMP/pump-negative.hbp" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/pump-original.bin" evidence/PNP_ASOLARIA_PUMP_TRACE.bin
+          printf X >> evidence/PNP_ASOLARIA_PUMP.hbi
+          if native/target/release/pnp-native asolaria-pump-verify evidence evidence > "$RUNNER_TEMP/pump-negative.hbp" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/pump-original.hbi" evidence/PNP_ASOLARIA_PUMP.hbi
+          ( cd evidence && sha256sum PNP_ASOLARIA_PUMP_TRACE.bin PNP_ASOLARIA_PUMP.hbp PNP_ASOLARIA_PUMP.hbi PNP_ASOLARIA_PUMP.anchor > PNP_ASOLARIA_PUMP_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_ASOLARIA_PUMP_DIGESTS.sha256 )
+          echo 'PNP_ASOLARIA_PUMP_NEGATIVE|wrong_fischer=REJECTED|bad_source_trit=REJECTED|bad_arity=REJECTED|archive_tamper=REJECTED|hbi_tamper=REJECTED|original_R3=EXACT|gradient_energy_pump=SEPARATE_SOURCE_HOLD|status=PASS|json=0'
       - name: Source-provenance and immutable HBP evidence archive
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp PNP_TLS_STREAM_ATTEST.hbp PNP_TLS_STREAM_VERIFY.hbp PNP_TLS_STREAM_BITPACK_CHECK.hbp PNP_TLS_STREAM_RANGE_CHECK.hbp PNP_TLS_STREAM_RESOURCE.hbp PNP_COMPUTE_ATTEST.hbp PNP_COMPUTE_VERIFY.hbp PNP_COMPUTE_INSPECT.hbp PNP_COMPUTE_RESOURCE.hbp PNP_FULL_MATRIX_ATTEST.hbp PNP_FULL_MATRIX_VERIFY.hbp PNP_FULL_MATRIX_INSPECT.hbp PNP_FULL_MATRIX_RESOURCE.hbp PNP_PRL_CAUSAL_ATTEST.hbp PNP_PRL_CAUSAL_VERIFY.hbp PNP_PRL_CAUSAL_INSPECT.hbp PNP_PRL_CAUSAL_RESOURCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp PNP_TLS_STREAM_ATTEST.hbp PNP_TLS_STREAM_VERIFY.hbp PNP_TLS_STREAM_BITPACK_CHECK.hbp PNP_TLS_STREAM_RANGE_CHECK.hbp PNP_TLS_STREAM_RESOURCE.hbp PNP_COMPUTE_ATTEST.hbp PNP_COMPUTE_VERIFY.hbp PNP_COMPUTE_INSPECT.hbp PNP_COMPUTE_RESOURCE.hbp PNP_FULL_MATRIX_ATTEST.hbp PNP_FULL_MATRIX_VERIFY.hbp PNP_FULL_MATRIX_INSPECT.hbp PNP_FULL_MATRIX_RESOURCE.hbp PNP_PRL_CAUSAL_ATTEST.hbp PNP_PRL_CAUSAL_VERIFY.hbp PNP_PRL_CAUSAL_INSPECT.hbp PNP_PRL_CAUSAL_RESOURCE.hbp PNP_ASOLARIA_PUMP_ATTEST.hbp PNP_ASOLARIA_PUMP_VERIFY.hbp PNP_ASOLARIA_PUMP_INSPECT.hbp PNP_ASOLARIA_PUMP_RESOURCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi native/fixtures/TLS_STOCHASTIC_CORPUS.hbi > evidence/SOURCE_PINS.sha256
@@ -1154,6 +1187,10 @@ jobs:
           sha256sum -c PNP_COMPUTE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_FULL_MATRIX_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_PRL_CAUSAL_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_ASOLARIA_PUMP_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_ASOLARIA_PUMP|jobs=54|phases_per_job=3|backend_http0_calls=25920|' PNP_ASOLARIA_PUMP_ATTEST.hbp
+          test "$(grep -c '^HBI|' PNP_ASOLARIA_PUMP.hbi)" -eq 64
+          test "$(grep -c '^PUMP_REFREEZE|' PNP_ASOLARIA_PUMP.hbp)" -eq 54
           grep -Fq 'PNP_PRL_CAUSAL|source_doi=10.1103/j1r2-5ph7|cases=9|paired_rows=108|binary_floors=4|original_operators=40|native_http0_calls=64152|' PNP_PRL_CAUSAL_ATTEST.hbp
           test "$(grep -c '^HBI|' PNP_PRL_MEMORY_FABRIC.hbi)" -eq 120
           test "$(grep -c '^PRL_FABRIC_PAIR|' PNP_PRL_MEMORY_FABRIC.hbp)" -eq 108
