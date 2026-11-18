@@ -4,7 +4,7 @@ use pnp_native::{
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
     tls_entropy_omnibit, tls_stream_fabric, http0_fabric_witness,
-    http0_compute, microkernel_compute, full_matrix_fabric, prl_temporal_fabric,
+    http0_compute, microkernel_compute, full_matrix_fabric, prl_temporal_fabric, asolaria_pump_fabric,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -96,6 +96,37 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("asolaria-pump-attest") => {
+            let prior=arguments.next().ok_or("missing accepted pump source evidence")?;
+            let output=arguments.next().ok_or("missing Asolaria pump output path")?;
+            if arguments.next().is_some(){return_fail("too many original pump arguments");}
+            let stats=asolaria_pump_fabric::attest(Path::new(&prior),Path::new(&output))?;
+            println!("PNP_ASOLARIA_PUMP|jobs={}|phases_per_job={}|backend_http0_calls={}|source_sha256={}|archive_sha256={}|original=RIME_27_SPHERICAL|gradient_source=HOLD|descriptor_source=HOLD|status=PASS|json=0",
+                stats.jobs,stats.phases,stats.messages,
+                stats.source_sha,stats.archive_sha);
+            for arm in &stats.arms {
+                println!("PNP_ASOLARIA_PUMP_ARM|arity={}|calls={}|physical_rooms={}|spectrum_points={}|wall_ns={}|all40=PASS|four_binary_floors=PASS|R3=EXACT|source=FROZEN|status=PASS|json=0",
+                    arm.arity,arm.messages,arm.rooms,
+                    arm.messages*27*3,arm.elapsed_ns);
+            }
+            Ok(())
+        }
+        Some("asolaria-pump-verify") => {
+            let prior=arguments.next().ok_or("missing original frozen pump evidence")?;
+            let output=arguments.next().ok_or("missing published pump archive")?;
+            if arguments.next().is_some(){return_fail("too many pump verify arguments");}
+            let stats=asolaria_pump_fabric::verify(Path::new(&prior),Path::new(&output))?;
+            println!("PNP_ASOLARIA_PUMP_VERIFY|jobs={}|calls={}|archive=BYTE_IDENTICAL|independent_ij_spectra=EXACT|source=FROZEN|status=PASS|json=0",
+                stats.jobs,stats.messages);
+            Ok(())
+        }
+        Some("asolaria-pump-inspect") => {
+            let archive=arguments.next().ok_or("missing frozen 27-point spectral pump file")?;
+            if arguments.next().is_some(){return_fail("too many pump inspect arguments");}
+            let count=asolaria_pump_fabric::inspect(Path::new(&archive))?;
+            println!("PNP_ASOLARIA_PUMP_INSPECT|jobs={count}|phases=3|RIME_PRISM=SOURCE_EQUIVALENT|spectral_roundtrip=EXACT|status=PASS|json=0");
             Ok(())
         }
         Some("prl-temporal-fabric-attest") => {
