@@ -957,11 +957,50 @@ jobs:
           ( cd evidence && sha256sum PNP_TLS_ENTROPY.hbp PNP_TLS_ENTROPY.hbi PNP_TLS_ENTROPY.anchor PNP_TLS_ENTROPY_SELECTED.bin PNP_TLS_ENTROPY_RESTORED.bin PNP_TLS_ENTROPY_GC.hbp > PNP_TLS_ENTROPY_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_TLS_ENTROPY_DIGESTS.sha256 )
           echo 'PNP_TLS_ENTROPY_NEGATIVE|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|model_archive=REJECTED|restored=REJECTED|owned_gc=PASS|status=PASS|json=0'
+      - name: Fully framed bitpack vs continuous coder with independent backend HTTP-0 rooms
+        run: |
+          set -euo pipefail
+          /usr/bin/time -f 'PNP_TLS_STREAM_RESOURCE|wall_elapsed_seconds=%e|max_rss_kib=%M|scope=ATTEST_NATIVE_PLUS_HTTP0_CHILD|json=0' -o PNP_TLS_STREAM_RESOURCE.hbp native/target/release/pnp-native stream-fabric-attest evidence evidence | tee PNP_TLS_STREAM_ATTEST.hbp
+          native/target/release/pnp-native stream-fabric-verify evidence evidence | tee PNP_TLS_STREAM_VERIFY.hbp
+          native/target/release/pnp-native stream-fabric-inspect evidence/PNP_TLS_STREAM_BITPACK.bin | tee PNP_TLS_STREAM_BITPACK_CHECK.hbp
+          native/target/release/pnp-native stream-fabric-inspect evidence/PNP_TLS_STREAM_RANGE.bin | tee PNP_TLS_STREAM_RANGE_CHECK.hbp
+          grep -Fq 'PNP_TLS_STREAM_FABRIC|frames=54|' PNP_TLS_STREAM_ATTEST.hbp
+          grep -Fq '|http0_calls=324|fischer_routing=3,27,81|backend_worker=SEPARATE_PROCESS|reconstructed=EXACT|' PNP_TLS_STREAM_ATTEST.hbp
+          grep -Fq 'PNP_TLS_STREAM_FABRIC_VERIFY|frames=54|' PNP_TLS_STREAM_VERIFY.hbp
+          test "$(grep -c '^HBI|' evidence/PNP_TLS_STREAM_FABRIC.hbi)" -eq 7
+          test "$(grep -c '^STREAM_FABRIC|' evidence/PNP_TLS_STREAM_FABRIC.hbp)" -eq 3
+          grep -Fq 'PNP_TLS_STREAM_INSPECT|frames=54|events=432000|canonical=PASS|' PNP_TLS_STREAM_BITPACK_CHECK.hbp
+          grep -Fq 'PNP_TLS_STREAM_INSPECT|frames=54|events=432000|canonical=PASS|' PNP_TLS_STREAM_RANGE_CHECK.hbp
+          test "$(stat -c%s evidence/PNP_TLS_STREAM_BITPACK.bin)" -eq 54725
+          cp evidence/PNP_TLS_STREAM_RANGE.bin "$RUNNER_TEMP/range-original.bin"
+          cp evidence/PNP_TLS_STREAM_BITPACK.bin "$RUNNER_TEMP/bitpack-original.bin"
+          cp evidence/PNP_TLS_STREAM_FABRIC.hbp "$RUNNER_TEMP/fabric-original.hbp"
+          cp evidence/PNP_TLS_STREAM_FABRIC.hbi "$RUNNER_TEMP/fabric-original.hbi"
+          cp evidence/PNP_TLS_STREAM_FABRIC.anchor "$RUNNER_TEMP/fabric-original.anchor"
+          native/target/release/pnp-native stream-fabric-attest evidence evidence > "$RUNNER_TEMP/fabric-repeat.hbp"
+          cmp evidence/PNP_TLS_STREAM_RANGE.bin "$RUNNER_TEMP/range-original.bin"
+          cmp evidence/PNP_TLS_STREAM_BITPACK.bin "$RUNNER_TEMP/bitpack-original.bin"
+          cmp evidence/PNP_TLS_STREAM_FABRIC.hbp "$RUNNER_TEMP/fabric-original.hbp"
+          cmp evidence/PNP_TLS_STREAM_FABRIC.hbi "$RUNNER_TEMP/fabric-original.hbi"
+          cmp evidence/PNP_TLS_STREAM_FABRIC.anchor "$RUNNER_TEMP/fabric-original.anchor"
+          printf X >> evidence/PNP_TLS_STREAM_BITPACK.bin
+          if native/target/release/pnp-native stream-fabric-inspect evidence/PNP_TLS_STREAM_BITPACK.bin > "$RUNNER_TEMP/fabric-tamper.log" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/bitpack-original.bin" evidence/PNP_TLS_STREAM_BITPACK.bin
+          printf X >> evidence/PNP_TLS_STREAM_RANGE.bin
+          if native/target/release/pnp-native stream-fabric-inspect evidence/PNP_TLS_STREAM_RANGE.bin > "$RUNNER_TEMP/fabric-tamper.log" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/range-original.bin" evidence/PNP_TLS_STREAM_RANGE.bin
+          printf X >> evidence/PNP_TLS_STREAM_FABRIC.hbi
+          if native/target/release/pnp-native stream-fabric-verify evidence evidence > "$RUNNER_TEMP/fabric-tamper.log" 2>&1; then exit 1; fi
+          cp "$RUNNER_TEMP/fabric-original.hbi" evidence/PNP_TLS_STREAM_FABRIC.hbi
+          native/target/release/pnp-native stream-fabric-verify evidence evidence > "$RUNNER_TEMP/fabric-restored.hbp"
+          ( cd evidence && sha256sum PNP_TLS_STREAM_BITPACK.bin PNP_TLS_STREAM_RANGE.bin PNP_TLS_STREAM_RESTORED.bin PNP_TLS_STREAM_FABRIC.hbp PNP_TLS_STREAM_FABRIC.hbi PNP_TLS_STREAM_FABRIC.anchor > PNP_TLS_STREAM_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_TLS_STREAM_DIGESTS.sha256 )
+          echo 'PNP_TLS_STREAM_NEGATIVE|framing=REJECTED|archive_integrity=REJECTED|hbi=REJECTED|independent_http0_model_tamper=REJECTED|original_source=PRESERVED|status=PASS|json=0'
       - name: Source-provenance and immutable HBP evidence archive
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp PNP_TLS_OMNI40_ATTEST.hbp PNP_TLS_OMNI40_VERIFY.hbp PNP_TLS_OMNI40_DECODE.hbp PNP_TLS_OMNI40_GULP.hbp PNP_TLS_OMNI40_RESOURCE.hbp PNP_TLS_ENTROPY_ATTEST.hbp PNP_TLS_ENTROPY_VERIFY.hbp PNP_TLS_ENTROPY_DECODE.hbp PNP_TLS_ENTROPY_GULP.hbp PNP_TLS_ENTROPY_RESOURCE.hbp PNP_TLS_STREAM_ATTEST.hbp PNP_TLS_STREAM_VERIFY.hbp PNP_TLS_STREAM_BITPACK_CHECK.hbp PNP_TLS_STREAM_RANGE_CHECK.hbp PNP_TLS_STREAM_RESOURCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi native/fixtures/TLS_STOCHASTIC_CORPUS.hbi > evidence/SOURCE_PINS.sha256
@@ -1004,6 +1043,10 @@ jobs:
           sha256sum -c PNP_TLS_STOCH_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_TLS_OMNI40_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_TLS_ENTROPY_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_TLS_STREAM_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_TLS_STREAM_FABRIC|frames=54|' PNP_TLS_STREAM_ATTEST.hbp
+          grep -Fq '|http0_calls=324|fischer_routing=3,27,81|backend_worker=SEPARATE_PROCESS|reconstructed=EXACT|' PNP_TLS_STREAM_ATTEST.hbp
+          test "$(grep -c '^STREAM_FABRIC|' PNP_TLS_STREAM_FABRIC.hbp)" -eq 3
           grep -Fq 'PNP_TLS_ENTROPY|frames=54|rows=81|' PNP_TLS_ENTROPY_ATTEST.hbp
           grep -Fq 'PNP_TLS_ENTROPY_GULP|owned_scratch_deleted_bytes=144000|' PNP_TLS_ENTROPY_GULP.hbp
           test "$(grep -c '^HBI|' PNP_TLS_ENTROPY.hbi)" -eq 81
