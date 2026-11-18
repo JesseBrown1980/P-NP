@@ -107,7 +107,8 @@ jobs:
           grep -Fq '|fischer_arbitrary_null_checks=360|rejected=120|language_ladder=64_256_1024_4096_16384|symbol_not_bit=PASS|ternary_prism_inverse=PASS|qprism=PASS|omnibit40=PASS|post_gulp_clear=PASS|watcher=INDEPENDENT_INTEGER|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_LAYERED_SPHERE.hbp
           grep -Fq 'PNP_OMNIMETS_NATIVE|schema=v1|source_commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|lanes=7|dispatches=1440|promotions=1320|deferrals=120|halts=120|errors=120|samples=1440|ratifications=120|seals=120|k=3|ratify_before_seal=PASS|real_microkernel=PASS|source_immutable=PASS|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_LAYERED_SPHERE.hbp
           test "$(grep -c '^OMNIMETS_LANE|lane=' PNP_LAYERED_SPHERE.hbp)" -eq 7
-          grep -Eq '^OMNIMETS_SHA|body_sha256=[0-9a-f]{64}\|json=0      - name: Brown Ledger Shannon-paid forward/reverse frozen matrix and null-outward N-Nest gate
+          grep -Fq 'OMNIMETS_SHA|body_sha256=' PNP_LAYERED_SPHERE.hbp
+      - name: Brown Ledger Shannon-paid forward/reverse frozen matrix and null-outward N-Nest gate
         run: |
           set -euo pipefail
           native/target/release/pnp-native brown-ledger-attest | tee PNP_BROWN_LEDGER.hbp
