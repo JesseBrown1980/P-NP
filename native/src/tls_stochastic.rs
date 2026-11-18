@@ -301,6 +301,9 @@ fn make_bundle(prior_hbp_sha:&str) -> Result<(Bundle,Stats),String>{
                     "mode={mode}|rep={rep}|lag={lag_n}|cond_yes_num={yes_count}|cond_yes_den={yes_total}|cond_no_num={no_count}|cond_no_den={no_total}|conditional_difference_q10000={difference}|shuffled_difference_q10000={scrambled}|g2_like=EVENT_CONDITIONAL_ONLY|g2_physical=NO"
                 ));
                 total_lags+=1;
+                if mode_index==0 && difference.abs()>400 {
+                    return Err("IID null produced a large apparent lag-correlation".to_owned());
+                }
                 if lag_n==1 && mode_index!=0 && difference<1000{
                     return Err("source-inspired persistent reservoir failed lag-1 control".to_owned());
                 }
