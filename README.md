@@ -10,6 +10,43 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Original Asolaria spherical pump restored to native matrix fabric (November 18, 2026)
+
+[Source-pinned pump acceptance protocol](native/ASOLARIA_PUMP_SOURCE_RECOVERY_PROTOCOL.md) · [27-coordinate exact kernel](native/src/asolaria_pump.rs) · [whole-fabric source experiment](native/src/asolaria_pump_fabric.rs)
+
+The historical Asolaria kernel pump belongs between the frozen matrix
+calculation and verified refreeze/recall. The first source-authenticated
+piece now rebuilt is the **original 27-point Rime spectral prism and
+logarithmic ternary energy-shell pump**, taken from Asolaria Host8 Rust
+source @ \`1c03dca\` (blob \`5d3e834e\`). The 27-point transform has
+an exact modular inverse over p=1,000,081, w=951,846. Its R0/R1/R2
+cyclic phase labels and logarithmic shell radius are checked without
+floating arithmetic. The digital shell input is an explicitly
+declared count of non-neutral signed trits, rather than physical
+energy inferred from a metaphor.
+
+The source-frozen 54 PRL-derived ternary jobs cross all **64, 256,
+1024 and 4096** binary floors and all **40 original reversible
+Omnibit operators**, then enter a separate native HTTP-0 pump worker
+at each of **3/27/81 room capacities**. The expected gate covers
+**25,920 actual backend HTTP-0 spectral calls**, each carrying
+three 27-dimensional spectra, independent 27-point inverse
+checks, source-byte integrity, R³ winding, and immutable
+HBI/HBP/SHA/SH/HASH refreeze receipts. PRL ordered/shuffled
+prediction archives are mandatory source roots and remain unchanged.
+
+The historic **27-node, nine-macro-kernel OIL/ANTI-OIL/ANTI-ANTI-OIL
+gradient-descent pump** and the **ACER kernel-pump 3→9→27
+descriptor/function pump** are recorded as separate original
+components pending their full executable source and equivalence
+checks. Their distinctive energy and descriptor algorithms will
+not be silently replaced by this source-pinned Rime prism.
+Trained-GNN forward inference remains held on issue #49.
+
+**Status:** hosted Rust 1.81 pump acceptance pending. No speed,
+prediction or gradient improvement is claimed until the
+corresponding controlled runs pass.
+
 ## PRL-informed temporal prediction through the complete fabric (November 18, 2026)
 
 [Research protocol](native/PRL_TEMPORAL_MEMORY_FABRIC_PREDICTION_PROTOCOL.md) · [actual source-trained evaluator](native/src/prl_temporal_fabric.rs) · [separate native HTTP-0 temporal worker](native/src/temporal_fabric.rs)
