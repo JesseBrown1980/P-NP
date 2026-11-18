@@ -428,8 +428,8 @@ mod tests{
         let mut data=Vec::from(MAG);
         data.extend_from_slice(&(STREAMS_PER_ARITY as u16).to_le_bytes());
         for case in 0..9_u8{
-            for variant in 0..2_u8{
-                for floor in FLOORS{
+            for floor in FLOORS{
+                for variant in 0..2_u8{
                     append_record(&mut data,case,variant,floor,
                         &[7_u8,0,11,0].repeat(EVENT_COUNT)).unwrap();
                 }
