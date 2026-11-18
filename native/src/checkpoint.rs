@@ -221,7 +221,12 @@ pub fn binary32_to_q20(bits: u32) -> Result<i64, &'static str> {
         (u128::from((1_u32 << 23) | fraction), (exp as i32) - 130)
     };
     let magnitude = if shift >= 0 {
-        significand.checked_shl(shift as u32).ok_or("Q20 overflow")?
+        let left = shift as u32;
+        let limit = (i64::MAX as u128) + u128::from(neg);
+        if left >= 64 || significand > (limit >> left) {
+            return Err("Q20 overflow");
+        }
+        significand << left
     } else {
         let right = (-shift) as u32;
         if right >= 128 {
@@ -430,6 +435,7 @@ mod tests {
         assert!(binary32_to_q20(0x7f80_0000).is_err());
         assert!(binary32_to_q20(0x7fc0_0000).is_err());
         assert!(binary32_to_q20(0x7f7f_ffff).is_err());
+        assert!(binary32_to_q20(0x7f00_0000).is_err());
         // Quarter Q20 unit rounds to zero, exact half unit uses even tie.
         assert_eq!(binary32_to_q20(0x3480_0000), Ok(0));
         assert_eq!(binary32_to_q20(0x3500_0000), Ok(0));
