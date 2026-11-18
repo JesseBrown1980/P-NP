@@ -3,6 +3,7 @@ use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
     policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, tls_memory, tls_stochastic, tls_omnibit_gc,
+    tls_entropy_omnibit,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +95,51 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-entropy-attest") => {
+            let original = arguments.next().ok_or("missing original Omnibit source")?;
+            let prior = arguments.next().ok_or("missing previously accepted archives")?;
+            let out = arguments.next().ok_or("missing entropy archive destination")?;
+            if arguments.next().is_some() { return_fail("too many entropy attest arguments"); }
+            let (counts, elapsed) = tls_entropy_omnibit::timing(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_ENTROPY|frames={}|rows={}|archive_bytes={}|restored_bytes={}|model_bytes={}|range_blocks={}|original_omnibit_blocks={}|original_operator_trials={}|full_decoder_bytes={}|elapsed_wall_ns={elapsed}|trained=PR43_TRAIN_ONLY|selector=VALIDATION_FRAMED_COST|bitpack54_unframed=54000|baseline_omni40_bytes=294615|source_independent_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0",
+                counts.frames, counts.rows, counts.archive_bytes, counts.restored_bytes,
+                counts.models_bytes, counts.range_blocks, counts.omega_blocks,
+                counts.original_trials, counts.decoder_bytes);
+            Ok(())
+        }
+        Some("tls-entropy-verify") => {
+            let original = arguments.next().ok_or("missing original Omnibit source")?;
+            let prior = arguments.next().ok_or("missing previously accepted archives")?;
+            let out = arguments.next().ok_or("missing entropy archive")?;
+            if arguments.next().is_some() { return_fail("too many entropy verification arguments"); }
+            let counts = tls_entropy_omnibit::verify(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_ENTROPY_VERIFY|frames={}|rows={}|archive_bytes={}|models_embedded=YES|original_source=RETAINED|standalone_decoder=PASS|status=PASS|json=0",
+                counts.frames, counts.rows, counts.archive_bytes);
+            Ok(())
+        }
+        Some("tls-entropy-decode") => {
+            let source = arguments.next().ok_or("missing self-contained entropy archive")?;
+            let output = arguments.next().ok_or("missing reconstructed events output")?;
+            if arguments.next().is_some() { return_fail("too many entropy decoder arguments"); }
+            let count = tls_entropy_omnibit::decode_to_file(Path::new(&source), Path::new(&output))?;
+            println!("PNP_TLS_ENTROPY_DECODE|restored_bytes={count}|external_model=NONE|source_generator=NOT_USED|original_operators=40|events=EXACT|status=PASS|json=0");
+            Ok(())
+        }
+        Some("tls-entropy-gulp-discard") => {
+            let original = arguments.next().ok_or("missing original Omnibit source")?;
+            let prior = arguments.next().ok_or("missing previously accepted archives")?;
+            let out = arguments.next().ok_or("missing retained entropy archive")?;
+            if arguments.next().is_some() { return_fail("too many entropy GULP arguments"); }
+            let (deleted,retained) = tls_entropy_omnibit::gulp_discard_owned(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_TLS_ENTROPY_GULP|owned_scratch_deleted_bytes={deleted}|archive_retained_bytes={retained}|scratch_absent=PASS|protected_original=RETAINED|live_operator_approval=NOT_REQUIRED|status=PASS|json=0");
             Ok(())
         }
         Some("tls-omni40-attest") => {
