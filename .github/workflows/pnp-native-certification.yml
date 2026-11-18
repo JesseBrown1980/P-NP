@@ -60,7 +60,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -211,6 +211,48 @@ jobs:
           native/target/release/pnp-native gnn-gate-verify evidence evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 )
           echo 'PNP_MULTIGNN_NEGATIVE|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: All nine authentic trained checkpoints inert ZIP and fixed Q20 conversion
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native checkpoint-attest source-train/models evidence evidence | tee PNP_CHECKPOINT_ATTEST.hbp
+          native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence | tee PNP_CHECKPOINT_VERIFY.hbp
+          grep -Fq 'PNP_CHECKPOINT_ATTEST|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|numeric_decode=INTEGER_ONLY|q20=PER_STORAGE|forward_parity=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_CHECKPOINT_ATTEST.hbp
+          grep -Fq 'PNP_CHECKPOINT_VERIFY|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|hbi=PASS|hbp=PASS|hash_chain=PASS|status=PASS|json=0' PNP_CHECKPOINT_VERIFY.hbp
+          test "$(grep -c '^CHECKPOINT|' evidence/PNP_CHECKPOINT.hbp)" -eq 9
+          test "$(grep -c '^HBI|' evidence/PNP_CHECKPOINT.hbi)" -eq 9
+          grep -Fq '|forward_parity=HOLD|' evidence/PNP_CHECKPOINT.hbp
+          cp evidence/PNP_CHECKPOINT.hbp "$RUNNER_TEMP/original-checkpoint.hbp"
+          cp evidence/PNP_CHECKPOINT.hbi "$RUNNER_TEMP/original-checkpoint.hbi"
+          cp evidence/PNP_CHECKPOINT.anchor "$RUNNER_TEMP/original-checkpoint.anchor"
+          native/target/release/pnp-native checkpoint-attest source-train/models evidence evidence > "$RUNNER_TEMP/recheck-checkpoints.hbp"
+          cmp evidence/PNP_CHECKPOINT.hbp "$RUNNER_TEMP/original-checkpoint.hbp"
+          cmp evidence/PNP_CHECKPOINT.hbi "$RUNNER_TEMP/original-checkpoint.hbi"
+          cmp evidence/PNP_CHECKPOINT.anchor "$RUNNER_TEMP/original-checkpoint.anchor"
+          ( cd evidence && sha256sum PNP_CHECKPOINT.hbp PNP_CHECKPOINT.hbi PNP_CHECKPOINT.anchor > PNP_CHECKPOINT_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 )
+          echo 'PNP_CHECKPOINT_REPLAY|real_models=9|bytes_authenticated=PASS|zip_integrity=PASS|sha=PASS|json=0'
+      - name: Original tensor and HBI HBP corruption rejection
+        run: |
+          set -euo pipefail
+          for name in PNP_CHECKPOINT.hbp PNP_CHECKPOINT.hbi PNP_CHECKPOINT.anchor; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf 'X' >> "evidence/$name"
+            if native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence > "$RUNNER_TEMP/bad-checkpoint.hbp" 2>&1; then
+              echo "PNP_CHECKPOINT_NEGATIVE_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp source-train/models/baseline_model.pt "$RUNNER_TEMP/original-baseline.pt"
+          printf 'X' >> source-train/models/baseline_model.pt
+          if native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence > "$RUNNER_TEMP/bad-model.hbp" 2>&1; then
+            echo 'PNP_CHECKPOINT_NEGATIVE_FAIL|original_model_tamper=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/original-baseline.pt" source-train/models/baseline_model.pt
+          native/target/release/pnp-native checkpoint-verify source-train/models evidence evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 )
+          echo 'PNP_CHECKPOINT_NEGATIVE|model=REJECTED|hbp=REJECTED|hbi=REJECTED|anchor=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -283,7 +325,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
           sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi > evidence/SOURCE_PINS.sha256
@@ -314,6 +356,12 @@ jobs:
           sha256sum -c PNP_SOURCE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_SCORE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_MULTIGNN_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_CHECKPOINT_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_CHECKPOINT_ATTEST|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|' PNP_CHECKPOINT_ATTEST.hbp
+          grep -Fq 'PNP_CHECKPOINT_VERIFY|models=9|source_shas=VERIFIED|torch_zip=VERIFIED|' PNP_CHECKPOINT_VERIFY.hbp
+          test "$(grep -c '^CHECKPOINT|' PNP_CHECKPOINT.hbp)" -eq 9
+          test "$(grep -c '^HBI|' PNP_CHECKPOINT.hbi)" -eq 9
+          grep -Fq '|forward_parity=HOLD|' PNP_CHECKPOINT.hbp
           grep -Fq 'PNP_MULTIGNN|families=10|trained_architectures=4|checkpoints=9|scoring_signals=8|g4_cases=13|records=23|tier0=SOURCE_MATCHED|' PNP_MULTIGNN_ATTEST.hbp
           grep -Fq 'PNP_MULTIGNN_VERIFY|records=23|g4=SOURCE_MATCHED|' PNP_MULTIGNN_VERIFY.hbp
           test "$(grep -c '^GNN_GATE|' PNP_GNN_GATE.hbp)" -eq 23
