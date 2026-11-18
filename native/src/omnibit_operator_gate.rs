@@ -2,7 +2,10 @@
 //! floors. The catalog source is vendored byte-for-byte from its pinned commit.
 #![forbid(unsafe_code)]
 
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
+type SymbolBank = (u8, Vec<u16>);
+type BankSet = Vec<SymbolBank>;
 use std::fs;
 use std::path::Path;
 
@@ -82,7 +85,7 @@ fn floor_bank(data:&[Trit],floor:u16,width:usize)->Result<Vec<u16>,String>{
     }
     Ok(out)
 }
-fn composite_bank(data:&[Trit])->Result<Vec<(u8,Vec<u16>)>,String>{
+fn composite_bank(data:&[Trit])->Result<BankSet,String>{
     if data.len()!=8 {return Err("composed Omnibit floor requires eight trits".to_owned());}
     let mut first=Vec::with_capacity(BANK_LEN);
     let mut second=Vec::with_capacity(BANK_LEN);
@@ -103,15 +106,15 @@ fn composite_bank(data:&[Trit])->Result<Vec<(u8,Vec<u16>)>,String>{
     Ok(vec![(8,first),(6,second)])
 }
 fn banks_for_case(data:&[Trit], choice:usize)
-    ->Result<(String,Vec<(u8,Vec<u16>)>),String>
+    ->Result<(String,BankSet),String>
 {
-    if choice<4 {
-        let (floor,bits,width)=FLOOR_DEFS[choice];
-        Ok((floor.to_string(),vec![(bits,floor_bank(data,floor,width)?)]))
-    } else if choice==4 {
-        Ok(("256+64".to_owned(),composite_bank(data)?))
-    } else {
-        Err("invalid mixed floor choice".to_owned())
+    match choice.cmp(&4) {
+        Ordering::Less => {
+            let (floor,bits,width)=FLOOR_DEFS[choice];
+            Ok((floor.to_string(),vec![(bits,floor_bank(data,floor,width)?)]))
+        }
+        Ordering::Equal => Ok(("256+64".to_owned(),composite_bank(data)?)),
+        Ordering::Greater => Err("invalid mixed floor choice".to_owned()),
     }
 }
 fn work_proxy(operator:u8, symbols:usize, banks:usize)->usize{
@@ -122,8 +125,8 @@ fn work_proxy(operator:u8, symbols:usize, banks:usize)->usize{
         _=>usize::MAX
     }
 }
-fn checked_omega(id:u8,banks:&[(u8,Vec<u16>)])
-    ->Result<Vec<(u8,Vec<u16>)>,String>
+fn checked_omega(id:u8,banks:&[SymbolBank])
+    ->Result<BankSet,String>
 {
     if usize::from(id)>=CATALOG_COUNT {return Err("operator ID not in source catalog".to_owned());}
     let mut changed=Vec::new();
@@ -148,7 +151,7 @@ fn checked_omega(id:u8,banks:&[(u8,Vec<u16>)])
     }
     Ok(changed)
 }
-fn frame_encoded(id:u8,banks:&[(u8,Vec<u16>)])->Result<Vec<u8>,String>{
+fn frame_encoded(id:u8,banks:&[SymbolBank])->Result<Vec<u8>,String>{
     if usize::from(id)>=CATALOG_COUNT || !(1..=2).contains(&banks.len()){
         return Err("operator selector or bank count invalid".to_owned());
     }
@@ -166,7 +169,7 @@ fn frame_encoded(id:u8,banks:&[(u8,Vec<u16>)])->Result<Vec<u8>,String>{
     }
     Ok(out)
 }
-fn frame_replayed(frame:&[u8],id:u8,original:&[(u8,Vec<u16>)])
+fn frame_replayed(frame:&[u8],id:u8,original:&[SymbolBank])
     ->Result<(),String>
 {
     if frame.len()<3 || frame[0]!=1 || frame[1]!=id
