@@ -196,7 +196,7 @@ def run(case, arm, raw):
             literal_checks = m["watcher_clause_checks"]
         preprocessing_ns = monotonic_ns() - t0
     else:
-        assert case in ("php21", "php8")
+        assert case in ("php21", "php8", "php4sat")
         expr = tuple((1 << v, 0) for v in range(n))
         free = tuple(range(n))
         if arm == "ym_fischer":
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     assert len(sys.argv) == 4
     arm, case, source_path = sys.argv[1:]
     assert arm in ("ym_fischer", "rime_new", "rime_original")
-    assert case in ("php21", "php8", "tseitin128")
+    assert case in ("php21", "php8", "tseitin128", "php4sat")
     raw = Path(source_path).read_text(encoding="ascii")
     receipt = run(case, arm, raw)
     print("HARD_NATIVE|" + repr(receipt) + "|json=0", flush=True)
