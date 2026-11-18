@@ -28,7 +28,7 @@ const HBP_HEADER: &str = "HBPHEADER|schema=pnp.tls.omnibit40.coded.v1|scope=PUBL
 const HBI_HEADER: &str = "HBIHEADER|schema=pnp.tls.omnibit40.index.v1|for=PNP_TLS_OMNI40.hbp|seal=HBI-HBP-SHA-SH-HASH|json=0\n";
 const GC_OWNED: &str = "PNP_TLS_OMNI40_GULP_OWNED.tmp";
 
-type Banks = Vec<(u8, Vec<u16>)>;
+pub(crate) type Banks = Vec<(u8, Vec<u16>)>;
 type Bundle = (String,String,String,Vec<u8>,Vec<u8>);
 
 #[derive(Clone,Debug,Eq,PartialEq)]
@@ -113,7 +113,7 @@ fn unroute(words:&[bridge::FloorWord],n:usize)->Result<Vec<u8>,String>{
         Trit::Zero=>Err("decoded reserved zero trit instead of event".to_owned())
     }).collect()
 }
-fn group_size(route:u8)->Result<usize,String>{
+pub(crate) fn group_size(route:u8)->Result<usize,String>{
     match route {0=>Ok(1),1=>Ok(5),2=>Ok(8),
         _=>Err("unknown binary/ternary/mixed floor route".to_owned())}
 }
@@ -121,7 +121,7 @@ fn floor_bits(route:u8)->Result<Vec<u8>,String>{
     match route{0=>Ok(vec![6]),1=>Ok(vec![8]),2=>Ok(vec![8,6]),
         _=>Err("unknown floor route tag".to_owned())}
 }
-fn banks_for(events:&[u8],route:u8)->Result<Banks,String>{
+pub(crate) fn banks_for(events:&[u8],route:u8)->Result<Banks,String>{
     let group=group_size(route)?;
     if events.len()!=SYMBOLS*group {
         return Err("selected source event window length differs".to_owned());
@@ -207,7 +207,7 @@ fn un_rle(bytes:&[u8])->Result<Vec<u16>,String>{
     }
     Ok(out)
 }
-fn encode_block(id:u8,banks:&Banks)->Result<Vec<u8>,String>{
+pub(crate) fn encode_block(id:u8,banks:&Banks)->Result<Vec<u8>,String>{
     if id>=40{return Err("operator selector outside frozen original catalog".to_owned());}
     let mut frame=vec![id];
     for (bits,data) in banks{
@@ -228,7 +228,7 @@ fn encode_block(id:u8,banks:&Banks)->Result<Vec<u8>,String>{
     }
     Ok(frame)
 }
-fn decode_block(bytes:&[u8],at:&mut usize,route:u8)->Result<Vec<u8>,String>{
+pub(crate) fn decode_block(bytes:&[u8],at:&mut usize,route:u8)->Result<Vec<u8>,String>{
     let count=floor_bits(route)?;
     if *at>=bytes.len(){return Err("missing 40-operator source selector".to_owned());}
     let op=bytes[*at];
