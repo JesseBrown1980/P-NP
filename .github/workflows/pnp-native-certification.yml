@@ -92,7 +92,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -386,13 +386,13 @@ jobs:
           set -euo pipefail
           native/target/release/pnp-native gc-archive-attest source-gac source-neural source-omni evidence | tee PNP_GC_ARCHIVE_ATTEST.hbp
           native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence | tee PNP_GC_ARCHIVE_VERIFY.hbp
-          grep -Fq 'PNP_GC_ARCHIVE|original_bodies=2|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|operator=HELD|live_rotation=HOLD|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GC_ARCHIVE_ATTEST.hbp
+          grep -Fq 'PNP_GC_ARCHIVE|original_bodies=2|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GC_ARCHIVE_ATTEST.hbp
           grep -Fq 'PNP_GC_ARCHIVE_VERIFY|original_bodies=2|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GC_ARCHIVE_VERIFY.hbp
           test "$(grep -c '^GC_ARCHIVE|' evidence/PNP_GC_ARCHIVE.hbp)" -eq 2
           test "$(grep -c '^HBI|' evidence/PNP_GC_ARCHIVE.hbi)" -eq 2
           cmp source-omni/packages/omni-gulp-gc/src/gc.ts evidence/PNP_GC_BODIES/original_gc.ts
           cmp source-omni/packages/omni-gulp-gc/src/gulp.ts evidence/PNP_GC_BODIES/original_gulp.ts
-          grep -Fq '|source_intact=1|archive_intact=1|operator_approval=HELD|live_rotation=HOLD|gc=NEVER_DELETE|gulp_feedback=HELD|' evidence/PNP_GC_ARCHIVE.hbp
+          grep -Fq '|source_intact=1|archive_intact=1|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|gc=NEVER_DELETE|gulp_feedback=HELD|' evidence/PNP_GC_ARCHIVE.hbp
           ( cd evidence && sha256sum PNP_GC_ARCHIVE.hbp PNP_GC_ARCHIVE.hbi PNP_GC_ARCHIVE.anchor PNP_GC_BODIES/original_gc.ts PNP_GC_BODIES/original_gulp.ts > PNP_GC_ARCHIVE_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 )
       - name: GC archive source/target/HBI/HBP/journal failure controls
@@ -434,6 +434,71 @@ jobs:
           native/target/release/pnp-native gc-archive-verify source-gac source-neural source-omni evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 )
           echo 'PNP_GC_ARCHIVE_NEGATIVE|overwrite=REJECTED|archive_body=REJECTED|missing_journal=REJECTED|original_source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: Automatic post-GULP durable compact summaries and actual raw-data reclamation
+        run: |
+          set -euo pipefail
+          mkdir evidence/PNP_GULP_EPHEMERAL
+          cp native/fixtures/GULP_OWNED_EVENTS.hbp evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          sed -i 's/seq=5|kind=GENIUS/seq=6|kind=GENIUS/' evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          if native/target/release/pnp-native gulp-discard source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gulp-invalid.log" 2>&1; then
+            echo 'PNP_GULP_NEGATIVE_FAIL|malformed_input=DISCARDED'
+            exit 1
+          fi
+          test -f evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          test ! -e evidence/PNP_GULP.hbp
+          cp native/fixtures/GULP_OWNED_EVENTS.hbp evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          printf 'not-a-gulp-journal' > evidence/PNP_GULP.hbp
+          if native/target/release/pnp-native gulp-discard source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gulp-precommit.log" 2>&1; then
+            echo 'PNP_GULP_NEGATIVE_FAIL|uncommitted_receipt=DISCARDED'
+            exit 1
+          fi
+          test -f evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          rm evidence/PNP_GULP.hbp
+          native/target/release/pnp-native gulp-discard source-gac source-neural source-omni evidence | tee PNP_GULP_DISCARD_RUN.hbp
+          native/target/release/pnp-native gulp-discard-verify source-gac source-neural source-omni evidence | tee PNP_GULP_DISCARD_VERIFY.hbp
+          grep -Fq 'PNP_GULP_GC|events=10|grouping=KIND_GLYPH|summary=COMMITTED|raw_owned=DELETED|source_archive=PRESERVED|manual_approval=NOT_REQUIRED|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GULP_DISCARD_RUN.hbp
+          grep -Fq 'PNP_GULP_GC_VERIFY|events=10|raw_owned=ABSENT|patterns=RETAINED|source_archive=PRESERVED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_GULP_DISCARD_VERIFY.hbp
+          test ! -e evidence/PNP_GULP_EPHEMERAL
+          test "$(grep -c '^GULP_KIND|' evidence/PNP_GULP.hbp)" -eq 4
+          test "$(grep -c '^GULP_GLYPH|' evidence/PNP_GULP.hbp)" -eq 3
+          test "$(grep -c '^HBI|' evidence/PNP_GULP.hbi)" -eq 9
+          grep -Fq '|id=MISTAKE|kind=MISTAKE|count=4|' evidence/PNP_GULP.hbp
+          grep -Fq '|id=GENIUS|kind=GENIUS|count=3|' evidence/PNP_GULP.hbp
+          grep -Fq '|id=MINUS|glyph=MINUS|count=4|' evidence/PNP_GULP.hbp
+          grep -Fq '|id=PLUS|glyph=PLUS|count=3|' evidence/PNP_GULP.hbp
+          grep -Fq '|status=DISCARDED|seal=HBI-HBP-SHA-SH-HASH|' evidence/PNP_GULP_DISCARD.hbp
+          cmp source-omni/packages/omni-gulp-gc/src/gc.ts evidence/PNP_GC_BODIES/original_gc.ts
+          cmp source-omni/packages/omni-gulp-gc/src/gulp.ts evidence/PNP_GC_BODIES/original_gulp.ts
+          ( cd evidence && sha256sum PNP_GULP.hbp PNP_GULP.hbi PNP_GULP.anchor PNP_GULP_DISCARD.hbp > PNP_GULP_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_GULP_DIGESTS.sha256 )
+      - name: Independent post-GULP deletion evidence tamper and idempotency controls
+        run: |
+          set -euo pipefail
+          if native/target/release/pnp-native gulp-discard source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gulp-duplicate.log" 2>&1; then
+            echo 'PNP_GULP_NEGATIVE_FAIL|second_delete=ACCEPTED'
+            exit 1
+          fi
+          test ! -e evidence/PNP_GULP_EPHEMERAL
+          for name in PNP_GULP.hbp PNP_GULP.hbi PNP_GULP.anchor PNP_GULP_DISCARD.hbp; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native gulp-discard-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gulp-tamper.log" 2>&1; then
+              echo "PNP_GULP_NEGATIVE_FAIL|tampered=$name"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          mkdir evidence/PNP_GULP_EPHEMERAL
+          cp native/fixtures/GULP_OWNED_EVENTS.hbp evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          if native/target/release/pnp-native gulp-discard-verify source-gac source-neural source-omni evidence > "$RUNNER_TEMP/gulp-raw-returned.log" 2>&1; then
+            echo 'PNP_GULP_NEGATIVE_FAIL|raw_reappeared=ACCEPTED'
+            exit 1
+          fi
+          rm evidence/PNP_GULP_EPHEMERAL/pending.events.hbp
+          rmdir evidence/PNP_GULP_EPHEMERAL
+          native/target/release/pnp-native gulp-discard-verify source-gac source-neural source-omni evidence >/dev/null
+          ( cd evidence && sha256sum -c PNP_GULP_DIGESTS.sha256 )
+          echo 'PNP_GULP_NEGATIVE|bad_input=PRESERVED|early_commit=PRESERVED|raw_reappeared=REJECTED|receipt_tamper=REJECTED|real_delete=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -506,10 +571,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -541,12 +606,20 @@ jobs:
           sha256sum -c PNP_FABRIC_GC_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_PRISM_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_GULP_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_GULP_GC|events=10|grouping=KIND_GLYPH|summary=COMMITTED|raw_owned=DELETED|' PNP_GULP_DISCARD_RUN.hbp
+          grep -Fq 'PNP_GULP_GC_VERIFY|events=10|raw_owned=ABSENT|patterns=RETAINED|' PNP_GULP_DISCARD_VERIFY.hbp
+          test ! -e PNP_GULP_EPHEMERAL
+          test "$(grep -c '^HBI|' PNP_GULP.hbi)" -eq 9
+          grep -Fq '|id=MISTAKE|kind=MISTAKE|count=4|' PNP_GULP.hbp
+          grep -Fq '|id=GENIUS|kind=GENIUS|count=3|' PNP_GULP.hbp
+          grep -Fq '|status=DISCARDED|seal=HBI-HBP-SHA-SH-HASH|' PNP_GULP_DISCARD.hbp
           grep -Fq 'PNP_GC_ARCHIVE|original_bodies=2|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|' PNP_GC_ARCHIVE_ATTEST.hbp
           grep -Fq 'PNP_GC_ARCHIVE_VERIFY|original_bodies=2|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|' PNP_GC_ARCHIVE_VERIFY.hbp
           test "$(grep -c '^GC_ARCHIVE|' PNP_GC_ARCHIVE.hbp)" -eq 2
           test "$(grep -c '^HBI|' PNP_GC_ARCHIVE.hbi)" -eq 2
           cmp PNP_GC_BODIES/original_gc.ts PNP_GC_BODIES/original_gc.ts
-          grep -Fq '|source_intact=1|archive_intact=1|operator_approval=HELD|live_rotation=HOLD|' PNP_GC_ARCHIVE.hbp
+          grep -Fq '|source_intact=1|archive_intact=1|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|' PNP_GC_ARCHIVE.hbp
           grep -Fq 'PNP_PRISM|rung=256_1024|bits=40|bytes_per_block=5|glyphs_per_block=4|cube_bytes=3200|cube_glyphs=2560|cases=15|' PNP_PRISM_ATTEST.hbp
           grep -Fq 'PNP_PRISM_VERIFY|cases=15|original_source=VERIFIED|inverse=EXACT|' PNP_PRISM_VERIFY.hbp
           test "$(grep -c '^PRISM|' PNP_PRISM.hbp)" -eq 15
