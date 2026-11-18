@@ -328,7 +328,7 @@ pub fn attest(models: &Path, source_archive: &Path, output: &Path) -> Result<usi
 }
 pub fn verify(models: &Path, source_archive: &Path, output: &Path) -> Result<usize, String> {
     let root = source_digest(source_archive)?;
-    let (hbp,hbi,anchor) = create(models, &root)?;
+    let (hbp,hbi,anchor) = create(models, &root, source_archive)?;
     for (name,text) in [
         ("PNP_CHECKPOINT.hbp",hbp),("PNP_CHECKPOINT.hbi",hbi),("PNP_CHECKPOINT.anchor",anchor)
     ] {
