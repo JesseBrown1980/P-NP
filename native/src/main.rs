@@ -14,6 +14,18 @@ fn main() {
     let mut arguments = std::env::args().skip(1);
     let result: Result<(), String> = (|| {
         match arguments.next().as_deref() {
+        Some("rime-sat-bench") => {
+            let path = arguments.next().ok_or("missing source-pinned four-axes GGUF")?;
+            let rounds = arguments.next().unwrap_or_else(|| "5".to_owned())
+                .parse::<usize>().map_err(|_| "invalid benchmark rounds")?;
+            if arguments.next().is_some() {
+                return_fail("too many SAT benchmark arguments");
+            }
+            for line in pnp_native::rime_sat_bench::run(Path::new(&path), rounds)? {
+                println!("{line}");
+            }
+            Ok(())
+        },
         Some("rime-disk-attest") => {
             let path = arguments.next().ok_or("missing original four-axes GGUF path")?;
             if arguments.next().is_some() {
