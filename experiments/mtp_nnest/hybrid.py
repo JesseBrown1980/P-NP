@@ -193,7 +193,7 @@ def tree_gate(claims,expected,leaves,inject=None):
         return raw,check,seal(addr,raw,ids),fine
 
     root=node("R",0,0,leaves)
-    assert executed==(3**(depth+1)-1)//2
+    assert executed==(pow(3,depth+1)-1)//2
     assert watchers==executed
     assert root[0]==root[1] if inject is None else not root[3]
     assert root[3] == (inject is None)
