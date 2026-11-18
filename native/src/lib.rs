@@ -8,6 +8,7 @@ pub mod checkpoint;
 pub mod ensemble;
 pub mod freeze;
 pub mod fischer_prime_tower;
+pub mod layered_sphere;
 pub mod fabric_gc;
 pub mod gc_archive;
 pub mod gulp_gc;
