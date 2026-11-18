@@ -31,6 +31,8 @@ pub mod tls_omnibit_gc;
 pub mod tls_entropy_omnibit;
 pub mod tls_stream_fabric;
 pub mod http0_fabric_witness;
+pub mod http0_compute;
+pub mod microkernel_compute;
 pub mod triad;
 pub mod wave;
 
