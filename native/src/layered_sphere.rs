@@ -10,6 +10,7 @@ use crate::fischer_prime_tower::reverse_fischer_address;
 use crate::freeze::fischer_address;
 use crate::matrix::{coordinates, CELLS, OMEGA};
 use crate::omega_operator_catalog as omega;
+use crate::omnimets_ledger::{Convergence, Lane, Meter};
 use crate::prism;
 use crate::sha256::hash_bytes;
 use crate::ternary::Trit;
@@ -314,24 +315,35 @@ impl Room {
     }
 }
 
-/// Bounded three-child shell; each child makes an independently checked
-/// presentation and parent verifies all three original source identities.
-pub fn three_child_shell(source: &LevelPacket, operator: u8)
+/// Bounded original OmniMets K=3 nested shell. Each independent
+/// child is presented to a separately decoded parent; after three matching
+/// presentations the shell ratifies and seals with source-authenticated
+/// OmniMets counters. Early SEAL must defer.
+pub fn three_child_shell(source: &LevelPacket, operator: u8, meter: &mut Meter)
     -> Result<usize, &'static str>
 {
     let mut successful = 0;
     let mut parent = Room::default();
+    let mut convergence = Convergence::default();
+    if convergence.seal(meter).is_ok() {
+        return Err("OmniMets sealed unratified shell");
+    }
     let original = source.play()?;
     for _ in 0..3 {
         let mut child = Room::default();
-        let message = child.process(source, operator)?;
+        let message = meter.execute(Lane::Cross, || child.process(source, operator))?;
         if message != original || !child.clear() || child.gulps() != 1 {
+            convergence.observe(false)?;
             return Err("child presentation/release mismatch");
         }
         let received = LevelPacket::freeze(source.name()?, &message)?;
-        if parent.process(&received, operator)? != original
-            || !parent.clear()
-        {
+        let reflected = meter.execute(Lane::Digestive, || {
+            parent.process(&received, operator)
+        })?;
+        let verified = reflected == original && parent.clear()
+            && received.independently_recover()? == original;
+        convergence.observe(verified)?;
+        if !verified {
             return Err("parent MTP/third watcher mismatch");
         }
         successful += 1;
@@ -339,10 +351,15 @@ pub fn three_child_shell(source: &LevelPacket, operator: u8)
     if parent.gulps() != 3 {
         return Err("parent room not rearmed for every presentation");
     }
+    convergence.ratify(meter)?;
+    convergence.seal(meter)?;
+    if !convergence.sealed() {
+        return Err("OmniMets did not seal accepted shell");
+    }
     Ok(successful)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SphereStats {
     pub rooms: usize,
     pub floors: usize,
@@ -354,6 +371,7 @@ pub struct SphereStats {
     pub source_bytes: usize,
     pub arbitrary_null_checks: usize,
     pub rejected: usize,
+    pub omnimets: Meter,
 }
 
 pub fn certify() -> Result<SphereStats, &'static str> {
@@ -362,6 +380,7 @@ pub fn certify() -> Result<SphereStats, &'static str> {
         microkernel_gulps: 0, child_presentations: 0,
         star_glyphs: 0, paid_bytes: 0, source_bytes: 0,
         arbitrary_null_checks: 0, rejected: 0,
+        omnimets: Meter::default(),
     };
     for count in [3_usize, 9, 27, 81] {
         for room in 0..count {
@@ -374,7 +393,17 @@ pub fn certify() -> Result<SphereStats, &'static str> {
             let mut room_kernel = Room::default();
             for (floor_name, _, _) in FLOORS {
                 let packet = LevelPacket::freeze(floor_name, &trits)?;
-                let played = room_kernel.process(&packet, 0)?;
+                let lane = match floor_name {
+                    64 => Lane::Muscular,
+                    256 => Lane::Skeletal,
+                    1024 => Lane::Nervous,
+                    4096 => Lane::Circulatory,
+                    16384 => Lane::Endocrine,
+                    _ => return Err("uncertified OmniMets floor lane"),
+                };
+                let played = stats.omnimets.execute(lane, || {
+                    room_kernel.process(&packet, 0)
+                })?;
                 if played != trits || !room_kernel.clear() {
                     return Err("five-floor replay or garbage collector failed");
                 }
@@ -397,16 +426,30 @@ pub fn certify() -> Result<SphereStats, &'static str> {
                     stats.transitions += 1;
                 }
                 if floor_name == 64 {
-                    stats.child_presentations += three_child_shell(&packet, 0)?;
+                    stats.child_presentations += three_child_shell(
+                        &packet, 0, &mut stats.omnimets,
+                    )?;
+                    stats.microkernel_gulps += 6;
                 }
                 stats.paid_bytes += packet.paid_bytes();
                 stats.source_bytes += trits.len();
                 stats.floors += 1;
                 last = Some(packet);
             }
-            if room_kernel.gulps() != 5 {
-                return Err("microkernel owned scratch not deleted after every slice");
+            // The last floor's operator 1 is deliberately unavailable for
+            // 14-bit glyphs. It must HALT, count ERROR, and still GULP the room.
+            let final_floor = last.as_ref().ok_or("empty final floor")?;
+            if final_floor.name()? != 16384
+                || stats.omnimets.execute(Lane::Cross, || {
+                    room_kernel.process(final_floor, 1)
+                }).is_ok()
+                || !room_kernel.clear()
+                || room_kernel.gulps() != 6
+            {
+                return Err("OmniMets rejected-workload room did not rearm");
             }
+            stats.rejected += 1;
+            stats.microkernel_gulps += 1;
             for anchor in [0_usize, OMEGA, 26_usize] {
                 let visit = fischer_from_any_center(anchor, room)?;
                 if visit.len() != CELLS {
@@ -418,10 +461,21 @@ pub fn certify() -> Result<SphereStats, &'static str> {
         }
     }
     if stats.rooms != 120 || stats.floors != 600 || stats.transitions != 480
-        || stats.microkernel_gulps != 600 || stats.child_presentations != 360
+        || stats.microkernel_gulps != 1440 || stats.child_presentations != 360
         || stats.star_glyphs != 5400 || stats.arbitrary_null_checks != 360
+        || stats.rejected != 120
     {
         return Err("sphere-shell receipt census changed");
+    }
+    let counts = stats.omnimets.totals();
+    if counts.dispatches != 1440 || counts.promotions != 1320
+        || counts.errors != 120 || counts.halts != 120
+        || counts.deferrals != 120 || counts.samples != 1440
+        || stats.omnimets.ratifications() != 120
+        || stats.omnimets.seals() != 120
+        || !stats.omnimets.verify_receipt(&stats.omnimets.receipt())
+    {
+        return Err("original-source OmniMets counters or closure changed");
     }
     Ok(stats)
 }
@@ -434,7 +488,7 @@ mod tests {
     fn five_level_reversible_star_ladder_and_mcp_rearm() {
         let stats = certify().expect("all accepted original source floor reversals");
         assert_eq!(stats.transitions, 480);
-        assert_eq!(stats.microkernel_gulps, 600);
+        assert_eq!(stats.microkernel_gulps, 1440);
     }
     #[test]
     fn all_star_triples_and_floor_reserved_controls() {
