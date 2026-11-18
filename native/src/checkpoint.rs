@@ -106,7 +106,7 @@ fn read_zip(data: &[u8]) -> Result<Vec<Entry<'_>>, String> {
             || name.split('/').any(|piece| piece.is_empty() || piece == "..")
             || !seen.insert(name)
         {
-            return Err("unsafe or duplicate checkpoint ZIP name".to_owned());
+            return Err("invalid or duplicate checkpoint ZIP name".to_owned());
         }
         let local_len = usize::from(read16(data, local + 26).ok_or("local path")?);
         let local_extra = usize::from(read16(data, local + 28).ok_or("local extra")?);
