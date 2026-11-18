@@ -41,7 +41,7 @@ pub struct Stats{
     pub arms:Vec<Arm>,
     pub full_binary_bytes:usize,
 }
-fn source_tasks(bytes:&[u8])->Result<Vec<Task>,String>{
+pub(crate) fn source_tasks(bytes:&[u8])->Result<Vec<Task>,String>{
     let streams=source_event_frames(bytes)?;
     if streams.len()!=18 {return Err("expected 18 source-frozen streams".into());}
     let mut tasks=Vec::with_capacity(TASKS);
@@ -70,7 +70,7 @@ fn source_tasks(bytes:&[u8])->Result<Vec<Task>,String>{
 }
 /// Primary exact finite stencil, 27 signed ternary cells x 243 ticks.
 /// Independent HTTP-0 fabric computes by a separately written ring method.
-fn compute_primary(task:&Task)->[u64;CELLS]{
+pub(crate) fn compute_primary(task:&Task)->[u64;CELLS]{
     let mut state=[0_u64;CELLS];
     let initial=task.seed%RIME_PRIME;
     for (i,value) in state.iter_mut().enumerate() {
