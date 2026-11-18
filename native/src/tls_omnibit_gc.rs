@@ -438,14 +438,12 @@ fn make_bundle(source_sha:&str,operator_sha:&str,inputs:&[Input],
                     restored.push(Decoded{mode,rep,shuffle,route,events:input.events.clone()});
                 }
             }
-            for route in 0..3_usize{
-                let holder=pair[0][route];
-                let shuffled=pair[1][route];
-                push("TLS_OMNI_PAIR",&format!("m{mode}_r{rep}_a{route}"),&format!(
-                    "mode={mode}|rep={rep}|route={route}|heldout_frame_bytes={holder}|shuffled_frame_bytes={shuffled}|heldout_minus_shuffled_bytes={}|relation=TEMPORAL_ORDER_CONTROL|identity_baseline=PER_STREAM|event_counts_identical=YES",
-                    holder as i64-shuffled as i64
-                ));
-            }
+            push("TLS_OMNI_PAIR",&format!("m{mode}_r{rep}"),&format!(
+                "mode={mode}|rep={rep}|binary_heldout_bytes={}|binary_shuffled_bytes={}|binary_heldout_minus_shuffle={}|ternary_heldout_bytes={}|ternary_shuffled_bytes={}|ternary_heldout_minus_shuffle={}|mixed_heldout_bytes={}|mixed_shuffled_bytes={}|mixed_heldout_minus_shuffle={}|relation=TEMPORAL_ORDER_CONTROL|identity_baseline=PER_STREAM|event_counts_identical=YES",
+                pair[0][0],pair[1][0],pair[0][0] as i64-pair[1][0] as i64,
+                pair[0][1],pair[1][1],pair[0][1] as i64-pair[1][1] as i64,
+                pair[0][2],pair[1][2],pair[0][2] as i64-pair[1][2] as i64
+            ));
         }
     }
     for (mode,amounts) in by_mode.iter().enumerate(){
