@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -609,6 +609,59 @@ jobs:
           native/target/release/pnp-native omnibit-verify source-omnibit evidence evidence > /dev/null
           ( cd evidence && sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 )
           echo 'PNP_OMNIBIT_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|payload=REJECTED|retention_exact_without_payload=HOLD|status=PASS|json=0'
+      - name: All 40 original Omnibit operators with four floors and composed 256-plus-64
+        run: |
+          set -euo pipefail
+          cmp native/src/omega_operator_catalog.rs source-omnibit/reference/omega-operator-catalog-v0/omega_operator_catalog.rs
+          test "$(git hash-object native/src/omega_operator_catalog.rs)" = '1535e158b21b1c2b9ece4dce84e0e9779498ec19'
+          native/target/release/pnp-native omni40-attest source-omnibit evidence evidence | tee PNP_OMNI40_ATTEST.hbp
+          native/target/release/pnp-native omni40-verify source-omnibit evidence evidence | tee PNP_OMNI40_VERIFY.hbp
+          grep -Fq 'PNP_OMNI40|original_catalog=BYTE_IDENTICAL|operators=40|rnq=8|tri=12|pi=20|floor_widths=6_8_10_12|compound=256_PLUS_64|public_fixtures=20|vantage_labels=6|candidate_trials=20160|selections=504|retention=EXACT_REPLAY_REQUIRED|receipts=20710|replay=EXACT|scoreboard=NOT_SCORED|winner=NONE|seat_local_runs=0|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_OMNI40_ATTEST.hbp
+          grep -Fq 'PNP_OMNI40_VERIFY|operators=40|candidate_trials=20160|selections=504|receipts=20710|all_payload_bytes=VERIFIED|source_git=PASS|floor_inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_OMNI40_VERIFY.hbp
+          test "$(grep -c '^OMNI40_OPERATOR|' evidence/PNP_OMNI40.hbp)" -eq 40
+          test "$(grep -c '^OMNI40_FLOOR|' evidence/PNP_OMNI40.hbp)" -eq 4
+          test "$(grep -c '^OMNI40_RUN|' evidence/PNP_OMNI40.hbp)" -eq 20160
+          test "$(grep -c '^OMNI40_SELECT|' evidence/PNP_OMNI40.hbp)" -eq 504
+          test "$(grep -c '^OMNI40_SOURCE|' evidence/PNP_OMNI40.hbp)" -eq 1
+          test "$(grep -c '^OMNI40_SUMMARY|' evidence/PNP_OMNI40.hbp)" -eq 1
+          test "$(grep -c '^HBI|' evidence/PNP_OMNI40.hbi)" -eq 20710
+          grep -Fq '|operator_id=0|name=RNQ_I_000|family=RNQ8|' evidence/PNP_OMNI40.hbp
+          grep -Fq '|operator_id=8|name=TRI12_D00|family=TRI12|' evidence/PNP_OMNI40.hbp
+          grep -Fq '|operator_id=39|name=PI20_FACE_19|family=PI20|' evidence/PNP_OMNI40.hbp
+          grep -Fq '|floor=256+64|original_trit_count=8|banks=2|symbols=40|' evidence/PNP_OMNI40.hbp
+          grep -Fq '|rnq8_runs=4032|tri12_runs=6048|pi20_runs=10080|full_floor_runs=19200|composed_256_64_runs=960|trials=20160|selection_decisions=504|selector_id_zero=504|' evidence/PNP_OMNI40.hbp
+          grep -Fq '|seat_local_runs=0|scoreboard=NOT_SCORED|winner=NONE|full_decoder_charge=HOLD|' evidence/PNP_OMNI40.hbp
+          for name in PNP_OMNI40.hbp PNP_OMNI40.hbi PNP_OMNI40.anchor PNP_OMNI40_PAYLOAD.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/frozen-$name"
+          done
+          native/target/release/pnp-native omni40-attest source-omnibit evidence evidence > "$RUNNER_TEMP/second-omni40.hbp"
+          for name in PNP_OMNI40.hbp PNP_OMNI40.hbi PNP_OMNI40.anchor PNP_OMNI40_PAYLOAD.bin; do
+            cmp "evidence/$name" "$RUNNER_TEMP/frozen-$name"
+          done
+          ( cd evidence && sha256sum PNP_OMNI40.hbp PNP_OMNI40.hbi PNP_OMNI40.anchor PNP_OMNI40_PAYLOAD.bin > PNP_OMNI40_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_OMNI40_DIGESTS.sha256 )
+      - name: Original Omega 40 operator HBI HBP and selector payload adversarial controls
+        run: |
+          set -euo pipefail
+          for name in PNP_OMNI40.hbp PNP_OMNI40.hbi PNP_OMNI40.anchor PNP_OMNI40_PAYLOAD.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/original-$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native omni40-verify source-omnibit evidence evidence > "$RUNNER_TEMP/omni40-rejected.hbp" 2>&1; then
+              echo "PNP_OMNI40_NEGATIVE_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/original-$name" "evidence/$name"
+          done
+          cp source-omnibit/reference/omega-operator-catalog-v0/omega_operator_catalog.rs "$RUNNER_TEMP/omni40-original-source.rs"
+          printf X >> source-omnibit/reference/omega-operator-catalog-v0/omega_operator_catalog.rs
+          if native/target/release/pnp-native omni40-verify source-omnibit evidence evidence > "$RUNNER_TEMP/omni40-source-rejected.hbp" 2>&1; then
+            echo 'PNP_OMNI40_NEGATIVE_FAIL|original_source=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/omni40-original-source.rs" source-omnibit/reference/omega-operator-catalog-v0/omega_operator_catalog.rs
+          native/target/release/pnp-native omni40-verify source-omnibit evidence evidence > /dev/null
+          ( cd evidence && sha256sum -c PNP_OMNI40_DIGESTS.sha256 )
+          echo 'PNP_OMNI40_NEGATIVE|operator_selector=REJECTED|original_source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|payload=REJECTED|restored=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -681,10 +734,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -719,6 +772,16 @@ jobs:
           sha256sum -c PNP_GULP_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_BRIDGE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_OMNI40_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_OMNI40|original_catalog=BYTE_IDENTICAL|operators=40|rnq=8|tri=12|pi=20|floor_widths=6_8_10_12|compound=256_PLUS_64|public_fixtures=20|vantage_labels=6|candidate_trials=20160|selections=504|' PNP_OMNI40_ATTEST.hbp
+          grep -Fq 'PNP_OMNI40_VERIFY|operators=40|candidate_trials=20160|selections=504|receipts=20710|all_payload_bytes=VERIFIED|' PNP_OMNI40_VERIFY.hbp
+          test "$(grep -c '^OMNI40_OPERATOR|' PNP_OMNI40.hbp)" -eq 40
+          test "$(grep -c '^OMNI40_RUN|' PNP_OMNI40.hbp)" -eq 20160
+          test "$(grep -c '^OMNI40_SELECT|' PNP_OMNI40.hbp)" -eq 504
+          test "$(grep -c '^HBI|' PNP_OMNI40.hbi)" -eq 20710
+          grep -Fq '|rnq8_runs=4032|tri12_runs=6048|pi20_runs=10080|full_floor_runs=19200|composed_256_64_runs=960|' PNP_OMNI40.hbp
+          grep -Fq '|selector_id_zero=504|' PNP_OMNI40.hbp
+          grep -Fq '|scoreboard=NOT_SCORED|winner=NONE|full_decoder_charge=HOLD|' PNP_OMNI40.hbp
           grep -Fq 'PNP_OMNIBIT|original_source=VERIFIED|source_files=5|seats=3|views=2|routing_arms=3|public_fixtures=20|runs=360|exact_replay=360|' PNP_OMNIBIT_ATTEST.hbp
           grep -Fq 'PNP_OMNIBIT_VERIFY|source_pins=PASS|public_fixture=20|runs=360|replay=EXACT|archive_payload=COMPLETE|' PNP_OMNIBIT_VERIFY.hbp
           test "$(grep -c '^OMNIBIT_RUN|' PNP_OMNIBIT.hbp)" -eq 360
