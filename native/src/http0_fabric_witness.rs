@@ -222,7 +222,7 @@ fn decode_independently(payload: &[u8], snapshot: &[u8])
 fn independent_address(frame: usize, arity: usize) -> Option<u64> {
     if !matches!(arity, 3 | 27 | 81) || frame >= 54 { return None; }
     let lane = frame % arity;
-    let position = frame / arity + lane / 27;
+    let position = lane / 27;
     let glyph = lane % 27;
     let mut point = 1_u64;
     for _ in 0..(position * 27 + glyph) {
@@ -398,7 +398,7 @@ impl FabricClient {
                   snapshot: &[u8], payload: &[u8]) -> Result<Vec<u8>, String> {
         let lane = frame % arity;
         let address = fischer_address((lane % 27) as u64,
-            (frame / arity + lane / 27) as u64).ok_or("Fischer routing impossible")?;
+            (lane / 27) as u64).ok_or("Fischer routing impossible")?;
         let mut body = Vec::with_capacity(snapshot.len() + payload.len() + 7);
         if !matches!(codec, 1 | 2) { return Err("unknown fabric codec".into()); }
         body.push(codec);
@@ -463,7 +463,7 @@ mod tests {
             for frame in 0..54 {
                 let lane=frame%arity;
                 assert_eq!(independent_address(frame,arity), fischer_address(
-                    (lane%27) as u64,(frame/arity+lane/27) as u64));
+                    (lane%27) as u64,(lane/27) as u64));
             }
         }
         assert_eq!(independent_address(54,3),None);
