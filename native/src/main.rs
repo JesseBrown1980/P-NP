@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
-    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate,
+    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate, omnibit_charged_codec,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +94,40 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("omni40-codec-attest") | Some("omni40-codec-bench") => {
+            let original = arguments.next().ok_or("missing original integrated Omnibit source")?;
+            let prior = arguments.next().ok_or("missing previous 40 operator HBI/HBP receipts")?;
+            let out = arguments.next().ok_or("missing coding archive output")?;
+            if arguments.next().is_some(){return_fail("too many charged codec arguments");}
+            let original=Path::new(&original);
+            let prior=Path::new(&prior);
+            let out=Path::new(&out);
+            let (stats,elapsed)=omnibit_charged_codec::bench(original,prior,out)?;
+            println!("PNP_OMNI40_CODEC|source_contract=GIT_PINNED|coder=RAW_RLE_EXPERIMENTAL|source_operators=40|patterns=7|general=5|targeted_controls=2|floor_routes=5|synthetic_views=2|contexts={}|candidates={}|receipts={}|selected_nonidentity={}|baseline_raw_archive_bytes={}|selected_archive_bytes={}|candidate_evidence_bytes={}|charged_executable_bytes={}|model_external_bytes=0|full_standalone_decode=PASS|operator_inverse=PASS|gc_exact_replay=RETAIN_PAYLOAD|source_hutter_score=NOT_CLAIMED|source_winner=NONE|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0",stats.contexts,stats.candidates,stats.receipts,stats.selected_nonidentity,stats.baseline_bytes,stats.selected_bytes,stats.candidate_archive_bytes,stats.program_bytes);
+            println!("PNP_OMNI40_CODEC_TIMING|scope=ATTEST_AND_REVERIFY|elapsed_wall_ns={elapsed}|peak_rss=MEASURED_EXTERNALLY|cpu=RUNNER_ENVIRONMENT|json=0");
+            Ok(())
+        }
+        Some("omni40-codec-verify") => {
+            let original=arguments.next().ok_or("missing original integrated Omnibit source")?;
+            let prior=arguments.next().ok_or("missing prior 40-operator receipts")?;
+            let out=arguments.next().ok_or("missing coding archive")?;
+            if arguments.next().is_some(){return_fail("too many charged codec verify arguments");}
+            let stats=omnibit_charged_codec::verify(
+                Path::new(&original),Path::new(&prior),Path::new(&out)
+            )?;
+            println!("PNP_OMNI40_CODEC_VERIFY|contexts={}|candidates={}|receipts={}|selected_bytes={}|program_bytes={}|upstream=VERIFIED|original_source=VERIFIED|selected_replay=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0",stats.contexts,stats.candidates,stats.receipts,stats.selected_bytes,stats.program_bytes);
+            Ok(())
+        }
+        Some("omni40-codec-unpack") => {
+            let original=arguments.next().ok_or("missing standalone coding archive path")?;
+            let output=arguments.next().ok_or("missing canonical restored source path")?;
+            if arguments.next().is_some(){return_fail("too many decode arguments");}
+            let restored=omnibit_charged_codec::unpack_to_file(
+                Path::new(&original),Path::new(&output)
+            )?;
+            println!("PNP_OMNI40_CODEC_UNPACK|restore_bytes={restored}|source=ARCHIVE_ONLY|external_model=0|original_omega_catalog=IN_BINARY|state=EXACT|status=PASS|json=0");
             Ok(())
         }
         Some("omni40-attest") => {
@@ -406,7 +440,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | omni40-codec-attest SOURCE UPSTREAM OUT | omni40-codec-bench SOURCE UPSTREAM OUT | omni40-codec-verify SOURCE UPSTREAM OUT | omni40-codec-unpack ARCHIVE OUTPUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
