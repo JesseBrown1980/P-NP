@@ -144,6 +144,24 @@ fn family_roster() -> Result<(usize, usize, usize), String> {
         let kind = field(&f, "kind")?;
         let original = field(&f, "origin_blob")?;
         let status = field(&f, "status")?;
+        // Preserve the four independently documented healthcare model
+        // lineage blobs and every plane's distinct promotion state.
+        let expected: (&str, &str) = match id {
+            "L0" => ("510f78890ec94b113f0610afbade8bafe6ca20e0", "HOLD_FORWARD"),
+            "L1" => ("99e3087a10ee58e90c0935f5ab63b72fd3cdd07e", "HOLD_FORWARD"),
+            "L2" => ("56329e61eb3e6ddb3ee97b46f997dd8dd8c6b39f", "HOLD_FORWARD"),
+            "L4" => ("886b3b0c0cdbddba983fa8c3ae083c4520d38f0e", "HOLD_FORWARD"),
+            "G1" => ("482c6a9ebd21935ee2585820a97ecae57b42b4b8", "HOLD_JL_PARITY"),
+            "G2" => ("0b1673c52048c4c7212e8e9a0e2cabb33429b1bb", "HOLD_JL_PARITY"),
+            "G3" => ("none", "HOLD_SOURCE"),
+            "G4" => ("9006f5cca08fab56c906bb67237e17974090cfe8", "SOURCE_PORT_TEST"),
+            "SHANNON" => ("b101c0989de3af0ca41db0eac1293c758d7e5296", "HOLD_ENTROPY_PARITY"),
+            "SHA" => ("b101c0989de3af0ca41db0eac1293c758d7e5296", "ACCEPTED_PR31"),
+            _ => return Err("unknown source lineage".to_owned()),
+        };
+        if (original, status) != expected {
+            return Err(format!("source lineage or GNN promotion state drift: {id}"));
+        }
         if kind == "trained_neural" {
             neural += 1;
             if status != "HOLD_FORWARD"
