@@ -25,9 +25,18 @@ The accepted source generator is
 5. Verify the whole-file SHA at admission and after the completed replay
    boundary, and reject changed bytes, lengths, coordinates, indices, framing
    and false Fischer addresses.
-6. Send one bounded 11-byte request and receive a 15-byte response over real
+6. Reconstruct each of the 24 actual 27-cell tensors from three orthogonal
+   nine-cell sum shadows (rank 19) plus eight retained corner coordinates
+   (indices 0, 1, 3, 4, 9, 10, 12, 13). Compare exact recovery with the
+   unchanged source values. A changed residual may define a different
+   shadow-consistent cube; source SHA and independent original comparisons
+   bind the witness to the published body.
+7. Send one bounded 11-byte request and receive a 15-byte response over real
    TCP loopback, comparing the returned coordinate against an independently
    performed source-file address read.
+
+The orthogonal three-shadow + eight-corner residual reconstruction is
+now an additional exact witness in the same acceptance gate.
 
 The three paths in this first gate are **direct store**, **forward Rime**, and
 **inverse Rime**. They are source-bound computational views. They are distinct
@@ -69,10 +78,11 @@ strict Clippy, no extra crates and repository audit must also pass.
   including source-specific training material when justified. **Freeze**
   commits verified state and source identity; **play** reads immutable
   addresses. Next generations are committed only after the witness accepts.
-- Full XY/YZ/ZX shadows have rank 19 on a 27-cell cube, so eight additional
-  independent residual coordinates are required for a general exact inverse.
-  Reuse the existing `freeze.rs` reversible column witness, and specify the
-  exact eight-coordinate complement before claiming three-shadow recovery.
+- Full XY/YZ/ZX shadows have rank 19 on a 27-cell cube. The new
+  `shadow3.rs` uses the exact eight-corner complement and checks all 24
+  original tensor cubes. Independent source identity remains mandatory,
+  because altering a free corner can select a different cube with the same
+  three shadows.
 - Later benchmarks must compare identical held-out SAT/UNSAT work across direct
   CPU baseline, existing ternary/Fischer solver, frozen CPU Rime guidance,
   and Pump–Funnel scheduling. Independently check SAT assignments or UNSAT
