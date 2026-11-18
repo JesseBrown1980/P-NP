@@ -26,6 +26,17 @@ fn main() {
                 Err(error) => Err(error),
             }
         }
+        Some("layered-sphere-attest") => {
+            if arguments.next().is_some() {
+                return_fail("layered sphere acceptance takes no arguments");
+            }
+            let stats = pnp_native::layered_sphere::certify().map_err(str::to_owned)?;
+            println!("PNP_LAYERED_SPHERE|schema=v1|rooms={}|floors={}|transitions={}|microkernel_gulps={}|nested_child_presentations={}|star_glyphs={}|paid_bytes={}|source_trit_bytes={}|fischer_arbitrary_null_checks={}|rejected={}|language_ladder=64_256_1024_4096_16384|symbol_not_bit=PASS|ternary_prism_inverse=PASS|qprism=PASS|omnibit40=PASS|post_gulp_clear=PASS|watcher=INDEPENDENT_INTEGER|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                stats.rooms, stats.floors, stats.transitions, stats.microkernel_gulps,
+                stats.child_presentations, stats.star_glyphs, stats.paid_bytes,
+                stats.source_bytes, stats.arbitrary_null_checks, stats.rejected);
+            Ok(())
+        }
         Some("brown-ledger-attest") => {
             if arguments.next().is_some() {
                 return_fail("Brown Ledger acceptance takes no arguments");
