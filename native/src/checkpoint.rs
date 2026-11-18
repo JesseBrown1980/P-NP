@@ -261,6 +261,55 @@ struct StorageReport {
     q20_bytes: Vec<u8>,
     dtype: &'static str,
 }
+/// Decode a canonical integer-only storage stream without pickle evaluation.
+pub fn decode_q20_stream(blob: &[u8]) -> Result<Vec<(String, Vec<i64>)>, String> {
+    let data = blob.strip_prefix(b"PNP-Q20-TENSOR-STORAGE-v1\0")
+        .ok_or("invalid Q20 storage header")?;
+    let count = usize::try_from(read32(data, 0).ok_or("missing storage count")?)
+        .map_err(|_| "Q20 storage count overflow")?;
+    if count == 0 || count > 1000 {
+        return Err("invalid converted tensor count".to_owned());
+    }
+    let mut pos = 4_usize;
+    let mut decoded = Vec::with_capacity(count);
+    let mut seen = BTreeSet::new();
+    for _ in 0..count {
+        let name_len = usize::try_from(read32(data, pos).ok_or("Q20 name length")?)
+            .map_err(|_| "Q20 path overflow")?;
+        pos = pos.checked_add(4).ok_or("Q20 name overflow")?;
+        let end = pos.checked_add(name_len).ok_or("Q20 name overflow")?;
+        let name = std::str::from_utf8(data.get(pos..end).ok_or("Q20 name absent")?)
+            .map_err(|_| "non-UTF8 converted tensor path")?;
+        if name.is_empty() || name.len() > 512
+            || !name.contains("/data/")
+            || name.split('/').any(|part| part == ".." || part.is_empty())
+            || !seen.insert(name)
+        {
+            return Err("invalid converted storage path".to_owned());
+        }
+        pos = end;
+        let words = usize::try_from(read64(data, pos).ok_or("Q20 word count absent")?)
+            .map_err(|_| "Q20 word count overflow")?;
+        if words == 0 || words > 5_000_000 {
+            return Err("invalid Q20 storage length".to_owned());
+        }
+        pos = pos.checked_add(8).ok_or("Q20 offset overflow")?;
+        let end = pos.checked_add(words.checked_mul(8).ok_or("Q20 storage overflow")?)
+            .ok_or("Q20 storage overflow")?;
+        let encoded = data.get(pos..end).ok_or("Q20 weights truncated")?;
+        let values = encoded.chunks_exact(8)
+            .map(|chunk| {
+                i64::from_le_bytes(chunk.try_into().expect("exact 8-byte chunks"))
+            }).collect();
+        decoded.push((name.to_owned(), values));
+        pos = end;
+    }
+    if pos != data.len() {
+        return Err("unexpected trailing Q20 bytes".to_owned());
+    }
+    Ok(decoded)
+}
+
 fn inspect(data: &[u8]) -> Result<StorageReport, String> {
     let entries = read_zip(data)?;
     let pickle = entries.iter().find(|entry| entry.name.ends_with("/data.pkl"))
@@ -293,17 +342,30 @@ fn inspect(data: &[u8]) -> Result<StorageReport, String> {
     let mut words = 0_usize;
     if float32_only {
         bytes.extend_from_slice(b"PNP-Q20-TENSOR-STORAGE-v1\0");
+        let count = u32::try_from(storages.len()).map_err(|_| "too many tensor storages")?;
+        bytes.extend_from_slice(&count.to_le_bytes());
         for item in &storages {
             let length = u32::try_from(item.name.len())
                 .map_err(|_| "storage name too long")?;
             bytes.extend_from_slice(&length.to_le_bytes());
             bytes.extend_from_slice(item.name.as_bytes());
+            let word_count = u64::try_from(item.payload.len() / 4)
+                .map_err(|_| "Q20 storage count overflow")?;
+            bytes.extend_from_slice(&word_count.to_le_bytes());
             for raw in item.payload.chunks_exact(4) {
                 let bits = u32::from_le_bytes(raw.try_into().map_err(|_| "tensor word")?);
                 let q = binary32_to_q20(bits).map_err(str::to_owned)?;
                 bytes.extend_from_slice(&q.to_le_bytes());
                 words = words.checked_add(1).ok_or("tensor count overflow")?;
             }
+        }
+    }
+    if float32_only {
+        let decoded = decode_q20_stream(&bytes)?;
+        if decoded.len() != storages.len()
+            || decoded.iter().map(|(_, values)| values.len()).sum::<usize>() != words
+        {
+            return Err("Q20 storage roundtrip count mismatch".to_owned());
         }
     }
     let q20_sha = if float32_only { hash_bytes(&bytes) } else { "none".to_owned() };
@@ -460,6 +522,25 @@ mod tests {
         assert_eq!(binary32_to_q20(0x3500_0000), Ok(0));
         assert_eq!(binary32_to_q20(0x3580_0000), Ok(1));
     }
+    #[test]
+    fn canonical_q20_stream_roundtrip_and_truncation_rejection() {
+        let mut bytes = b"PNP-Q20-TENSOR-STORAGE-v1\0".to_vec();
+        bytes.extend_from_slice(&1_u32.to_le_bytes());
+        let path = b"weights/data/0";
+        bytes.extend_from_slice(&(path.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(path);
+        bytes.extend_from_slice(&3_u64.to_le_bytes());
+        for value in [-1_i64, 0, 42] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        let decoded = decode_q20_stream(&bytes).expect("reversible storage");
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].0, "weights/data/0");
+        assert_eq!(decoded[0].1, [-1, 0, 42]);
+        bytes.pop();
+        assert!(decode_q20_stream(&bytes).is_err());
+    }
+
     #[test]
     fn crc32_has_independent_standard_vector() {
         assert_eq!(checksum_crc32(b"123456789"), 0xcbf4_3926);
