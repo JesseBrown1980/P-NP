@@ -143,6 +143,13 @@ jobs:
           cmp evidence/PNP_SCORE.anchor "$RUNNER_TEMP/frozen-score.anchor"
           ( cd evidence && sha256sum PNP_SCORE.hbp PNP_SCORE.hbi PNP_SCORE.anchor > PNP_SCORE_DIGESTS.sha256 )
           ( cd evidence && sha256sum -c PNP_SCORE_DIGESTS.sha256 )
+          echo 'HBIHEADER|schema=pnp.score.cases.v1|source_blob=b101c0989de3af0ca41db0eac1293c758d7e5296|seal=HBI-HBP-SHA-SH-HASH|json=0' > "$RUNNER_TEMP/UNSEEN.hbi"
+          echo 'CASE|id=fresh|pid_hex=666f6f|content_hex=626172|baseline_q=none|reverse_q=none|mark=none|json=0' >> "$RUNNER_TEMP/UNSEEN.hbi"
+          native/target/release/pnp-native score-attest "$RUNNER_TEMP/UNSEEN.hbi" evidence "$RUNNER_TEMP/unseen" > "$RUNNER_TEMP/fresh-score.hbp"
+          native/target/release/pnp-native score-verify "$RUNNER_TEMP/UNSEEN.hbi" evidence "$RUNNER_TEMP/unseen" > /dev/null
+          grep -Fq 'baseline_sha256=0fc7e25e075c7849f89b9729d1aeada1c4d791893248a042f8025c35f26b635f|sh=0fc7e25e075c7849|baseline_q=390|reverse_q=9610|promoted=0|mark=MISTAKE|' "$RUNNER_TEMP/unseen/PNP_SCORE.hbp"
+          test "$(grep -c '^SCORE|' "$RUNNER_TEMP/unseen/PNP_SCORE.hbp")" -eq 1
+          echo 'PNP_SCORE_FRESH|input=UNSEEN|source_authenticated=PASS|integer_output=EXACT|hbi=PASS|hbp=PASS|json=0'
           echo 'PNP_SCORE_REFERENCE|original_source=PINNED|integer_q=EXACT|cases=9|byte_replay=PASS|json=0'
       - name: Independent original-score evidence corruption controls
         run: |
