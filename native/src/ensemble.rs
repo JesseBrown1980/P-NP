@@ -192,8 +192,8 @@ fn reference_cases() -> Result<Vec<(String, Gate, String)>, String> {
         if !row.starts_with("G4CASE|") { return Err("unknown G4 case".to_owned()); }
         let f = fields(row)?;
         let id = field(&f, "id")?;
-        if !ids.insert(id) || field(&f, "json")? != "0" {
-            return Err("duplicate G4 case".to_owned());
+        if !ids.insert(id) || f.get("json").copied() != Some("0") {
+            return Err(format!("duplicate/invalid G4 case: {id}, fields={f:?}"));
         }
         let previous = Phase::parse(field(&f, "prev")?)
             .ok_or("unknown prior G4 state")?;
