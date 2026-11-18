@@ -120,7 +120,7 @@ fn slot(lit:i32)->usize {
     let pos=lit.unsigned_abs() as usize-1;
     2*pos+usize::from(lit<0)
 }
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Outcome { Sat, Unsat, HoldNodes, HoldTime }
 impl Outcome {
     fn label(self) -> &'static str {
