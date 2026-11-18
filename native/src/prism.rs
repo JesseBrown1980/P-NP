@@ -75,15 +75,6 @@ fn encode_words(words: &[u16]) -> Vec<u8> {
     }
     bytes
 }
-fn hex(data: &[u8]) -> String {
-    const ALPH: &[u8; 16] = b"0123456789abcdef";
-    let mut result = String::with_capacity(data.len() * 2);
-    for &b in data {
-        result.push(char::from(ALPH[usize::from(b >> 4)]));
-        result.push(char::from(ALPH[usize::from(b & 15)]));
-    }
-    result
-}
 fn case_data(name: &str) -> Option<Vec<u8>> {
     match name {
         "empty" => Some(Vec::new()),
