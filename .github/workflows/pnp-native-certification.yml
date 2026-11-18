@@ -97,6 +97,13 @@ jobs:
           native/target/release/pnp-native audit . | tee PNP_AUDIT.hbp
           grep -Fq 'PNP_LEGACY_AUDIT|legacy_failed=54|python_scripts=44|old_workflows=10|' PNP_AUDIT.hbp
           grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
+      - name: Brown Ledger Shannon-paid forward/reverse frozen matrix and null-outward N-Nest gate
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native brown-ledger-attest | tee PNP_BROWN_LEDGER.hbp
+          grep -Fq 'PNP_BROWN_LEDGER|schema=v1|rooms=120|verified_cells=3240|' PNP_BROWN_LEDGER.hbp
+          grep -Fq '|tamper_rejections=244|prism_floor_roundtrips=120|' PNP_BROWN_LEDGER.hbp
+          grep -Fq '|fischer_null_outward=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_BROWN_LEDGER.hbp
       - name: Fetch and verify the original Constellation kernels, keys, master table, and disk GGUF
         shell: bash
         run: |
