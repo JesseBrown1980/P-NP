@@ -75,8 +75,7 @@ payloads, framing changes and modified evidence. The existing
 original-source SHA chain and protected-source retention policy are
 preserved. Signed HBI/HBP/anchor plus independently rechecked published
 SHA manifest are required. Rust 1.81 offline/locked tests and strict
-Clippy must pass. Hosted measurements remain NOT_MEASURED until those
-jobs finish.
+Clippy must pass. **Hosted acceptance PASSED** in [GitHub run #44338318876](https://github.com/JesseBrown1980/P-NP/actions/runs/44338318876), including independent published-archive recheck. Precise measured bytes and route timings are recorded below.
 
 ## Native CLI
 
@@ -92,3 +91,61 @@ PNP_TLS_STREAM_RANGE.bin, PNP_TLS_STREAM_RESTORED.bin,
 PNP_TLS_STREAM_FABRIC.hbp, PNP_TLS_STREAM_FABRIC.hbi and
 PNP_TLS_STREAM_FABRIC.anchor, with resource measurements and an
 SHA-256 manifest added by the hosted acceptance workflow.
+
+
+## Accepted results — 2026-11-18, hosted run #44338318876
+
+The same 54 frame inputs and the same 8,000 source events per frame were
+reconstructed by the primary decoder and by every independently programmed
+HTTP-0 room witness. All 103 native Rust unit tests passed, Rust 1.81
+offline Clippy passed with zero warnings, source audit and compiled-integer
+checks passed, and the separate evidence-recheck job passed.
+
+| Actual payload | Stored bytes | Relative to fully framed bitpack |
+|---|---:|---:|
+| 54 × 8,000 bits, unframed bitpack reference | 54,000 | Reference only |
+| Fully framed bitpack archive, with SHA trailer | 54,725 | Baseline |
+| Full continuous causal range, including nine model snapshots | **54,200** | **−525 (−0.9593%)** |
+| Previous PR45 blockwise entropy × Omnibit40 archive | 95,149 | Historical comparator |
+| Previous PR44 Omnibit40 selected archive | 294,615 | Historical comparator |
+
+Nine model snapshots occupy exactly **228 charged bytes** including
+their per-snapshot lengths. Continuous coding is **40,949 B / 43.04%**
+smaller than the PR45 blockwise archive, but it is **200 B larger
+than unframed bitpacking**; we make separate claims for framed and
+unframed references. All 54 continuous frames selected causal
+arithmetic coding; the previous Omnibit40 operators remain accepted,
+unchanged and measured separately.
+
+The accepted new full native executable is **1,683,096 B**. When that
+entire binary is charged once, continuous archive + binary totals
+**1,737,296 B**, and framed bitpack + the identical binary totals
+**1,737,821 B**. HBI/HBP/anchor, decoded witness and the protected
+upstream source are separate costs.
+
+| Fischer routing width | Independent HTTP-0 reconstruction messages | Measured group wall |
+|---|---:|---:|
+| 3 rooms | 108 | 22,286,116 ns |
+| 27 rooms | 108 | 22,024,929 ns |
+| 81 rooms | 108 | 22,414,411 ns |
+
+Total **324 verified HTTP-0 messages** and **2,592,000 recovered
+event occurrences**, exact by source comparison. This measures
+client wire transport, native decoding, actual room dispatch and
+the eight-byte room-state update together, not isolated pure-network
+latency. The three measured timings are close; no performance ordering
+across widths is established by one run. Fischer provides authenticated
+address computation and routing, not data compression or trained HRM
+inference in this gate.
+
+Negative controls: mutated bitpack and continuous archive bodies
+rejected; changed HBI witness rejected; corrupted model version
+rejected inside the separate native worker; canonical replay and
+regenerate-and-compare PASS; original source preserved. The earlier
+PR45 owned post-GULP scratch discard also remained PASS.
+
+**Scientific interpretation:** The positive 525-byte result is a
+matched-frame payload result on this finite synthetic corpus. Model
+overhead, compiled executable and retained evidence are reported
+independently. Full trained HRM-to-codex pairing and standalone
+transport-only ablation remain separate prospective experiments.
