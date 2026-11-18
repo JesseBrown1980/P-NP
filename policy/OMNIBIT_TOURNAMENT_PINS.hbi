@@ -1,0 +1,6 @@
+HBIHEADER|schema=pnp.omnibit.original.v1|seal=HBI-HBP-SHA-SH-HASH|json=0
+OMNIBIT_PIN|id=architecture_contract|commit=dad4647ad19a1b08ee90990c34aab1255f9a6046|path=contracts/ARCHITECTURE.hbp|git_blob=fcd2f1f40034525c6b9b90c6861cd2c27d7f7f4d|json=0
+OMNIBIT_PIN|id=tournament_record|commit=dad4647ad19a1b08ee90990c34aab1255f9a6046|path=provenance/receipts/tournament/OMNIBIT-TOURNAMENT-RECORD-2026-10-09.hbp|git_blob=7f1385e2e8751479cffac776aee738dd14bbfb59|json=0
+OMNIBIT_PIN|id=operator_contract|commit=dad4647ad19a1b08ee90990c34aab1255f9a6046|path=provenance/receipts/operator-catalog/OPERATOR-CATALOG.hbp|git_blob=e5c9d7e807a557d3b2fdd6689ec43a0aad5d06d6|json=0
+OMNIBIT_PIN|id=operator_source|commit=dad4647ad19a1b08ee90990c34aab1255f9a6046|path=reference/omega-operator-catalog-v0/omega_operator_catalog.rs|git_blob=1535e158b21b1c2b9ece4dce84e0e9779498ec19|json=0
+OMNIBIT_PIN|id=gc_codec_contract|commit=dad4647ad19a1b08ee90990c34aab1255f9a6046|path=contracts/ACER-GLYPH-CODEC-V1.hbp|git_blob=afa29fe3fd1d8eabfdcd5901c02cead7e8a47037|json=0
