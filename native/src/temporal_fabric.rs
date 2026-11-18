@@ -214,6 +214,7 @@ impl TemporalClient{
         }
         Ok(usize::from(response[1]))
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn frame(&self,arity:usize,case:u8,variant:u8,
         floor:u16,index:usize,count:usize,operator:u8,
         task:&Task)->Result<PredictedFrame,String>
