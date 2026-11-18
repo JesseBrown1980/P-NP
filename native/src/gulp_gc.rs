@@ -201,7 +201,7 @@ fn controlled_raw_path(output: &Path) -> Result<std::path::PathBuf, String> {
         .map(|entry| {
             entry.map(|dirent| dirent.file_name()).map_err(|e| e.to_string())
         }).collect::<Result<_,_>>()?;
-    if names.len() != 1 || names[0] != INPUT_FILE {
+    if names.len() != 1 || names[0].to_str() != Some(INPUT_FILE) {
         return Err("owned ephemeral scope includes other files: HOLD".to_owned());
     }
     Ok(path)
@@ -263,10 +263,10 @@ fn reconstruct_from_committed(hbp: &str, upstream: &str) -> Result<Compact, Stri
         }
     }
     if kinds.len() != nkinds || glyphs.len() != nglyphs
+        || kinds.values().any(|&c| c == 0 || c > events)
+        || glyphs.values().any(|&c| c == 0 || c > events)
         || kinds.values().sum::<usize>() != events
         || glyphs.values().sum::<usize>() != events
-        || kinds.values().any(|&c| c == 0)
-        || glyphs.values().any(|&c| c == 0)
     {
         return Err("GULP grouping coverage mismatch".to_owned());
     }
