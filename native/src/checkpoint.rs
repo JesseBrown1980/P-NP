@@ -422,8 +422,11 @@ fn original_checkpoint_sha(archive: &Path, pin_id: &str) -> Result<String, Strin
     Ok(sha.to_owned())
 }
 
+type ConvertedWeightFiles = Vec<(String, Vec<u8>)>;
+type CheckpointBundle = (String, String, String, ConvertedWeightFiles);
+
 fn create(models: &Path, source_root: &str, source_archive: &Path)
-    -> Result<(String, String, String, Vec<(String, Vec<u8>)>), String>
+    -> Result<CheckpointBundle, String>
 {
     let mut hbp = HBP_HEADER.to_owned();
     let mut hbi = HBI_HEADER.to_owned();
