@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Source-authenticated Omnibit public tournament — binary, ternary and mixed routing (November 18, 2026)
+
+The original [Asolaria Omega Omnibit Tournament](https://github.com/JesseBrown1980/asolaria-omega-omnibit-tournament) now contributes five immutable source pins, the Acer/Liris/Relic × NORMAL/ANTI **six-slot tournament format**, and exact reconstruction/GC retention requirements. The first [native public tournament protocol](native/OMNIBIT_PUBLIC_TOURNAMENT_PROTOCOL.md) evaluates **360 real reversible software routes**: 20 frozen public synthetic trit fixtures × 3 binary/ternary/mixed arms × 6 labeled seat/view slots. All resulting encoded frames, original source SHA identities, charged frame bytes, deterministic logical-step counts, full HBI/HBP offsets and SHA/SH/HASH witnesses are archived and independently replayed. The original 40-operator Rust reference suite runs separately under the frozen toolchain.
+
+The original tournament still has **`scoreboard=NOT_SCORED` and `winner=NONE`**, because these are source-scoped public fixture comparisons, rather than executions on private Acer/Liris/Relic matrices. The new `NORMAL`/`ANTI` test transforms are explicitly synthetic forward/reverse proxies and do not silently redefine the original operator's traversal semantics. No runtime performance superiority is inferred from logical-step counts alone.
+
+This stage also restores the GC classification rule: automatic, source-verified `SUMMARY_ONLY` reclamation after durable aggregation, while `EXACT_REPLAY_REQUIRED` working data can be discarded only after the complete charged reconstruction payload and decoder replay are verified. No live human approval is needed in the computation loop.
+
+---
+
 ## Native binary ↔ balanced-ternary matrix bridge (November 18, 2026)
 
 The original Asolaria concept uses two coordinated address/computation ladders in the same matrix fabric: **binary floors 64, 256, 1,024, 4,096** and native **balanced ternary 3, 9, 27, 81, 243, 729, 2,187, 6,561**. The [bridge protocol](native/BINARY_TERNARY_BRIDGE_PROTOCOL.md) establishes the exact reversible mapping from `−1/0/+1` trit sequences into their floor's valid data codes. Five trits form **243 states** inside a 256-value byte floor; codes **243–255 are reserved, never silently decoded as data**. The 6,561-state eight-trit landing uses a **256 floor (five trits) plus a 64 floor (three trits)**.
