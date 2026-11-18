@@ -339,7 +339,8 @@ pub fn certify() -> Result<LedgerStats, &'static str> {
             }
             stats.corruptions_rejected += 1;
             let mut bad_delta = delta.serialized().to_vec();
-            bad_delta[bad_delta.len() - 1] ^= 1;
+            let final_byte = bad_delta.len() - 1;
+            bad_delta[final_byte] ^= 1;
             if BrownDelta::load(bad_delta, &restored).is_ok() {
                 return Err("mutated signed delta not rejected");
             }
