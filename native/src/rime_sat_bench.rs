@@ -258,6 +258,7 @@ fn one_case(cnf: &Cnf, expected: Status, disk: &DiskRime, arm: Arm)
 struct Samples {
     prep: Vec<u128>,
     verify: Vec<u128>,
+    total: Vec<u128>,
     nodes: u64,
     checks: u64,
     reads: u64,
@@ -321,16 +322,16 @@ pub fn run(path: &Path, rounds: usize) -> Result<Vec<String>, String> {
             let report = std::mem::take(&mut by_arm[i]);
             stats[i].prep.push(report.prep_solve_ns);
             stats[i].verify.push(report.verify_ns);
+            stats[i].total.push(report.prep_solve_ns + report.verify_ns);
             stats[i].add(report);
         }
     }
     for (i, arm_stats) in stats.iter().enumerate() {
         let prep = median(arm_stats.prep.clone());
         let verified = median(arm_stats.verify.clone());
-        // Separate medians cannot be summed to obtain the median total
-        // on a round. Report both components rather than a pseudo total.
+        let total = median(arm_stats.total.clone());
         lines.push(format!(
-            "PNP_RIME_SAT_ARM|arm={}|median_prep_solve_ns={prep}|median_verify_ns={verified}|nodes={}|literal_checks={}|disk_requests={}|path_solves={}|independent_checks={}|status=PASS|json=0",
+            "PNP_RIME_SAT_ARM|arm={}|median_prep_solve_ns={prep}|median_verify_ns={verified}|median_total_ns={total}|nodes={}|literal_checks={}|disk_requests={}|path_solves={}|independent_checks={}|status=PASS|json=0",
             Arm::from_index(i).label(), arm_stats.nodes,
             arm_stats.checks, arm_stats.reads, arm_stats.solves, arm_stats.comparisons
         ));
