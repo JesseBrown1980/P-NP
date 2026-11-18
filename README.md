@@ -30,9 +30,9 @@ direct memoization is an essential control. Every room has an eight-byte
 state word. Trained-model checkpoint loading remains HOLD: the HRM-shaped
 route is deterministic and is not described as a trained model.
 
-**Status:** source implementation and hosted acceptance pending.
-The new speed and cache-use verdicts will be published only from
-passing hosted logs, with zero-gain results retained.
+**Hosted acceptance PASS:** [run #44345372419](https://github.com/JesseBrown1980/P-NP/actions/runs/44345372419), with both native and independent artifact-check jobs PASS; **105 Rust tests** passed. A direct CPU worker ran the 162 task calls in **2.027 ms**, and direct memoization reduced it to **0.701 ms**. The corresponding native HTTP-0 Fischer room execution times for capacities 3/27/81 were **14.441/14.175/15.583 ms** (no recall), **12.877/13.337/13.587 ms** (room recall), and **12.874/13.505/13.704 ms** (deterministic HRM-shape route with room recall). All nine native HTTP-0 arms delivered the exact 27 outputs in all **1,458 independent backend messages**; the cache arms each logged exactly **54 actual calculations and 108 source-keyed hits** out of 162 requests. Corrupt tasks, false Fischer addresses, source-witness mutation and HBI corruption were rejected. Full release binary was **1,777,944 B**.
+
+These small workload trials establish executable per-room state and genuinely reused results. They also show HTTP-0 roundtrip overhead dominated these short computations relative to direct CPU; deterministic HRM-shape routing did **not** consistently improve performance. The current HTTP-0 worker is **serial**, and 81-room capacity only visits 54 ordinary Fischer or 42 HRM-proxy addresses on this 54-job workload. The next separate measurements are batching, real CPU concurrency, cache scaling and actual loaded trained HRM inference.
 
 ## Continuous entropy and native backend-only HTTP-0 fabric witness (November 18, 2026)
 
