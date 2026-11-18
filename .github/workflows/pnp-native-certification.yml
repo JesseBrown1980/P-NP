@@ -100,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -720,6 +720,58 @@ jobs:
           native/target/release/pnp-native tls-memory-verify evidence > /dev/null
           ( cd evidence && sha256sum -c PNP_TLS_DIGESTS.sha256 )
           echo 'PNP_TLS_NEGATIVE|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|trace=REJECTED|frozen_source_tamper=DETECTED|restored=PASS|json=0'
+      - name: Stochastic TLS blinded holdout Brier selection and history-shuffle controls
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native tls-stochastic-attest evidence evidence | tee PNP_TLS_STOCH_ATTEST.hbp
+          native/target/release/pnp-native tls-stochastic-verify evidence evidence | tee PNP_TLS_STOCH_VERIFY.hbp
+          grep -Fq 'PNP_TLS_STOCHASTIC|source=DOI_10.1103_j1r2-5ph7|scope=SYNTHETIC_HIDDEN_MARKOV|regimes=3|repetitions=3|traces=9|candidate_models=45|ternary_capacities=0_1_3_27_81|lag_records=45|null_baseline_selections=3|coupled_heldout_improvements=6|shuffle_reversals=6|' PNP_TLS_STOCH_ATTEST.hbp
+          grep -Fq '|records=117|split=TRAIN_VALIDATION_TEST|metric=HELDOUT_BRIER|g2_physical=NOT_MEASURED|quantum_hardware=NO|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_TLS_STOCH_ATTEST.hbp
+          grep -Fq 'PNP_TLS_STOCHASTIC_VERIFY|traces=9|models=45|lag_records=45|null_baseline=3|coupled_improved=6|shuffle_reversed=6|records=117|source=ORIGINAL_TLS_ACCEPTED|stochastic_replay=EXACT|' PNP_TLS_STOCH_VERIFY.hbp
+          test "$(grep -c '^TLS_STOCH_SOURCE|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 1
+          test "$(grep -c '^TLS_STOCH_TRACE|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 9
+          test "$(grep -c '^TLS_STOCH_MODEL|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 45
+          test "$(grep -c '^TLS_STOCH_LAG|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 45
+          test "$(grep -c '^TLS_STOCH_SELECT|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 9
+          test "$(grep -c '^TLS_STOCH_AGGREGATE|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 3
+          test "$(grep -c '^TLS_STOCH_GC|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 4
+          test "$(grep -c '^TLS_STOCH_SUMMARY|' evidence/PNP_TLS_STOCHASTIC.hbp)" -eq 1
+          test "$(grep -c '^HBI|' evidence/PNP_TLS_STOCHASTIC.hbi)" -eq 117
+          grep -Fq '|mode=IID_NULL|rep=0|selector=VALIDATION_ONLY|chosen_capacity=0|' evidence/PNP_TLS_STOCHASTIC.hbp
+          grep -Fq '|mode=ONE_TLS|rep=0|selector=VALIDATION_ONLY|chosen_capacity=27|' evidence/PNP_TLS_STOCHASTIC.hbp
+          grep -Fq '|mode=THREE_TLS|rep=1|selector=VALIDATION_ONLY|chosen_capacity=1|' evidence/PNP_TLS_STOCHASTIC.hbp
+          grep -Fq '|source_hardware=NO|source_jump_data=NO|true_g2=NOT_MEASURED|gc_exact_replay=RETAIN_UNTIL_VERIFIED|' evidence/PNP_TLS_STOCHASTIC.hbp
+          for name in PNP_TLS_STOCHASTIC.hbp PNP_TLS_STOCHASTIC.hbi PNP_TLS_STOCHASTIC.anchor PNP_TLS_STOCHASTIC_TRACE.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/stoch-original-$name"
+          done
+          native/target/release/pnp-native tls-stochastic-attest evidence evidence > "$RUNNER_TEMP/stoch-repeat.hbp"
+          for name in PNP_TLS_STOCHASTIC.hbp PNP_TLS_STOCHASTIC.hbi PNP_TLS_STOCHASTIC.anchor PNP_TLS_STOCHASTIC_TRACE.bin; do
+            cmp "evidence/$name" "$RUNNER_TEMP/stoch-original-$name"
+          done
+          ( cd evidence && sha256sum PNP_TLS_STOCHASTIC.hbp PNP_TLS_STOCHASTIC.hbi PNP_TLS_STOCHASTIC.anchor PNP_TLS_STOCHASTIC_TRACE.bin > PNP_TLS_STOCH_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_TLS_STOCH_DIGESTS.sha256 )
+      - name: Stochastic heldout TLS source and journal adversarial controls
+        run: |
+          set -euo pipefail
+          for name in PNP_TLS_STOCHASTIC.hbp PNP_TLS_STOCHASTIC.hbi PNP_TLS_STOCHASTIC.anchor PNP_TLS_STOCHASTIC_TRACE.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/stoch-$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native tls-stochastic-verify evidence evidence > "$RUNNER_TEMP/stoch-negative.log" 2>&1; then
+              echo "PNP_TLS_STOCH_NEGATIVE_FAIL|file=$name"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/stoch-$name" "evidence/$name"
+          done
+          cp evidence/PNP_TLS.hbp "$RUNNER_TEMP/stoch-upstream.hbp"
+          printf X >> evidence/PNP_TLS.hbp
+          if native/target/release/pnp-native tls-stochastic-verify evidence evidence > "$RUNNER_TEMP/stoch-prior-failure.log" 2>&1; then
+            echo 'PNP_TLS_STOCH_NEGATIVE_FAIL|original_tls_pilot=ACCEPTED'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/stoch-upstream.hbp" evidence/PNP_TLS.hbp
+          native/target/release/pnp-native tls-stochastic-verify evidence evidence > /dev/null
+          ( cd evidence && sha256sum -c PNP_TLS_STOCH_DIGESTS.sha256 )
+          echo 'PNP_TLS_STOCH_NEGATIVE|corrupt_hbi=REJECTED|corrupt_hbp=REJECTED|corrupt_anchor=REJECTED|corrupt_raw_traces=REJECTED|altered_prior=REJECTED|history_shuffle=NEGATIVE_CONTROL|status=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -792,10 +844,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp PNP_OMNI40_ATTEST.hbp PNP_OMNI40_VERIFY.hbp PNP_TLS_ATTEST.hbp PNP_TLS_VERIFY.hbp PNP_TLS_STOCH_ATTEST.hbp PNP_TLS_STOCH_VERIFY.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp native/src/omega_operator_catalog.rs native/fixtures/PRL_TLS_SOURCE.hbi native/fixtures/TLS_STOCHASTIC_CORPUS.hbi > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -832,6 +884,15 @@ jobs:
           sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_OMNI40_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_TLS_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_TLS_STOCH_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_TLS_STOCHASTIC|source=DOI_10.1103_j1r2-5ph7|scope=SYNTHETIC_HIDDEN_MARKOV|regimes=3|repetitions=3|traces=9|candidate_models=45|ternary_capacities=0_1_3_27_81|lag_records=45|null_baseline_selections=3|coupled_heldout_improvements=6|shuffle_reversals=6|' PNP_TLS_STOCH_ATTEST.hbp
+          grep -Fq 'PNP_TLS_STOCHASTIC_VERIFY|traces=9|models=45|lag_records=45|null_baseline=3|coupled_improved=6|shuffle_reversed=6|records=117|' PNP_TLS_STOCH_VERIFY.hbp
+          test "$(grep -c '^TLS_STOCH_MODEL|' PNP_TLS_STOCHASTIC.hbp)" -eq 45
+          test "$(grep -c '^TLS_STOCH_LAG|' PNP_TLS_STOCHASTIC.hbp)" -eq 45
+          test "$(grep -c '^TLS_STOCH_SELECT|' PNP_TLS_STOCHASTIC.hbp)" -eq 9
+          test "$(grep -c '^HBI|' PNP_TLS_STOCHASTIC.hbi)" -eq 117
+          grep -Fq '|mode=IID_NULL|rep=0|selector=VALIDATION_ONLY|chosen_capacity=0|' PNP_TLS_STOCHASTIC.hbp
+          grep -Fq '|source_hardware=NO|source_jump_data=NO|true_g2=NOT_MEASURED|' PNP_TLS_STOCHASTIC.hbp
           grep -Fq 'PNP_TLS_MEMORY|doi=10.1103/j1r2-5ph7|model=CLASSICAL_FIXED_POINT_EULER|latent_cells=0_1_3_27_81|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_ATTEST.hbp
           grep -Fq 'PNP_TLS_MEMORY_VERIFY|models=10|pairs=30|lag_cases=150|null_controls=18|coupled_separations=12|' PNP_TLS_VERIFY.hbp
           test "$(grep -c '^TLS_PAIR|' PNP_TLS.hbp)" -eq 30
