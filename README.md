@@ -10,6 +10,16 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Temporal probability entropy × Omnibit40: first hosted blockwise gate (November 18, 2026)
+
+The [native entropy acceptance protocol](native/TLS_ENTROPY_OMNIBIT_ACCEPTANCE_PROTOCOL.md) now has a **hosted, independently verified first implementation** in [Actions run #44328356455](https://github.com/JesseBrown1980/P-NP/actions/runs/44328356455). The code reuses the authenticated PR #43 train-only temporal Q10,000 predictors at **0/1/3/27/81** capacity and the unchanged 40 Omnibit operator functions, compares a causal arithmetic/range-coded block against all 40 reversible predicted-residual transform candidates, and stores the exact selected mode, payload, framing, and model snapshot. All **54 frames** (three encodings of 18 unique frozen synthetic held-out/shuffled event streams) independently reconstruct their complete event histories without the original generator or external fitted model.
+
+**Measured 54-frame archive: 95,149 bytes**, including **246 bytes of trained model snapshots**, versus the accepted **294,615-byte** Omnibit40 framed archive: **199,466 bytes (67.70%) smaller**. All **9,540 hybrid blocks** selected the range coder after **381,600 original-operator candidate evaluations**; Omnibit residuals provided **no additional selected block gain** in this gate. The archive remains **41,149 bytes larger** than the 54,000-byte *unframed* bit-packed reference for the same 54 route frames. The fully compiled native executable grew to **1,539,624 bytes**; new archive plus that full decoder is **1,634,773 bytes**. These different accounting levels are reported separately, and the 18 unique streams retain an independent **18,000-byte** unframed bitpack reference.
+
+The hosted Rust 1.81/Clippy tests, standalone decoding, repeated source-bound HBI/HBP output, archive/model/receipt tamper negatives and separate independent SHA archive check all **PASS**. **81 signed-index receipt rows** accompany the run. After verified durable replay, automatic GULP physically deleted **144,000 bytes of owned disposable event scratch**, preserving original source evidence. The next optimization is continuous-stream entropy coding and an actual fully framed bit-packed competitor to isolate block-reset and selector overhead. The source events and models are a **synthetic classical** memory experiment.
+
+---
+
 ## Temporal TLS memory × all original 40 Omnibit operators with automatic GULP disposal (November 18, 2026)
 
 The [integrated temporal Omnibit protocol](native/TLS_OMNIBIT40_TEMPORAL_GC_PROTOCOL.md) connects the **exact prior PR #43 held-out/shuffled event archives** to all original source-authenticated **8 RNQ + 12 TRI + 20 PI operators** and three native floor routes: binary 64, ternary 256 and composed mixed 256+64. It exhaustively evaluates **381,600 operator candidates** across **9,540 twenty-symbol blocks**, reconstructing 18 distinct frozen synthetic event streams through 54 independent route encodings. Every selected block retains its operator selector, coding mode and complete literal/RLE residual, with a standalone inverse requiring no event generator or trained hidden-state model.
