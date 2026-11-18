@@ -1,0 +1,10 @@
+HBIHEADER|schema=pnp.score.cases.v1|source_blob=b101c0989de3af0ca41db0eac1293c758d7e5296|seal=HBI-HBP-SHA-SH-HASH|json=0
+CASE|id=empty|pid_hex=none|content_hex=none|baseline_q=1970|reverse_q=8030|mark=MISTAKE|json=0
+CASE|id=alpha|pid_hex=6167656e742d3237|content_hex=68656c6c6f|baseline_q=5360|reverse_q=4640|mark=MISTAKE|json=0
+CASE|id=signed|pid_hex=776f726b65723a2d31|content_hex=2d|baseline_q=8190|reverse_q=1810|mark=GENIUS|json=0
+CASE|id=unicode|pid_hex=636166c3a9|content_hex=c3a1c39fe29c93|baseline_q=6870|reverse_q=3130|mark=MISTAKE|json=0
+CASE|id=newlines|pid_hex=726f6f6d7c7a|content_hex=6c696e65310a6c696e6532|baseline_q=6570|reverse_q=3430|mark=MISTAKE|json=0
+CASE|id=zero|pid_hex=30|content_hex=30|baseline_q=6020|reverse_q=3980|mark=MISTAKE|json=0
+CASE|id=trit|pid_hex=2d2d302b2b|content_hex=e28892302b|baseline_q=7290|reverse_q=2710|mark=GENIUS|json=0
+CASE|id=fischer|pid_hex=6d61747269782d3831|content_hex=317c367c31327c38|baseline_q=5010|reverse_q=4990|mark=MISTAKE|json=0
+CASE|id=space|pid_hex=20|content_hex=0920|baseline_q=3730|reverse_q=6270|mark=MISTAKE|json=0
