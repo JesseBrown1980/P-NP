@@ -97,6 +97,6 @@ canonical hash receipts. Reject tampered records, witness or index.
 Source archives are unchanged. Previously accepted automatic
 owned-scratch GULP deletion remains active.
 
-Status: implementation submitted for hosted Rust 1.81, strict Clippy,
-full native CI and independent published-artifact review. Predictive
-claims will follow actual acceptance logs.
+**Accepted hosted results:** [PR #51 run #44399086719](https://github.com/JesseBrown1980/P-NP/actions/runs/44399086719) passed Rust 1.81 strict native acceptance and a separate published-artifact SHA review. 108 native tests passed. All 64,152 native HTTP-0 calls reconstructed exact source order/trits and all 27 matrix output values; 37,422 source-keyed results were reused, 5,346 unique packets computed in the cached control. The nine frozen train/validation decisions retained 6/6 coupled ordered predictive Brier improvements, 6/6 shuffle reversals, and 3/3 IID memoryless selections. The independently written causal online prediction loop reproduced every original 8,000-event score. Results in PNP_TEMPORAL_FABRIC.hbp retain all nine selected model indices, ordered/shuffled baseline/selected Brier squared sums and signed differences.
+
+The single-run total wall measurements were **1,580,680,464 ns** for the 21,384 uncached backend requests and **2,815,131,121 ns** for both 21,384-request cached passes combined (42,768 total). These totals include HTTP-0 loopback, ternary encoding/decoding, matrix computation and source verification; they are not per-operation CPU-only measurements. The test shows exact predictive-memory preservation and genuine saved computations; serial backend transport remains an optimization target.
