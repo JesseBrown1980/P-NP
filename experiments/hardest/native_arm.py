@@ -18,14 +18,20 @@ from time import monotonic_ns
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT.joinpath("sat")))
-sys.path.insert(0, str(ROOT.joinpath("algebra")))
-sys.path.insert(0, str(ROOT.joinpath("historical/asolaria-2026-07-21")))
-
 import engine
-import competition
-import rime_fischer as historical_fischer
-import rime_sphere as historical_sphere
 import challenge
+
+# Each contender runs in its own process. Resolve the two same-named
+# rime_fischer modules lazily, from distinct exact source directories.
+# Never load both under the same Python module key.
+METRIC_NAMES = (
+    "group_inserts", "local_literal_checks", "watcher_clause_checks",
+    "watcher_rejections", "accepted_transforms", "fischer_row_scores",
+    "pivot_probes", "row_xors", "xor_bitwork_bound", "basis_peak_bits",
+    "watcher_pivot_probes", "watcher_row_xors", "watcher_bitwork_bound",
+    "backsub_xors", "watcher_expression_checks", "fischer_literal_scores",
+    "search_nodes", "search_literal_checks", "witness_literal_checks",
+)
 
 
 LIMIT = 2000
@@ -128,6 +134,15 @@ def original_phi_rank(n, clauses, sha):
 
 
 def run(case, arm, raw):
+    global competition, historical_fischer, historical_sphere
+    if arm == "rime_new":
+        sys.path.insert(0, str(ROOT.joinpath("algebra")))
+        import competition
+    elif arm == "rime_original":
+        sys.path.insert(0, str(ROOT.joinpath(
+            "historical/asolaria-2026-07-21")))
+        import rime_fischer as historical_fischer
+        import rime_sphere as historical_sphere
     started = monotonic_ns()
     n, clauses = challenge.parse(raw)
     assert (n, clauses) == challenge.original(case)
@@ -184,7 +199,7 @@ def run(case, arm, raw):
             navigation_ns = monotonic_ns() - t
             assert pow(g, exponent, P) == target
             navigation_ops = sum(moves for _, moves in towers)
-            m = {key: 0 for key in competition.METRICS}
+            m = {key: 0 for key in METRIC_NAMES}
             rows, residual, proof, corrected = engine.compile_source(
                 n, clauses, m, tamper_first=True)
             basis = engine.right_eliminate(n, rows, m)
