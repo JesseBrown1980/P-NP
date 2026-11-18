@@ -238,16 +238,27 @@ class Circuit:
         return assignment, read
 
     def verify_reference(self, output_bits):
-        full = GENESIS_NONCE
-        values, evaluate = self.model(full)
-        digest = bytes(int("".join("1" if evaluate(bit) else "0"
-                                   for bit in output_bits[j:j + 8]), 2)
-                       for j in range(0, 256, 8))
-        assert digest[::-1].hex() == GENESIS_HASH
-        for clause in self.clauses:
-            assert any(evaluate(lit) for lit in clause)
-        print("BTC_MODEL|nonce=" + str(full) +
-              "|evaluated_auxiliary=" + str(len(values)) +
+        mask = (1 << self.freebits) - 1
+        candidates = (GENESIS_NONCE,
+                      GENESIS_NONCE ^ 1,
+                      GENESIS_NONCE ^ mask,
+                      GENESIS_NONCE ^ (mask >> 1))
+        for nonce in dict.fromkeys(candidates):
+            values, evaluate = self.model(nonce)
+            digest = bytes(int("".join("1" if evaluate(bit) else "0"
+                                       for bit in output_bits[j:j + 8]), 2)
+                           for j in range(0, 256, 8))
+            actual_header = HEADER_PREFIX + nonce.to_bytes(4, "little")
+            independent = hashlib.sha256(hashlib.sha256(
+                actual_header).digest()).digest()
+            assert digest == independent
+            if nonce == GENESIS_NONCE:
+                assert digest[::-1].hex() == GENESIS_HASH
+                for clause in self.clauses:
+                    assert any(evaluate(lit) for lit in clause)
+        print("BTC_MODEL|nonce=" + str(GENESIS_NONCE) +
+              "|evaluated_auxiliary=" + str(self.counter) +
+              "|alternate_nonces=" + str(len(set(candidates)) - 1) +
               "|all_original_clauses=SAT|double_sha256=PASS", flush=True)
 
     def format(self):
