@@ -36,8 +36,7 @@ gain on time-shuffled observations, while all three IID controls
 remain memoryless. Actual single-run latency is separately recorded
 and original GNN forward remains HOLD pending source parity.
 
-**Status:** new hosted verification pending; exact predictive
-measurements will be published from the accepted CI evidence.
+**Hosted PASS:** [run #44399086719](https://github.com/JesseBrown1980/P-NP/actions/runs/44399086719), both native and independent artifact-check jobs successful, **108 Rust unit tests**. Across 64,152 actual HTTP-0 calls all 144,000 original ordered/shuffled event outcomes and 27-cell matrix computations were reconstructed exactly. **6/6 coupled ordered-memory gains, 6/6 count-preserving shuffled reversals, and 3/3 IID memoryless controls** were independently reproduced using the original train-only classical predictor and a separately written causal Brier scorer. Source-keyed backend recall supplied **37,422 exact hits**; the uncached 21,384-call pass took **1.581 s** and two cached 21,384-call passes together took **2.815 s**, with serial loopback transport charged. Every original source SHA, frozen PRL DOI, original model-selection boundary and protected GNN-forward HOLD remained intact.
 
 ## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
 
