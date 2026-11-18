@@ -195,7 +195,7 @@ fn unpack_rle(payload:&[u8],expected:usize)->Result<Vec<u16>,String>{
         if tag&128!=0 {
             if payload.len()-at<2{return Err("missing RLE repeat symbol".to_owned());}
             let val=u16::from_le_bytes([payload[at],payload[at+1]]);
-            out.extend(std::iter::repeat_n(val,count));
+            out.resize(out.len()+count,val);
             at+=2;
         }else{
             let n=count.checked_mul(2).ok_or("RLE literal arithmetic overflow")?;
