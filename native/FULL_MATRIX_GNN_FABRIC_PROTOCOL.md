@@ -2,7 +2,7 @@
 
 ## Original architecture and actual connected data path
 
-PR43 accepted source trace -> PR47 same 54 source-authenticated 27-trit jobs ->
+PRL DOI 10.1103/j1r2-5ph7 -> source-scoped classical Solomon/TLS memory experiment -> synthetic held-out/shuffled stochastic temporal events -> PR43 accepted trace -> PR47 same 54 source-authenticated 27-trit jobs ->
 four authentic binary floor encoders -> every original Omnibit40 reversible
 operator -> native Fischer address -> backend-only HTTP-0 -> separate Rust
 worker process -> original operator inverse -> separately implemented radix-3
@@ -41,12 +41,48 @@ trits, arity and Fischer room address. The original 8-byte per-room
 state is preserved. Direct same-workload calculation and direct
 memoization are measured as separate controls.
 
+## PRL memory research is the source of the original workload
+
+Nicolas Gosling et al., *Probing the memory of a superconducting
+qubit environment*, Physical Review Letters, accepted October 28, 2026,
+DOI 10.1103/j1r2-5ph7:
+https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7
+
+The paper reports experimental superconducting qubit jump dynamics
+influenced by persistent two-level-system reservoirs; fitting
+Solomon equations and examining non-Poissonian jump timing exposes
+the temporal-memory structure.
+
+P-NP already used that finding to motivate TWO explicitly classical
+and synthetic steps. First, its fixed-point Solomon-inspired
+two-level-reservoir model tested memoryless versus retained-state
+dynamics with 0/1/3/27/81 latent cells (native/TLS_TEMPORAL_MEMORY_PROTOCOL.md).
+Second, its stochastic train/validation/heldout experiment
+generated independent synthetic IID_NULL, ONE_TLS, THREE_TLS
+event streams, matched count-preserving temporal shuffles,
+tested Brier-score predictive advantage and lagged correlations,
+and froze the accepted source bytes
+(native/TLS_STOCHASTIC_HELDOUT_PROTOCOL.md).
+
+The temporal source archive is the actual data source for the later
+Omnibit40, fully framed entropy, independent HTTP-0 fabric and
+four-floor matrix tests. Each full-matrix acceptance now binds
+the DOI-containing PNP_TLS.hbp and PNP_TLS_STOCHASTIC.hbp receipts
+as **two explicit SHA-256 provenance roots**, in addition to
+the original source trace bytes. The DOI identifies the external
+scientific inspiration; measured hardware jump data are not
+present and no quantum physical fit is claimed for our
+synthetic held-out source.
+
 ## Genuine neural and matrix source dependencies
 
-Six existing accepted source artifacts become mandatory provenance
-roots: PNP_BRIDGE.hbp, PNP_OMNI40.hbp, PNP_GNN_GATE.hbp,
-PNP_CHECKPOINT.hbp, PNP_FABRIC_GC.hbp and the exact
-PNP_MICROKERNEL_RESULTS.bin. This preserves the original four trainable
+Eight existing accepted artifacts become mandatory provenance
+roots: PNP_TLS.hbp, PNP_TLS_STOCHASTIC.hbp, PNP_BRIDGE.hbp,
+PNP_OMNI40.hbp, PNP_GNN_GATE.hbp, PNP_CHECKPOINT.hbp,
+PNP_FABRIC_GC.hbp, and the exact PNP_MICROKERNEL_RESULTS.bin.
+The first two archives must contain DOI 10.1103/j1r2-5ph7.
+The new HBI/HBP archive records all eight actual prior SHA-256 roots
+as individually authenticated receipt rows. This preserves the original four trainable
 GNN families, all nine source-authenticated Q20 model checkpoint
 imports, the G1/G2/G3/G4/OmniShannon/SHA family map, and GAC 60D
 source law. Each of 54 source tasks also receives an original native
