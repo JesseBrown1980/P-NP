@@ -2,7 +2,7 @@
 use pnp_native::{
     certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, binary_ternary_bridge, checkpoint, ensemble, fabric_gc, gc_archive, gulp_gc,
     guidance::{Guidance, Strategy},
-    policy, prism, relic, scoring, source, omnibit_tournament,
+    policy, prism, relic, scoring, source, omnibit_tournament, omnibit_operator_gate,
     solver::{check_against_exhaustive, solve},
     ternary::{model_to_text, Cnf},
 };
@@ -94,6 +94,37 @@ fn main() {
                 Path::new(&gac), Path::new(&neural), Path::new(&omni), Path::new(&out)
             )?;
             println!("PNP_GC_ARCHIVE_VERIFY|original_bodies={count}|source=GIT_PINNED|archive=EXACT|restart_replay=PASS|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("omni40-attest") => {
+            let original = arguments.next().ok_or("missing original Omnibit catalog")?;
+            let upstream = arguments.next().ok_or("missing accepted HBI/HBP tournament receipts")?;
+            let out = arguments.next().ok_or("missing 40-operator evidence output")?;
+            if arguments.next().is_some() {
+                return_fail("too many Omnibit 40-operator arguments");
+            }
+            let count = omnibit_operator_gate::attest(
+                Path::new(&original),Path::new(&upstream),Path::new(&out)
+            )?;
+            if omnibit_operator_gate::verify(
+                Path::new(&original),Path::new(&upstream),Path::new(&out)
+            )? != count {
+                return_fail("original Omega 40-operator witness replay disagreed");
+            }
+            println!("PNP_OMNI40|original_catalog=BYTE_IDENTICAL|operators=40|rnq=8|tri=12|pi=20|floor_widths=6_8_10_12|compound=256_PLUS_64|public_fixtures=20|vantage_labels=6|candidate_trials=20160|selections=504|retention=EXACT_REPLAY_REQUIRED|receipts={count}|replay=EXACT|scoreboard=NOT_SCORED|winner=NONE|seat_local_runs=0|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("omni40-verify") => {
+            let original = arguments.next().ok_or("missing original Omnibit catalog")?;
+            let upstream = arguments.next().ok_or("missing original HBI/HBP tournament receipts")?;
+            let out = arguments.next().ok_or("missing 40-operator evidence output")?;
+            if arguments.next().is_some() {
+                return_fail("too many original Omega verifier arguments");
+            }
+            let count = omnibit_operator_gate::verify(
+                Path::new(&original),Path::new(&upstream),Path::new(&out)
+            )?;
+            println!("PNP_OMNI40_VERIFY|operators=40|candidate_trials=20160|selections=504|receipts={count}|all_payload_bytes=VERIFIED|source_git=PASS|floor_inverse=EXACT|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("omnibit-attest") => {
@@ -375,7 +406,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | gulp-discard GAC NEURAL OMNI OUT | gulp-discard-verify GAC NEURAL OMNI OUT | gc-archive-attest GAC NEURAL OMNI OUT | gc-archive-verify GAC NEURAL OMNI OUT | omni40-attest SOURCE UPSTREAM OUT | omni40-verify SOURCE UPSTREAM OUT | omnibit-attest SOURCE UPSTREAM OUT | omnibit-verify SOURCE UPSTREAM OUT | bridge-attest PRISM GAC NEURAL OMNI UPSTREAM OUT | bridge-verify PRISM GAC NEURAL OMNI UPSTREAM OUT | prism-attest SOURCE OUT | prism-verify SOURCE OUT | fabric-gc-attest GAC NEURAL OMNI OUT | fabric-gc-verify GAC NEURAL OMNI OUT | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | checkpoint-attest MODELS SOURCE OUT | checkpoint-verify MODELS SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {
