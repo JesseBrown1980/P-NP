@@ -10,7 +10,8 @@ use std::path::Path;
 
 fn main() {
     let mut arguments = std::env::args().skip(1);
-    let result = match arguments.next().as_deref() {
+    let result: Result<(), String> = (|| {
+        match arguments.next().as_deref() {
         Some("audit") => {
             let directory = arguments.next().unwrap_or_else(|| ".".to_owned());
             match policy::check_repository(Path::new(&directory)) {
@@ -78,7 +79,8 @@ fn main() {
             Ok(())
         }
         _ => Err("usage: pnp-native audit [root] | certify | relic | sat ENGINE FILE [node-budget]".to_owned()),
-    };
+        }
+    })();
     if let Err(message) = result {
         eprintln!("PNP_NATIVE_FAIL|reason={message}|json=0");
         std::process::exit(1);
