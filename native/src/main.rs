@@ -53,7 +53,7 @@ fn main() {
             )? != count {
                 return_fail("GC staged archive differs on readback");
             }
-            println!("PNP_GC_ARCHIVE|original_bodies={count}|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|operator=HELD|live_rotation=HOLD|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            println!("PNP_GC_ARCHIVE|original_bodies={count}|source_unchanged=PASS|archives=BYTE_IDENTICAL|overwrite=REJECTED|authorization=AUTO_VERIFIED|manual_approval=NOT_REQUIRED|live_rotation=HOLD_ATOMICITY|gulp_feedback=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("gc-archive-verify") => {
