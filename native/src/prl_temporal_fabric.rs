@@ -220,7 +220,7 @@ fn execute(source_dir:&Path)->Result<(Bundle,Stats),String>{
         let mut reversals=0_usize;
         let mut iid=0_usize;
 
-        for (case,(mode,rep,_,_,held,shuffled)) in cases.iter().enumerate(){
+        for (case,(mode,_rep,_,_,held,shuffled)) in cases.iter().enumerate(){
             let (fit,choice)=&models[case];
             for floor in FLOORS{
                 let mut pair=[(0_u128,0_u128);2];
@@ -431,7 +431,7 @@ mod tests{
             for variant in 0..2_u8{
                 for floor in FLOORS{
                     append_record(&mut data,case,variant,floor,
-                        &vec![7_u8,0,11,0].repeat(EVENT_COUNT)).unwrap();
+                        &[7_u8,0,11,0].repeat(EVENT_COUNT)).unwrap();
                 }
             }
         }
