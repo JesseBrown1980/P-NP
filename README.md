@@ -10,6 +10,14 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Native ternary engine rebuild (November 18, 2026)
+
+The [Rust 1.81 native ternary engine protocol](native/TERNARY_ENGINE_PROTOCOL.md) now uses [THE RELIC REDISCOVERY](https://github.com/JesseBrown1980/THE-RELIC-REDISCOVERY) as the exact reference for invariant free-center semantics, ternary prefixes, intermediate ×3 waves, nonuniform structural landings, and 27-triple center/difference reconstruction. The 3/27/81 n-ary structures are real source-derived dispatch lanes and matrix fabric widths. Balanced `−1,0,+1` trits represent false, unassigned, true in the SAT core.
+
+**First native pass:** nine Rust-only source-derived strategies share one exact full SAT DPLL implementation and were verified on small SAT/UNSAT/PHP tests, with 2,304 exhaustive crosschecks; full [Rust 1.81 Clippy, byte-exact replay and independent archive](https://github.com/JesseBrown1980/P-NP/actions/runs/44275667495) PASSED. This is a fresh native correctness baseline; **historical trained GNN/FNN weights, full Omni/Host-8 architecture, source-equivalent Fischer/HXF algorithms, general cryptographic benchmarks, and a P=NP theorem remain pending**. The 54 legacy artifacts are still nonaccepted under the new software contract.
+
+---
+
 
 **Status (2026-11-17): OPEN RESEARCH.** This repository tests whether source-frozen, independently verified representation discovery and move selection can reduce the total cost of difficult constraint problems. The mathematical outcome is undecided. A finite set of successful experiments is evidence about algorithms and instances, while a statement about the complexity classes P and NP requires a mathematical theorem.
 
