@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 use pnp_native::{
-    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave,
+    certify_exact_witness, certify_matrix_fabric, certify_lazy_wave, ensemble,
     guidance::{Guidance, Strategy},
     policy, relic, scoring, source,
     solver::{check_against_exhaustive, solve},
@@ -54,6 +54,29 @@ fn main() {
                 return_fail("source HBI/HBP acceptance count differed");
             }
             println!("PNP_SOURCE_ATTEST|source_pins={count}|model_checkpoints=9|manifest_checkpoints_sha=2|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|port=HOLD|status=PASS|json=0");
+            Ok(())
+        }
+        Some("gnn-gate-attest") => {
+            let sources = arguments.next().ok_or("missing original source archive")?;
+            let output = arguments.next().ok_or("missing multi-GNN HBI/HBP directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many multi-GNN attest arguments");
+            }
+            let records = ensemble::attest(Path::new(&sources), Path::new(&output))?;
+            if ensemble::verify(Path::new(&sources), Path::new(&output))? != records {
+                return_fail("independent multi-GNN receipt replay differed");
+            }
+            println!("PNP_MULTIGNN|families=10|trained_architectures=4|checkpoints=9|scoring_signals=8|g4_cases=13|records={records}|tier0=SOURCE_MATCHED|operator_approval=HELD|g3=HOLD_SOURCE|neural_forward=HOLD|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0");
+            Ok(())
+        }
+        Some("gnn-gate-verify") => {
+            let sources = arguments.next().ok_or("missing original source archive")?;
+            let output = arguments.next().ok_or("missing multi-GNN receipt directory")?;
+            if arguments.next().is_some() {
+                return_fail("too many multi-GNN verify arguments");
+            }
+            let records = ensemble::verify(Path::new(&sources), Path::new(&output))?;
+            println!("PNP_MULTIGNN_VERIFY|records={records}|g4=SOURCE_MATCHED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0");
             Ok(())
         }
         Some("score-attest") => {
@@ -142,7 +165,7 @@ fn main() {
             }
             Ok(())
         }
-        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
+        _ => Err("usage: pnp-native audit [root] | certify | relic | source-attest TRAINED STAGE OUT | source-verify OUT | score-attest CASES SOURCE OUT | score-verify CASES SOURCE OUT | gnn-gate-attest SOURCE OUT | gnn-gate-verify SOURCE OUT | sat ENGINE FILE [node-budget]".to_owned()),
         }
     })();
     if let Err(message) = result {

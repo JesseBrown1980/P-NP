@@ -1,0 +1,14 @@
+HBIHEADER|schema=pnp.g4.reference.v1|source_blob=9006f5cca08fab56c906bb67237e17974090cfe8|scale=10000|json=0
+G4CASE|id=edge_mine|prev=DESCRIBED|edge=8000|path=1000|gain=0|g1=1000|g2=1001|g3=1002|next=EDGE_MINED|emit=1|tier0=0|json=0
+G4CASE|id=path_found|prev=EDGE_MINED|edge=8000|path=7000|gain=0|g1=1003|g2=1004|g3=1005|next=PATH_FOUND|emit=1|tier0=0|json=0
+G4CASE|id=mistake|prev=PATH_FOUND|edge=8000|path=7000|gain=-3000|g1=1006|g2=1007|g3=1008|next=MISTAKE_FLAGGED|emit=1|tier0=1|json=0
+G4CASE|id=retry|prev=MISTAKE_FLAGGED|edge=9000|path=9000|gain=1000|g1=1009|g2=1010|g3=1011|next=PATH_FOUND|emit=1|tier0=0|json=0
+G4CASE|id=converge|prev=PATH_FOUND|edge=9000|path=9000|gain=8000|g1=1012|g2=1013|g3=1014|next=CONVERGED|emit=1|tier0=0|json=0
+G4CASE|id=absorbing|prev=CONVERGED|edge=10000|path=10000|gain=-10000|g1=1015|g2=1016|g3=1017|next=CONVERGED|emit=0|tier0=0|json=0
+G4CASE|id=no_antecedent|prev=DESCRIBED|edge=8000|path=8000|gain=8000|g1=1018|g2=none|g3=1020|next=DESCRIBED|emit=0|tier0=0|json=0
+G4CASE|id=no_signal|prev=EDGE_MINED|edge=none|path=8000|gain=8000|g1=1021|g2=1022|g3=1023|next=EDGE_MINED|emit=0|tier0=0|json=0
+G4CASE|id=path_below|prev=EDGE_MINED|edge=1|path=4999|gain=0|g1=1024|g2=1025|g3=1026|next=EDGE_MINED|emit=0|tier0=0|json=0
+G4CASE|id=path_at|prev=EDGE_MINED|edge=1|path=5000|gain=0|g1=1027|g2=1028|g3=1029|next=PATH_FOUND|emit=1|tier0=0|json=0
+G4CASE|id=gain_below|prev=PATH_FOUND|edge=1|path=5000|gain=4999|g1=1030|g2=1031|g3=1032|next=PATH_FOUND|emit=0|tier0=0|json=0
+G4CASE|id=gain_at|prev=PATH_FOUND|edge=1|path=5000|gain=5000|g1=1033|g2=1034|g3=1035|next=CONVERGED|emit=1|tier0=0|json=0
+G4CASE|id=edge_zero|prev=DESCRIBED|edge=0|path=9000|gain=9000|g1=1036|g2=1037|g3=1038|next=DESCRIBED|emit=0|tier0=0|json=0
