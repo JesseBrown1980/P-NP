@@ -94,3 +94,52 @@ FNN/GNN forward parity and trained reverse-gain arbitration with
 a matched byte/time comparison. These neural components remain
 HOLD_FORWARD until actual original checkpoint tensor/graph execution
 matches independently produced held-out reference outputs.
+
+
+## OmniMets source-mapped monitoring and convergence (native extension)
+
+The historical OmniMets package is in
+[JesseBrown1980/asolaria-behcs-256](https://github.com/JesseBrown1980/asolaria-behcs-256/tree/818cc235a6db815e3b2591339cf9b42aad3e85a0/packages/omnimets).
+It has two distinct functions:
+
+- mets.ts records seven lane counters (muscular, skeletal, nervous,
+  circulatory, endocrine, digestive, cross): dispatch, promotion,
+  deferral, halt, error, latency and sample count, with event rollup.
+- convergence.ts defines 6 bodies × 6 reflections × 6 waves ×
+  6 phases × 6 lanes × 12 iterations = 93,312 theoretical cells.
+  Its configurable convergence rule requires K consecutive independent
+  results (historically K=3), and ratification before seal.
+
+The native src/omnimets_ledger.rs adapts these specific observable
+semantics to the source-checked five-level kernel, and original Git
+tree/blob identities are pinned in CI. It is a bounded K=3 convergence
+gate, not an execution of all 93,312 historical convergence cells.
+
+In the native acceptance test, 120 27-trit vectors pass 600
+floor messages (64/256/1024/4096/16384 symbols), 480 exact
+up/down floor rebasings, and 360 three-child presentations.
+At every source room, one trial deliberately requests a
+noncertified Omnibit operator at the experimental 16,384 floor,
+proving automatic HALT/ERROR and immediate owned-room GULP.
+
+OmniMets counts physical microkernel dispatches:
+- 600 five-floor kernel calls;
+- 360 child MCP-style room calls and 360 parent calls;
+- 120 planted invalid operator calls.
+
+This yields 1,440 total dispatches, 1,320 promotions, 120
+halts/errors, 120 recorded early-seal deferrals, 120 ratifications
+and 120 seals. Every dispatch has an integer nanosecond latency
+sample. Both a per-lane receipt and a SHA-256-linked ordered event
+root are emitted. Counts measure executed operations, not a
+forecasted agent population.
+
+The 16,384-symbol floor is separately tagged as an experimental
+8-trit code. Its reversible representation is tested independently;
+the original source Omnibit40 catalog applies at its four certified
+floors. Original trained GNN/FNN inference remains HOLD_FORWARD;
+OmniMets telemetry does not substitute for trained model inference.
+
+The N-Nest source separately requires a parent to recompute and
+verify child presentations, propagating failures upward. OmniMets
+ratify-before-seal measures and gates that three-child convergence.
