@@ -20,6 +20,7 @@ pub mod omnibit_operator_gate;
 pub mod policy;
 pub mod relic;
 pub mod rime_disk;
+pub mod rime_sat_bench;
 pub mod shadow3;
 pub mod prism;
 pub mod scoring;
