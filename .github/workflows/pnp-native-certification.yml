@@ -67,6 +67,14 @@ jobs:
           path: source-prism
           persist-credentials: false
           fetch-depth: 1
+      - name: Checkout original Omnibit six-vantage tournament and operator catalog
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-omega-omnibit-tournament
+          ref: dad4647ad19a1b08ee90990c34aab1255f9a6046
+          path: source-omnibit
+          persist-credentials: false
+          fetch-depth: 1
       - name: Pin exact Rust 1.81, offline sources and Clippy
         run: |
           set -euo pipefail
@@ -92,7 +100,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -547,6 +555,60 @@ jobs:
           native/target/release/pnp-native bridge-verify source-prism source-gac source-neural source-omni evidence evidence >/dev/null
           ( cd evidence && sha256sum -c PNP_BRIDGE_DIGESTS.sha256 )
           echo 'PNP_BRIDGE_NEGATIVE|reserved_243_to_255=REJECTED|upstream=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|restored=PASS|json=0'
+      - name: Original Omnibit operator code and six-vantage public fixture tournament
+        run: |
+          set -euo pipefail
+          rustc --edition=2021 --test source-omnibit/reference/omega-operator-catalog-v0/omega_operator_catalog.rs -o "$RUNNER_TEMP/omnibit-original-operators"
+          "$RUNNER_TEMP/omnibit-original-operators" | tee ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp
+          native/target/release/pnp-native omnibit-attest source-omnibit evidence evidence | tee PNP_OMNIBIT_ATTEST.hbp
+          native/target/release/pnp-native omnibit-verify source-omnibit evidence evidence | tee PNP_OMNIBIT_VERIFY.hbp
+          grep -Fq 'PNP_OMNIBIT|original_source=VERIFIED|source_files=5|seats=3|views=2|routing_arms=3|public_fixtures=20|runs=360|exact_replay=360|retention_cases=3|receipts=369|scoreboard=NOT_SCORED|winner=NONE|seat_local_runs=0|manual_approval=NOT_REQUIRED|hbi=PASS|hbp=PASS|sha256=PASS|sh=PASS|hash_chain=PASS|status=PASS|json=0' PNP_OMNIBIT_ATTEST.hbp
+          grep -Fq 'PNP_OMNIBIT_VERIFY|source_pins=PASS|public_fixture=20|runs=360|replay=EXACT|archive_payload=COMPLETE|receipts=369|scoreboard=NOT_SCORED|hbi=PASS|hbp=PASS|sha256=PASS|hash_chain=PASS|status=PASS|json=0' PNP_OMNIBIT_VERIFY.hbp
+          test "$(grep -c '^OMNIBIT_SOURCE|' evidence/PNP_OMNIBIT.hbp)" -eq 5
+          test "$(grep -c '^OMNIBIT_RUN|' evidence/PNP_OMNIBIT.hbp)" -eq 360
+          test "$(grep -c '^OMNIBIT_GC|' evidence/PNP_OMNIBIT.hbp)" -eq 3
+          test "$(grep -c '^OMNIBIT_SUMMARY|' evidence/PNP_OMNIBIT.hbp)" -eq 1
+          test "$(grep -c '^HBI|' evidence/PNP_OMNIBIT.hbi)" -eq 369
+          test "$(grep -c '|seat_label=acer|view_label=NORMAL|' evidence/PNP_OMNIBIT.hbp)" -eq 60
+          test "$(grep -c '|seat_label=liris|view_label=ANTI|' evidence/PNP_OMNIBIT.hbp)" -eq 60
+          test "$(grep -c '|seat_label=relic|view_label=ANTI|' evidence/PNP_OMNIBIT.hbp)" -eq 60
+          grep -Fq '|retention=SUMMARY_ONLY|summary_committed=1|payload_retained=0|independent_replay=0|reclaim=1|' evidence/PNP_OMNIBIT.hbp
+          grep -Fq '|retention=EXACT_REPLAY_REQUIRED|summary_committed=1|payload_retained=0|independent_replay=0|reclaim=0|' evidence/PNP_OMNIBIT.hbp
+          grep -Fq '|retention=EXACT_REPLAY_REQUIRED|summary_committed=1|payload_retained=1|independent_replay=1|reclaim=1|' evidence/PNP_OMNIBIT.hbp
+          grep -Fq '|source_catalog_operators=40|original_source_scoreboard=NOT_SCORED|new_winner=NONE|private_seat_runs=0|' evidence/PNP_OMNIBIT.hbp
+          cp evidence/PNP_OMNIBIT.hbp "$RUNNER_TEMP/original-omnibit.hbp"
+          cp evidence/PNP_OMNIBIT.hbi "$RUNNER_TEMP/original-omnibit.hbi"
+          cp evidence/PNP_OMNIBIT.anchor "$RUNNER_TEMP/original-omnibit.anchor"
+          cp evidence/PNP_OMNIBIT_PAYLOAD.bin "$RUNNER_TEMP/original-omnibit.bin"
+          native/target/release/pnp-native omnibit-attest source-omnibit evidence evidence > "$RUNNER_TEMP/repeat-omnibit.hbp"
+          cmp evidence/PNP_OMNIBIT.hbp "$RUNNER_TEMP/original-omnibit.hbp"
+          cmp evidence/PNP_OMNIBIT.hbi "$RUNNER_TEMP/original-omnibit.hbi"
+          cmp evidence/PNP_OMNIBIT.anchor "$RUNNER_TEMP/original-omnibit.anchor"
+          cmp evidence/PNP_OMNIBIT_PAYLOAD.bin "$RUNNER_TEMP/original-omnibit.bin"
+          ( cd evidence && sha256sum PNP_OMNIBIT.hbp PNP_OMNIBIT.hbi PNP_OMNIBIT.anchor PNP_OMNIBIT_PAYLOAD.bin > PNP_OMNIBIT_DIGESTS.sha256 )
+          ( cd evidence && sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 )
+      - name: Omnibit original Git source and HBI HBP payload corruption negatives
+        run: |
+          set -euo pipefail
+          for name in PNP_OMNIBIT.hbp PNP_OMNIBIT.hbi PNP_OMNIBIT.anchor PNP_OMNIBIT_PAYLOAD.bin; do
+            cp "evidence/$name" "$RUNNER_TEMP/$name"
+            printf X >> "evidence/$name"
+            if native/target/release/pnp-native omnibit-verify source-omnibit evidence evidence > "$RUNNER_TEMP/omnibit-corrupt.hbp" 2>&1; then
+              echo "PNP_OMNIBIT_NEGATIVE_FAIL|file=$name|json=0"
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/$name" "evidence/$name"
+          done
+          cp source-omnibit/contracts/ARCHITECTURE.hbp "$RUNNER_TEMP/omnibit-architecture.hbp"
+          printf X >> source-omnibit/contracts/ARCHITECTURE.hbp
+          if native/target/release/pnp-native omnibit-verify source-omnibit evidence evidence > "$RUNNER_TEMP/omnibit-source.hbp" 2>&1; then
+            echo 'PNP_OMNIBIT_NEGATIVE_FAIL|original_source=ACCEPTED|json=0'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/omnibit-architecture.hbp" source-omnibit/contracts/ARCHITECTURE.hbp
+          native/target/release/pnp-native omnibit-verify source-omnibit evidence evidence > /dev/null
+          ( cd evidence && sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 )
+          echo 'PNP_OMNIBIT_NEGATIVE|source=REJECTED|hbi=REJECTED|hbp=REJECTED|anchor=REJECTED|payload=REJECTED|retention_exact_without_payload=HOLD|status=PASS|json=0'
       - name: Relic rediscovery source-exact integer wave and frozen center replays
         run: |
           set -euo pipefail
@@ -619,10 +681,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp evidence/
+          cp RUST_PIN.hbp PNP_AUDIT.hbp PNP_MATRIX.hbp PNP_MATRIX_REPEAT.hbp PNP_NATIVE_OUTPUT.sha256 PNP_RELIC.hbp PNP_RELIC_REPEAT.hbp PNP_TERNARY.hbp PNP_TERNARY_ORIGINAL.hbp SOURCE_ATTEST.hbp SOURCE_VERIFY.hbp PNP_SCORE_ATTEST.hbp PNP_SCORE_REPLAY.hbp PNP_MULTIGNN_ATTEST.hbp PNP_MULTIGNN_VERIFY.hbp PNP_CHECKPOINT_ATTEST.hbp PNP_CHECKPOINT_VERIFY.hbp PNP_FABRIC_GC_ATTEST.hbp PNP_FABRIC_GC_VERIFY.hbp PNP_PRISM_ATTEST.hbp PNP_PRISM_VERIFY.hbp ORIGINAL_PRISM_REFERENCE.hbp PNP_GC_ARCHIVE_ATTEST.hbp PNP_GC_ARCHIVE_VERIFY.hbp PNP_GULP_DISCARD_RUN.hbp PNP_GULP_DISCARD_VERIFY.hbp PNP_BRIDGE_ATTEST.hbp PNP_BRIDGE_VERIFY.hbp PNP_OMNIBIT_ATTEST.hbp PNP_OMNIBIT_VERIFY.hbp ORIGINAL_OMNIBIT_OPERATOR_REFERENCE.hbp evidence/
           git rev-parse HEAD > evidence/SOURCE_COMMIT.hbp
           git ls-files > evidence/TRACKED_SOURCES.hbi
-          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp > evidence/SOURCE_PINS.sha256
+          sha256sum native/Cargo.toml native/Cargo.lock native/rust-toolchain.toml policy/LEGACY_PINNED.hbp policy/TRAINED_SOURCE_PINS.hbi native/fixtures/SOURCE_SCORE_VECTORS.hbi native/fixtures/MULTI_GNN_FAMILIES.hbi native/fixtures/G4_GLSM_REFERENCE.hbi policy/GAC_GC_SOURCE_PINS.hbi policy/PRISM_SOURCE_PIN.hbi native/fixtures/GULP_OWNED_EVENTS.hbp policy/OMNIBIT_TOURNAMENT_PINS.hbi native/fixtures/OMNIBIT_PUBLIC_TRITS.hbp > evidence/SOURCE_PINS.sha256
           ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
           ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
           echo 'PNP_NATIVE_CERTIFICATE|rust=1.81.0|clippy_zero_warning=PASS|integer_only=PASS|legacy=FAIL_NATIVE_ACCEPTANCE|native_pilot=PASS|json=0'
@@ -656,6 +718,14 @@ jobs:
           sha256sum -c PNP_GC_ARCHIVE_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_GULP_DIGESTS.sha256 >/dev/null
           sha256sum -c PNP_BRIDGE_DIGESTS.sha256 >/dev/null
+          sha256sum -c PNP_OMNIBIT_DIGESTS.sha256 >/dev/null
+          grep -Fq 'PNP_OMNIBIT|original_source=VERIFIED|source_files=5|seats=3|views=2|routing_arms=3|public_fixtures=20|runs=360|exact_replay=360|' PNP_OMNIBIT_ATTEST.hbp
+          grep -Fq 'PNP_OMNIBIT_VERIFY|source_pins=PASS|public_fixture=20|runs=360|replay=EXACT|archive_payload=COMPLETE|' PNP_OMNIBIT_VERIFY.hbp
+          test "$(grep -c '^OMNIBIT_RUN|' PNP_OMNIBIT.hbp)" -eq 360
+          test "$(grep -c '^OMNIBIT_SOURCE|' PNP_OMNIBIT.hbp)" -eq 5
+          test "$(grep -c '^HBI|' PNP_OMNIBIT.hbi)" -eq 369
+          grep -Fq '|original_source_scoreboard=NOT_SCORED|new_winner=NONE|private_seat_runs=0|' PNP_OMNIBIT.hbp
+          grep -Fq '|retention=EXACT_REPLAY_REQUIRED|summary_committed=1|payload_retained=0|independent_replay=0|reclaim=0|' PNP_OMNIBIT.hbp
           grep -Fq 'PNP_BRIDGE|source_prism=VERIFIED|source_gac=VERIFIED|binary_floors=4|ternary_landings=8|floor_checks=3186|route_checks=9840|reserved_byte_codes=13|' PNP_BRIDGE_ATTEST.hbp
           grep -Fq 'PNP_BRIDGE_VERIFY|receipts=26|upstream_source=VERIFIED|floor_inverses=PASS|reserved_code_rejection=PASS|' PNP_BRIDGE_VERIFY.hbp
           test "$(grep -c '^BRIDGE_FLOOR|' PNP_BRIDGE.hbp)" -eq 4
