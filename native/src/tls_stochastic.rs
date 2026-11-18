@@ -98,23 +98,23 @@ fn traces(mode: &str, rep: usize) -> Result<ThreeTrace, String> {
     Ok(ThreeTrace { training, validation, heldout, shuffled })
 }
 #[derive(Clone, Copy, Debug, Default)]
-struct Bucket { count: u32, success: u32 }
+pub(crate) struct Bucket { pub(crate) count: u32, pub(crate) success: u32 }
 #[derive(Clone, Debug)]
-struct Fit {
-    prior: i64,
-    mean_x: i64,
-    beta: i64,
-    tables: [Vec<Bucket>; 3],
+pub(crate) struct Fit {
+    pub(crate) prior: i64,
+    pub(crate) mean_x: i64,
+    pub(crate) beta: i64,
+    pub(crate) tables: [Vec<Bucket>; 3],
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Keys { trit3: usize, trit27: usize, trit81: usize }
 #[derive(Clone, Copy, Debug)]
-struct Context {
+pub(crate) struct Context {
     history: [u8; 5],
-    ema: i64,
+    pub(crate) ema: i64,
 }
 impl Context {
-    fn new() -> Self { Self { history: [0; 5], ema: 5_000 } }
+    pub(crate) fn new() -> Self { Self { history: [0; 5], ema: 5_000 } }
     fn keys(&self) -> Keys {
         let a = usize::from(self.history[0]) + usize::from(self.history[1]);
         let b = usize::from(self.history[1]) + usize::from(self.history[2]);
@@ -122,13 +122,13 @@ impl Context {
         let d = usize::from(self.history[3]) + usize::from(self.history[4]);
         Keys { trit3: a, trit27: a + 3*b + 9*c, trit81: a + 3*b + 9*c + 27*d }
     }
-    fn observe(&mut self, outcome: u8) {
+    pub(crate) fn observe(&mut self, outcome: u8) {
         self.history.rotate_right(1);
         self.history[0] = outcome;
         self.ema = (15*self.ema + S*i64::from(outcome)) / 16;
     }
 }
-fn fit(data: &[u8]) -> Result<Fit, String> {
+pub(crate) fn fit(data: &[u8]) -> Result<Fit, String> {
     if data.len() != TRAIN || data.iter().any(|&y| y > 1) {
         return Err("training data missing or nonbinary".to_owned());
     }
@@ -163,7 +163,7 @@ fn fit(data: &[u8]) -> Result<Fit, String> {
     };
     Ok(Fit { prior, mean_x, beta, tables: table })
 }
-fn predict(model:usize, fit:&Fit,context:&Context)->Result<i64,String>{
+pub(crate) fn predict(model:usize, fit:&Fit,context:&Context)->Result<i64,String>{
     let keys=context.keys();
     let p=match model {
         0 => fit.prior,
@@ -180,7 +180,7 @@ fn predict(model:usize, fit:&Fit,context:&Context)->Result<i64,String>{
     };
     Ok(p.clamp(1,9_999))
 }
-fn score(data:&[u8], fitted:&Fit)->Result<[u128;5],String>{
+pub(crate) fn score(data:&[u8], fitted:&Fit)->Result<[u128;5],String>{
     let mut sums=[0_u128;5];
     let mut context=Context::new();
     for &y in data {
@@ -194,7 +194,7 @@ fn score(data:&[u8], fitted:&Fit)->Result<[u128;5],String>{
     }
     Ok(sums)
 }
-fn select(validation:&[u128;5])->usize{
+pub(crate) fn select(validation:&[u128;5])->usize{
     (0..5).min_by_key(|&i|(validation[i]+PENALTY*(i as u128),i)).unwrap_or(0)
 }
 fn lag(data:&[u8], gap:usize)->Result<(usize,usize,usize,usize,i64),String>{
