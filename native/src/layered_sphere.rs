@@ -370,7 +370,7 @@ pub fn certify() -> Result<SphereStats, &'static str> {
                 1 => Trit::Zero,
                 _ => Trit::Plus,
             }).collect();
-            let mut last = None;
+            let mut last: Option<LevelPacket> = None;
             let mut room_kernel = Room::default();
             for (floor_name, _, _) in FLOORS {
                 let packet = LevelPacket::freeze(floor_name, &trits)?;
