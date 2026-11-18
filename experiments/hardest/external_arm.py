@@ -22,7 +22,8 @@ def timed(command, stdout_path, stderr_path, memory_path, seconds):
     args = ["/usr/bin/time", "-f", "%M", "-o", str(memory_path),
             "timeout", "--kill-after=5s", str(seconds) + "s"] + command
     t = monotonic_ns()
-    p = run(args, stdout_path.open("wb"), stderr_path.open("wb"), check=False)
+    with stdout_path.open("wb") as output, stderr_path.open("wb") as errors:
+        p = run(args, stdout=output, stderr=errors, check=False)
     elapsed = monotonic_ns() - t
     memory = memory_path.read_text(encoding="ascii").strip().splitlines()
     rss = int(memory[-1]) if memory and memory[-1].isdigit() else -1
@@ -105,11 +106,12 @@ def run_external(arm, case, cnf, archive, drat_path):
             proof_bytes = proof.stat().st_size
             proof_sha = hashlib.sha256(proof.read_bytes()).hexdigest()
             before = monotonic_ns()
-            verified = run(
-                ["timeout", "--kill-after=5s", str(CERT_LIMIT_SECONDS) + "s",
-                 str(drat_path), str(cnf), str(proof)],
-                stdout=(archive / "drat.stdout").open("wb"),
-                stderr=(archive / "drat.stderr").open("wb"), check=False)
+            with (archive / "drat.stdout").open("wb") as proof_out, (
+                    archive / "drat.stderr").open("wb") as proof_err:
+                verified = run(
+                    ["timeout", "--kill-after=5s", str(CERT_LIMIT_SECONDS) + "s",
+                     str(drat_path), str(cnf), str(proof)],
+                    stdout=proof_out, stderr=proof_err, check=False)
             cert_ns = monotonic_ns() - before
             if verified.returncode == 0 and "s VERIFIED" in (
                     archive / "drat.stdout").read_text(encoding="ascii"):
