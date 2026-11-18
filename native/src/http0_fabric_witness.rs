@@ -272,7 +272,7 @@ fn execute_request(path: &str, body: &[u8], states: &mut BTreeMap<u64, u64>)
     -> Result<Vec<u8>, String>
 {
     let parts: Vec<&str> = path.split('/').collect();
-    if parts.len() != 5 || parts[0] != "" || parts[1] != "room" {
+    if parts.len() != 5 || !parts[0].is_empty() || parts[1] != "room" {
         return Err("room dispatch path invalid".into());
     }
     let arity: usize = parts[2].parse().map_err(|_| "room arity")?;
