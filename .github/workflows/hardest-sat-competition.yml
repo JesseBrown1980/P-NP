@@ -1,0 +1,164 @@
+name: P-NP six-contender hard SAT competition
+on:
+  pull_request:
+    paths:
+      - 'experiments/hardest/**'
+      - '.github/workflows/hardest-sat-competition.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  run-competitor:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [ym_fischer, rime_new, rime_original, minisat, cadical, picosat]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Confirm original source identities and exact policy
+        run: |
+          set -euo pipefail
+          test "$(git hash-object sat/engine.py)" = 0f67b6a32ad830188c1b8194ed212ef4950c3e7b
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_fischer.py)" = cbdf20564f1b38f3ddd08062ead8174ecc3d236a
+          test "$(git hash-object historical/asolaria-2026-07-21/rime_sphere.py)" = 449ac82b82223349ca8fc41d8e9b005fd3beda06
+          python3 -I -B tools/exact_policy.py experiments/hardest/challenge.py experiments/hardest/native_arm.py experiments/hardest/external_arm.py experiments/hardest/verify_hardest.py
+      - name: Generate same frozen 4 input sources
+        run: |
+          set -euo pipefail
+          mkdir -p "build/$ARM/input" "build/$ARM/cases"
+          python3 -I -B experiments/hardest/challenge.py "build/$ARM/input" | tee "build/$ARM/SOURCE.hbp"
+          grep -Fq 'HARD_SOURCE|case=php21|variables=420|clauses=4221|' "build/$ARM/SOURCE.hbp"
+          grep -Fq 'HARD_SOURCE|case=tseitin128|variables=192|clauses=512|' "build/$ARM/SOURCE.hbp"
+          grep -Fq 'HARD_SOURCE|case=php4sat|variables=16|clauses=28|' "build/$ARM/SOURCE.hbp"
+          test "$(grep -c '^HARD_SOURCE|' "build/$ARM/SOURCE.hbp")" -eq 4
+      - name: Install pinned external SAT tools and DRAT checker
+        if: ${{ matrix.arm == 'minisat' || matrix.arm == 'cadical' || matrix.arm == 'picosat' }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2' time build-essential
+          dpkg-query -W minisat cadical picosat | tee "build/$ARM/SOLVER_VERSIONS.txt"
+          if [ "$ARM" = cadical ]; then
+            git clone --quiet https://github.com/marijnheule/drat-trim.git "build/$ARM/drat-trim-source"
+            git -C "build/$ARM/drat-trim-source" checkout --quiet 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+            test "$(git -C "build/$ARM/drat-trim-source" rev-parse HEAD)" = 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+            make -C "build/$ARM/drat-trim-source" drat-trim
+            cp "build/$ARM/drat-trim-source/drat-trim" "build/$ARM/drat-trim"
+          fi
+      - name: Run full 4-case arm, preserving HOLD and measurements
+        run: |
+          set -euo pipefail
+          for case in php21 php8 tseitin128 php4sat; do
+            dir="build/$ARM/cases/$case"
+            mkdir -p "$dir"
+            awk '$1=="p"{print $3}' "build/$ARM/input/$case.cnf" > "$dir/variables.txt"
+            if [[ "$ARM" == ym_fischer || "$ARM" == rime_new || "$ARM" == rime_original ]]; then
+              set +e
+              /usr/bin/time -f '%M' -o "$dir/native.rss" timeout --kill-after=5s 45s python3 -s -B experiments/hardest/native_arm.py "$ARM" "$case" "build/$ARM/input/$case.cnf" > "$dir/native.stdout" 2> "$dir/native.stderr"
+              rc=$?
+              set -e
+              if [ "$rc" = 0 ]; then
+                python3 - "$dir/native.stdout" "$dir/receipt.txt" <<'PY'
+          import ast
+          import pathlib
+          import sys
+          lines = pathlib.Path(sys.argv[1]).read_text(encoding="ascii").splitlines()
+          records = [x for x in lines if x.startswith("HARD_NATIVE|")]
+          assert len(records) == 1 and records[0].endswith("|json=0")
+          row = ast.literal_eval(records[0].split("|", 2)[1])
+          pathlib.Path(sys.argv[2]).write_text(repr(row) + "\n", encoding="ascii")
+          PY
+                echo 'COMPLETE' > "$dir/RESULT.txt"
+              elif [ "$rc" = 124 ] || [ "$rc" = 137 ] || [ "$rc" = 143 ]; then
+                echo 'HOLD_TIMEOUT' > "$dir/RESULT.txt"
+              else
+                cat "$dir/native.stderr"
+                exit 1
+              fi
+            else
+              checker=/usr/bin/false
+              if [ "$ARM" = cadical ]; then
+                checker="build/$ARM/drat-trim"
+              fi
+              python3 -s -B experiments/hardest/external_arm.py "$ARM" "$case" "build/$ARM/input/$case.cnf" "$dir" "$checker" | tee "$dir/CASE.hbp"
+              echo 'COMPLETE' > "$dir/RESULT.txt"
+            fi
+            echo "HARD_CASE|arm=$ARM|case=$case|flag=$(cat "$dir/RESULT.txt")"
+          done
+          test "$(find "build/$ARM/cases" -name RESULT.txt | wc -l)" -eq 4
+          ( cd "build/$ARM" && find input cases -type f -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256 )
+          ( cd "build/$ARM" && sha256sum -c MANIFEST.sha256 >/dev/null )
+      - name: Retain every arm's original source, proof and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnp-hard-${{ matrix.arm }}
+          path: build/${{ matrix.arm }}/
+          retention-days: 90
+          if-no-files-found: error
+  independent-referee:
+    needs: run-competitor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pnp-hard-*
+          path: evidence
+          merge-multiple: false
+      - name: Independently compile pinned DRAT checker
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/marijnheule/drat-trim.git build-drattrim
+          git -C build-drattrim checkout --quiet 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          test "$(git -C build-drattrim rev-parse HEAD)" = 2e3b2dc0ecf938addbd779d42877b6ed69d9a985
+          make -C build-drattrim drat-trim
+      - name: Verify all 24 receipts, original CNF math, witnesses and DRAT
+        run: |
+          set -euo pipefail
+          for arm in ym_fischer rime_new rime_original minisat cadical picosat; do
+            test -s "evidence/pnp-hard-$arm/MANIFEST.sha256"
+            (cd "evidence/pnp-hard-$arm" && sha256sum -c MANIFEST.sha256 >/dev/null)
+          done
+          python3 -s -B experiments/hardest/verify_hardest.py evidence build-drattrim/drat-trim | tee HARD_INDEPENDENT.hbp
+          grep -Fq 'HARD_REFEREE_FINAL|arms=6|sources=4|runs=24|' HARD_INDEPENDENT.hbp
+          grep -Fq '|100_flip_controls=PASS|status=PASS' HARD_INDEPENDENT.hbp
+          mkdir -p evidence/research-referee
+          cp HARD_INDEPENDENT.hbp evidence/research-referee/
+          cp experiments/hardest/*.py evidence/research-referee/
+          cp .github/workflows/hardest-sat-competition.yml evidence/research-referee/
+          ( cd evidence && find . -type f ! -name EVIDENCE.sha256 -print0 | sort -z | xargs -0 sha256sum > EVIDENCE.sha256 )
+          ( cd evidence && sha256sum -c EVIDENCE.sha256 >/dev/null )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pnp-hard-all-competitors-independent-acceptance
+          path: evidence/
+          retention-days: 90
+          if-no-files-found: error
+  archive-acceptance:
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pnp-hard-all-competitors-independent-acceptance
+          path: checked
+      - name: Recheck published six-arm archive SHA receipts
+        run: |
+          set -euo pipefail
+          cd checked
+          test -s EVIDENCE.sha256
+          test -s research-referee/HARD_INDEPENDENT.hbp
+          grep -Fq 'HARD_REFEREE_FINAL|arms=6|sources=4|runs=24|' research-referee/HARD_INDEPENDENT.hbp
+          for arm in ym_fischer rime_new rime_original minisat cadical picosat; do
+            test -s "pnp-hard-$arm/MANIFEST.sha256"
+            test "$(find "pnp-hard-$arm/cases" -name RESULT.txt -type f | wc -l)" -eq 4
+          done
+          sha256sum -c EVIDENCE.sha256 >/dev/null
+          echo 'HARD_ARCHIVE|arms=6|cases=24|downloaded=PASS|SHA=PASS'
