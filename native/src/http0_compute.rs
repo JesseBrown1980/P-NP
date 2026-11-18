@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use crate::freeze::fischer_address;
+use crate::matrix_wire;
 
 const PRIME: u64 = 1_000_081;
 const GENERATOR: u64 = 7;
@@ -96,6 +97,9 @@ struct Service{
 }
 impl Service{
     fn calculate(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        if route.starts_with("/matrix/") {
+            return self.calculate_matrix(route,body);
+        }
         let parts:Vec<&str>=route.split('/').collect();
         if parts.len()!=6 || !parts[0].is_empty() || parts[1]!="compute"{
             return Err("native room route shape incorrect".into());
@@ -133,6 +137,46 @@ impl Service{
         for value in result {out.extend_from_slice(&value.to_le_bytes());}
         Ok(out)
     }
+    /// A genuine matrix-floor message, decoded inside the independent HTTP-0
+    /// child process before entering the original integer computation kernel.
+    fn calculate_matrix(&mut self,route:&str,body:&[u8])->Result<Vec<u8>,String>{
+        let parts:Vec<&str>=route.split('/').collect();
+        if parts.len()!=6 || !parts[0].is_empty() || parts[1]!="matrix"{
+            return Err("matrix room route invalid".into());
+        }
+        let mode:u8=parts[2].parse().map_err(|_|"matrix mode")?;
+        let arity:usize=parts[3].parse().map_err(|_|"matrix room capacity")?;
+        let lane:usize=parts[4].parse().map_err(|_|"matrix room lane")?;
+        let address:u64=parts[5].parse().map_err(|_|"matrix Fischer address")?;
+        if !matches!(mode,4|5) || !matches!(arity,3|27|81)
+            || lane>=arity || address!=address_for(lane){
+            return Err("independent matrix Fischer route mismatch".into());
+        }
+        let (task,_,_)=matrix_wire::decode_independent(body)?;
+        if lane!=usize::from(task.id)%arity{
+            return Err("matrix floor task routed to incorrect room".into());
+        }
+        let key=(arity,address,task.id,task.seed,task.trits);
+        let previous=if mode==5{self.memo.get(&key).copied()}else{None};
+        let hit=previous.is_some();
+        let result=previous.unwrap_or_else(||compute_independent(&task));
+        if mode==5 && !hit{self.memo.insert(key,result);}
+        self.calls+=1;
+        self.hits+=usize::from(hit);
+        let state=self.state.entry((arity,address)).or_insert(0);
+        let mut fold=*state^address;
+        for (i,value) in result.iter().enumerate(){
+            fold=fold.rotate_left(7).wrapping_add(*value)
+                .wrapping_mul(0x100_0000_01b3)
+                .wrapping_add(u64::from(task.trits[i]));
+        }
+        *state=fold;
+        let mut out=Vec::with_capacity(1+CELLS+OUTPUT_SIZE);
+        out.push(u8::from(hit));
+        out.extend_from_slice(&task.trits);
+        for value in result{out.extend_from_slice(&value.to_le_bytes());}
+        Ok(out)
+    }
 }
 fn receive(socket:&mut TcpStream)->Result<(String,Vec<u8>),String>{
     let mut reader=BufReader::new(socket);
@@ -162,7 +206,7 @@ fn receive(socket:&mut TcpStream)->Result<(String,Vec<u8>),String>{
     }
     if !ended{return Err("unterminated HTTP-0 headers".into());}
     let length=content_length.ok_or("missing content length")?;
-    if length>WIRE_SIZE{return Err("compute request size exceeded".into());}
+    if length>128{return Err("compute request size exceeded".into());}
     let mut message=vec![0_u8;length];
     reader.read_exact(&mut message).map_err(|e|e.to_string())?;
     Ok((route,message))
@@ -201,6 +245,7 @@ pub fn serve()->Result<(),String>{
 }
 pub struct Client{process:Child,port:u16}
 pub struct ResultFrame{pub values:[u64;CELLS],pub hit:bool}
+pub struct MatrixFrame{pub computed:ResultFrame,pub reconstructed:[u8;CELLS]}
 pub struct Stop{pub calls:usize,pub hits:usize,pub rooms:usize,pub entries:usize}
 impl Client{
     pub fn start()->Result<Self,String>{
@@ -217,7 +262,7 @@ impl Client{
             .parse::<u16>().map_err(|_|"compute port invalid")?;
         Ok(Self{process,port})
     }
-    fn call(&self,route:&str,body:&[u8])->Result<(String,Vec<u8>),String>{
+    pub(crate) fn call(&self,route:&str,body:&[u8])->Result<(String,Vec<u8>),String>{
         let mut socket=TcpStream::connect(("127.0.0.1",self.port))
             .map_err(|e|e.to_string())?;
         let request=format!("POST {route} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len());
@@ -266,6 +311,67 @@ impl Client{
             if *value>=PRIME{return Err("out-of-domain stencil field element".into());}
         }
         Ok(ResultFrame{values:result,hit:bytes[0]==1})
+    }
+    pub fn execute_matrix(&self,mode:u8,arity:usize,lane:usize,
+                          framed:&[u8])->Result<MatrixFrame,String>{
+        let address=fischer_address((lane%27)as u64,(lane/27)as u64)
+            .ok_or("matrix Fischer address missing")?;
+        let route=format!("/matrix/{mode}/{arity}/{lane}/{address}");
+        let (status,data)=self.call(&route,framed)?;
+        if status!="HTTP/1.1 200 OK\r\n"{
+            return Err(format!("matrix third seat rejected message: {}",
+                String::from_utf8_lossy(&data)));
+        }
+        if data.len()!=1+CELLS+OUTPUT_SIZE || data[0]>1{
+            return Err("independent matrix response invalid".into());
+        }
+        let mut reconstructed=[0_u8;CELLS];
+        reconstructed.copy_from_slice(&data[1..1+CELLS]);
+        if reconstructed.iter().any(|value|*value>2){
+            return Err("matrix witness returned impossible ternary digit".into());
+        }
+        let mut values=[0_u64;CELLS];
+        for (index,value) in values.iter_mut().enumerate(){
+            let at=1+CELLS+index*8;
+            *value=u64::from_le_bytes(data[at..at+8].try_into()
+                .map_err(|_|"matrix result width invalid")?);
+            if *value>=PRIME{return Err("matrix cell outside modular domain".into());}
+        }
+        Ok(MatrixFrame{
+            computed:ResultFrame{values,hit:data[0]==1},
+            reconstructed,
+        })
+    }
+    pub fn matrix_negative(&self,arity:usize,framed:&[u8],floor256:&[u8])
+        ->Result<usize,String>{
+        let mut rejected=0;
+        let correct=fischer_address(0,0).ok_or("room zero address")?;
+        let malformed=format!("/matrix/4/{arity}/0/{}",correct+1);
+        let (status,_)=self.call(&malformed,framed)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        let mut tampered=framed.to_vec();
+        tampered[12]=40;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&tampered)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        let mut tampered=framed.to_vec();
+        tampered[0]=9;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&tampered)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        // Source-independent reserved five-trit code, rejected in the backend.
+        let mut reserved=floor256.to_vec();
+        reserved[14]=243;
+        reserved[15]=0;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&reserved)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        // The final five-trit chunk contains three mandatory zero-trit
+        // padding symbols. Replacing it with all '-' must be rejected.
+        let mut bad_padding=floor256.to_vec();
+        let end=bad_padding.len();
+        bad_padding[end-2]=0;
+        bad_padding[end-1]=0;
+        let (status,_)=self.call(&format!("/matrix/4/{arity}/0/{correct}"),&bad_padding)?;
+        if status=="HTTP/1.1 422 Unprocessable Content\r\n"{rejected+=1;}
+        Ok(rejected)
     }
     pub fn mutated_route_rejected(&self,task:&Task,arity:usize)->Result<bool,String>{
         let lane=usize::from(task.id)%arity;

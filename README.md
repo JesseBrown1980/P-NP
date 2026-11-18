@@ -10,6 +10,46 @@ The [binding engineering contract](policy/NATIVE_ACCEPTANCE.md) and [exactly pin
 
 ---
 
+## Full binary–ternary matrix fabric × original Omnibit40 × neural-source gate (November 18, 2026)
+
+**Experimental source lineage:** [Gosling et al., *Probing the memory of a superconducting qubit environment*](https://journals.aps.org/prl/accepted/10.1103/j1r2-5ph7) (PRL accepted October 28, 2026; DOI `10.1103/j1r2-5ph7`) inspired the original **classical** Solomon/TLS memory model and synthetic held-out non-Poissonian-versus-IID event experiments. Those accepted event traces are the actual inputs to the Omnibit40/entropy/Fischer HTTP-0/mixed-radix matrix stack. PRL hardware measurements are distinct from our precommitted synthetic event corpus. The full-matrix verifier now imports both original DOI-bearing `PNP_TLS.hbp` and `PNP_TLS_STOCHASTIC.hbp` roots directly into its HBI/HBP receipt ledger (eight prior-plane SHA roots total).
+
+
+
+[Complete data-path protocol](native/FULL_MATRIX_GNN_FABRIC_PROTOCOL.md) · [native integration](native/src/full_matrix_fabric.rs) · [independent floor decoder](native/src/matrix_wire.rs)
+
+The native whole-matrix gate connects accepted source-derived ternary jobs to
+**all four genuine binary floors (64/256/1024/4096)**, **all 40 original
+Omnibit transforms (RNQ8/TRI12/PI20)**, Fischer modular room addresses,
+**backend-only HTTP-0**, actual independently computed 27-cell/243-tick
+matrix results, reversible worker/reflection/fabric third-seat checks,
+source-authenticated GAC 60D metadata and a genuine G4 neural state gate.
+The receiving process must reconstruct the original trits after the real
+operator inverse and independent base-three decode; it checks all 27
+source digits and 27 computed cell values, not just a hash.
+
+This creates **8,640 full-radix/operator crossings per arm** and
+**51,840 HTTP-0 independent worker requests** across the no-cache and
+source-keyed recall configurations at 3/27/81 room capacities. The same
+original 54 tasks and all source/bridge/Omnibit/multi-GNN/checkpoint
+receipts are reused. Cache arms must report 8,586 exact representation-
+independent hits per room-width and 54 physical calculations. Native
+60D tuples bind task metadata to source hashes; physical axis mapping
+remains separately gated.
+
+The nine published GNN model checkpoints and authentic four model-family
+roster are required provenance. **Trained GNN forward execution is held**
+until source-model outputs, tensor shape/graph semantics and native
+integer inference are independently matched. The original G4 logic
+must reject missing learned G1/G2/G3 input signals, without quietly
+substituting deterministic pseudo-neural predictions.
+
+**First hosted benchmark PASS:** [run #44354419893](https://github.com/JesseBrown1980/P-NP/actions/runs/44354419893), both native and independent artifact-check jobs passed, **107 Rust tests**. All 51,840 native HTTP-0 calls reconstructed the 27 source trits and all 27 exact field values; 18 matrix third-seat groups and 54 authentic G4 missing-trained-input holds passed. Four floor widths and all 40 original Omnibit operators were exercised in each of six backend arms.
+
+Per **8,640 matched representations**, direct native execution took **139.261 ms**, direct source-keyed memoization **10.643 ms**. Across 3/27/81 room capacities, un-cached HTTP-0 took **493.261 / 506.776 / 516.303 ms**, compared with room recall **435.330 / 439.431 / 365.735 ms**. Each cached arm completed **54 physical recurrences and 8,586 exact cross-representation memory hits**, while each un-cached arm completed all 8,640 recurrences. These are single-run measurements from a serial backend worker; CPU concurrency and true trained-GNN performance remain separate gates.
+
+The genuine four trainable GNN families and nine source-authenticated Q20 checkpoint archives are linked into every integration evidence root. **Trained GNN forward parity remains HOLD** until graph/tensor semantics and original held-out inference outputs can be independently matched. The native GAC 60D tuples are verified source-bound metadata, with physical-axis routing still gated.
+
 ## Fischer function-room computation, actual recall and HRM-shape routing (November 18, 2026)
 
 [Exact native acceptance protocol](native/HTTP0_MICROKERNEL_COMPUTE_PROTOCOL.md) · [source-side reference](native/src/microkernel_compute.rs) · [separate native HTTP-0 worker](native/src/http0_compute.rs)

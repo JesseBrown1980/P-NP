@@ -33,6 +33,8 @@ pub mod tls_stream_fabric;
 pub mod http0_fabric_witness;
 pub mod http0_compute;
 pub mod microkernel_compute;
+pub mod matrix_wire;
+pub mod full_matrix_fabric;
 pub mod triad;
 pub mod wave;
 
