@@ -44,8 +44,8 @@ fn authenticated(root: &Path) -> Result<(), String> {
 fn materialize() -> Result<String, String> {
     let mut rows = String::new();
     for wave in 0..WAVES {
-        for actor in 0..6 {
-            for target in 0..6 {
+        for (actor, actor_name) in ACTORS.iter().enumerate() {
+            for (target, target_name) in TARGETS.iter().enumerate() {
                 // Deterministic stratified source sample: every row is an
                 // actual coordinate of the original 93,312-point cube.
                 // No training labels, checkpoint weights or source language
@@ -55,7 +55,7 @@ fn materialize() -> Result<String, String> {
                 let state = (actor + 2*target + wave) % 6;
                 let word = format!(
                     "D1:{}/D2:{}/D3:{}/D4:{risk}/D5:{}/D6:w{wave}",
-                    ACTORS[actor],VERBS[verb],TARGETS[target],STATES[state],
+                    actor_name,VERBS[verb],target_name,STATES[state],
                 );
                 let glyph = behcs_glyph_language::address(&word)
                     .ok_or("unable to map original word to 256-glyph address")?;
@@ -64,7 +64,7 @@ fn materialize() -> Result<String, String> {
                 let id = wave*PAIRS + actor*6 + target;
                 rows.push_str(&format!(
                     "WORD|id={id}|wave={wave}|actor={}|verb={}|target={}|risk={risk}|state={}|word_sha={}|glyph_sha={}|json=0\n",
-                    ACTORS[actor],VERBS[verb],TARGETS[target],STATES[state],
+                    actor_name,VERBS[verb],target_name,STATES[state],
                     hash_bytes(word.as_bytes()),hash_bytes(glyph.as_bytes()),
                 ));
             }
