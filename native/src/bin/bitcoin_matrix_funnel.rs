@@ -203,7 +203,7 @@ fn acceptance(case: &str, raw_cnf: &[u8]) -> Result<String> {
          encoding=BALANCED_TRITS_SIX_PER_BYTE|data_trits={digits}|\
          frames=18|cells_per_frame=27|padding_cells={pad}|\
          fischer_inverse=EXACT|brown_freeze_play=EXACT|\
-         brown_delta_inverse=EXACT|source_bytes_roundtrip_sha256={roundtrip}|\
+         brown_delta_inverse=EXACT|matrix_proof_root={matrix_root}|source_bytes_roundtrip_sha256={roundtrip}|\
          paid_slice_and_delta_bytes={paid_bytes}|\
          negative_header_controls=2|solver_search=NOT_RUN|\
          cryptographic_preimage_discovery=NOT_CLAIMED|status=PASS|json=0\n",
