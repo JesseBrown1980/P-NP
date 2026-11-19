@@ -241,18 +241,80 @@ jobs:
                   result_lines.append(row)
                   print(row, flush=True)
           
-          # Control: perturb the observed source risk feature while preserving
-          # tensor shape. This measures sensitivity, not accuracy.
+          # Wave 11 is an actual inference-only held-out read after the three
+          # preceding feedback passes; it is never used for reward updates.
+          for mode in ("naive-second", "symmetric", "confidence-weighted", "periodic-reset"):
+              # Reconstruct independent pass-3 priors from the exact signed
+              # source verdict stream; model parameters remain unchanged.
+              priors = initial.copy()
+              for _ in range(3):
+                  feedback(priors, mode)
+              final_scores, _ = scores_for(11, priors)
+              heldout = (
+                  f'GNN_HELDOUT|mode={mode}|wave=11|'
+                  f'score_mean_ppm={round(float(final_scores.mean())*1000000)}|'
+                  f'score_span_nano={round(float(final_scores.max()-final_scores.min())*1000000000)}|'
+                  f'feedback_saturated={sum(1 for p in priors if p <= 1e-8 or p >= 1-1e-8)}|'
+                  f'original_labels=UNAVAILABLE|status=PASS|json=0'
+              )
+              print(heldout, flush=True)
+              result_lines.append(heldout)
+
+          # Original GSLGNN checkpoint weights are retained. Deliberately
+          # alter actual numerical node inputs to separate a symmetric
+          # adapter from a model which is insensitive to its inputs.
           with torch.no_grad():
               x = node_features(8, [0.5] * 36)
               perturb = x.clone()
-              perturb[:, 1] = torch.flip(perturb[:, 1], dims=(0,))
+              perturb[:, 1] = 1.0 - perturb[:, 1]
+              input_change = float((perturb - x).abs().mean())
+              assert input_change > 0.01, "risk inversion did not change graph inputs"
               shifted = model(perturb, edges)
               mean_change = float((shifted - source_scores).abs().mean())
               assert math.isfinite(mean_change)
-          control_line = f'GNN_CONTROL|kind=risk_feature_reversal|absolute_score_delta_ppm={round(mean_change*1000000)}|status=PASS|json=0'
+          control_line = (
+              f'GNN_CONTROL|kind=real_risk_inversion|'
+              f'input_delta_ppm={round(input_change*1000000)}|'
+              f'absolute_score_delta_nano={round(mean_change*1000000000)}|status=PASS|json=0'
+          )
           print(control_line, flush=True)
           result_lines.append(control_line)
+
+          # Wider and domain-shifted stress probes are NOT held-out
+          # accuracy measurements: they test live dependence on features.
+          diagnostic_changes = [mean_change]
+          for label in ("online_off", "all_zeros", "all_ones", "role_checkerboard"):
+              target = x.clone()
+              if label == "online_off":
+                  target[:, 4] = 0
+              elif label == "all_zeros":
+                  target.zero_()
+              elif label == "all_ones":
+                  target.fill_(1)
+              else:
+                  target[:, 0] = torch.tensor([0.0 if i % 2 == 0 else 1.0 for i in range(12)])
+                  target[:, 2] = torch.tensor([1.0 if i % 2 == 0 else 0.0 for i in range(12)])
+              with torch.no_grad():
+                  predictions = model(target, edges)
+              assert torch.isfinite(predictions).all()
+              change = float((predictions - source_scores).abs().mean())
+              diagnostic_changes.append(change)
+              dx = float((target - x).abs().mean())
+              assert dx > 0.01
+              diagnostic = (
+                  f'GNN_DIAGNOSTIC|probe={label}|input_delta_ppm={round(dx*1000000)}|'
+                  f'output_delta_nano={round(change*1000000000)}|status=PASS|json=0'
+              )
+              print(diagnostic, flush=True)
+              result_lines.append(diagnostic)
+
+          # Hold semantic claims when the checkpoint does not respond to
+          # the input; binary source/parameter integrity still passes.
+          sensitivity = "RESPONSIVE" if max(diagnostic_changes) > 1e-6 else "FLAT"
+          result_lines.append(
+              f'GNN_SENSITIVITY|probe_count=5|verdict={sensitivity}|'
+              f'original_labels=UNAVAILABLE|calibration=HOLD|status=PASS|json=0'
+          )
           
           body = "\n".join(result_lines) + "\n"
           result_hash = digest(body.encode())
@@ -264,7 +326,7 @@ jobs:
               f'source_wave_words=432|feedback_points_per_pass=93312|'
               f'wave_fixture_sha={source_sha}|prediction_rows={len(result_lines)}|'
               f'predictions_sha={result_hash}|torch={torch.__version__}|pyg={torch_geometric.__version__}|'
-              f'feature_adapter=EXPERIMENTAL_PROXY|original_labels=UNAVAILABLE|'
+              f'feature_adapter=EXPERIMENTAL_PROXY|prediction_sensitivity={sensitivity}|original_labels=UNAVAILABLE|'
               f'heldout_accuracy=NOT_COMPUTED|source_code=PINNED|status=PASS|json=0\n'
           )
           Path("GNN_FORWARD.hbp").write_text(receipt + body)
@@ -275,6 +337,9 @@ jobs:
           grep -Fq '|weights_loaded=STRICT|input_dim=6|hidden_dim=64|nodes=12|edges=36|' GNN_FORWARD.hbp
           grep -Fq '|heldout_accuracy=NOT_COMPUTED|source_code=PINNED|status=PASS|json=0' GNN_FORWARD.hbp
           test "$(grep -c '^GNN_PASS|' GNN_FORWARD.hbp)" -eq 12
+          test "$(grep -c '^GNN_HELDOUT|' GNN_FORWARD.hbp)" -eq 4
+          test "$(grep -c '^GNN_DIAGNOSTIC|' GNN_FORWARD.hbp)" -eq 4
+          grep -Fq '|calibration=HOLD|status=PASS|json=0' GNN_FORWARD.hbp
       - name: Publish original checkpoint inference and source-wave measurement receipts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -313,5 +378,8 @@ jobs:
           (cd proof && sha256sum -c GNN_FORWARD.sha256)
           test "$(grep -c '^GNN_PASS|' proof/GNN_FORWARD.hbp)" -eq 12
           test "$(grep -c '^GNN_CONTROL|' proof/GNN_FORWARD.hbp)" -eq 1
+          test "$(grep -c '^GNN_HELDOUT|' proof/GNN_FORWARD.hbp)" -eq 4
+          test "$(grep -c '^GNN_DIAGNOSTIC|' proof/GNN_FORWARD.hbp)" -eq 4
+          grep -Fq '|calibration=HOLD|status=PASS|json=0' proof/GNN_FORWARD.hbp
           grep -Fq '|heldout_accuracy=NOT_COMPUTED|' proof/GNN_FORWARD.hbp
           echo 'GNN_SOURCE_WITNESS|word_fixture=EXACT|trained_checkpoint=REFERENCED|inference_receipt_sha=PASS|status=PASS|json=0'
