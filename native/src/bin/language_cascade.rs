@@ -2,6 +2,7 @@
 //! This is an exact word/route witness, not the trained GNN forward pass.
 #![forbid(unsafe_code)]
 
+use pnp_native::behcs_glyph_language;
 use pnp_native::prism;
 use pnp_native::sha256::hash_bytes;
 use std::env;
@@ -72,14 +73,18 @@ fn shard(run: &str, leaf: usize) -> Result<String, String> {
     let mut words = 0_usize;
     let mut bytes = 0_usize;
     let mut glyphs = 0_usize;
-    let mut fingerprint = format!("WAVE_WORDS_V1|{run}|{leaf}|{SOURCE_BLOB}|{ORIGIN}\n");
+    let mut fingerprint = format!("WAVE_WORDS_V2|{run}|{leaf}|{SOURCE_BLOB}|{ORIGIN}\n");
     for index in (leaf..TOTAL).step_by(N) {
         let (word, bucket) = point(index)?;
         glyphs += bytes_glyph_roundtrip(&word)?;
+        let address = behcs_glyph_language::address(&word)
+            .ok_or("missing original 256-symbol word address")?;
+        ensure(behcs_glyph_language::verify_word(&word, &address),
+            "source word/glyph address mapping altered")?;
         bytes += word.len();
         words += 1;
         buckets[bucket] += 1;
-        fingerprint.push_str(&format!("{index}|{word}\n"));
+        fingerprint.push_str(&format!("{index}|{word}|{address}\n"));
     }
     let counts = counts_line(&buckets);
     let source_digest = hash_bytes(fingerprint.as_bytes());
@@ -105,7 +110,7 @@ fn fanin_root(run: &str, folder: &Path) -> Result<String, String> {
     ensure(fs::read_dir(folder).map_err(|e| e.to_string())?.count() == N,
         "missing, duplicated or unexpected leaf file")?;
     let mut totals = [0_u32; BUCKETS];
-    let mut commits = vec![format!("CW_ROOT_V1|{run}|{ORIGIN}|{SOURCE_BLOB}")];
+    let mut commits = vec![format!("CW_ROOT_V2|{run}|{ORIGIN}|{SOURCE_BLOB}")];
     let mut point_count = 0_usize;
     for leaf in 0..N {
         let body = fs::read_to_string(path(folder, "language", leaf)).map_err(|e| e.to_string())?;
@@ -149,7 +154,7 @@ fn final_row(run: &str, dir: &Path, root_file: &Path, reverse_dir: &Path) -> Res
     let root = verify_root(run, dir, root_file)?;
     ensure(fs::read_dir(reverse_dir).map_err(|e| e.to_string())?.count() == N,
         "missing or extra reverse word receipts")?;
-    let mut receipts = vec![format!("CW_REVERSE_ROOT_V1|{run}|{root}")];
+    let mut receipts = vec![format!("CW_REVERSE_ROOT_V2|{run}|{root}")];
     for leaf in 0..N {
         let actual = fs::read_to_string(path(reverse_dir, "language-reverse", leaf))
             .map_err(|e| e.to_string())?;
@@ -158,7 +163,7 @@ fn final_row(run: &str, dir: &Path, root_file: &Path, reverse_dir: &Path) -> Res
     }
     let reverse = hash_bytes(receipts.join("|").as_bytes());
     Ok(format!(
-        "CW_FINAL|schema=1|run={run}|source={ORIGIN}|forward_root={root}|reverse_root={reverse}|events=93312|word_dimension=ACTOR_VERB_TARGET_RISK_STATE_WAVE|unique_execution=93312|search_buckets=432|collisions_per_bucket=216|reverse_leaves=20|word_reconstruction=EXACT_FROM_PINNED_WORDS|prism=ROUNDTRIP|trained_gnn=SEPARATE_MODEL_GATE|status=PASS|json=0\n"
+        "CW_FINAL|schema=1|run={run}|source={ORIGIN}|forward_root={root}|reverse_root={reverse}|events=93312|word_dimension=ACTOR_VERB_TARGET_RISK_STATE_WAVE|glyph_language=ORIGINAL_256_GLYPHS|unique_execution=93312|search_buckets=432|collisions_per_bucket=216|reverse_leaves=20|word_reconstruction=EXACT_FROM_PINNED_WORDS|prism=ROUNDTRIP|trained_gnn=SEPARATE_MODEL_GATE|status=PASS|json=0\n"
     ))
 }
 fn take(args: &mut impl Iterator<Item=String>, what: &str) -> Result<String, String> {
