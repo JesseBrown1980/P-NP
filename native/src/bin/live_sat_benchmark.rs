@@ -171,7 +171,7 @@ fn verify(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Res
     let watchers = parse("watcher_reads")?;
     ensure(frames == decision + unit && watchers == frames,
            "matrix/branch/propagation frame accounting differs")?;
-    if mode == "live" {
+    if mode != "direct" {
         ensure(fields.get("frame_root").is_some_and(|v| v.len() == 64),
                "source-bound matrix root missing")?;
         ensure(parse("paid_metadata_bytes")? == 192 * frames,
