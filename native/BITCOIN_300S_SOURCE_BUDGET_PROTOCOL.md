@@ -134,3 +134,50 @@ accounting.
 This work is committed on the PR branch. Hosted acceptance is always
 reported by the exact-commit Actions run results rather than inferred
 from the presence of executable code.
+
+## Combined matrix plus raised-node genuine-search gate
+
+The next combined program is now committed separately from the reference
+and original research-arm experiments:
+
+- `research/bitcoin_300s_matrix_search.py` orchestrates the original
+  source-CNF SHA check, exact Rust `bitcoin_matrix_funnel` attestation and
+  full inverse replay, then invokes historical Fischer/RIME ordering and
+  the original watched-DPLL algorithm in a second timed process.
+- The original 1,024-node stop is replaced in this experimental adapter
+  with a 1,000,000,000,000-node ceiling. GNU timeout gives each worker
+  exactly 300 seconds for **CNF parsing, route scoring and search together**.
+- Six independent jobs cover Yang-Mills Fischer ordering, modern RIME,
+  and historical RIME/Fischer, each on nonce32 and merkle_nonce288.
+  The companion historical research-arm experiment additionally tests
+  HXF-1 with a separate one-million-node ceiling.
+- `research/bitcoin_300s_matrix_verify.py` independently checks the
+  source hashes and dimensions, rebuilds the native matrix proof, checks
+  solver exit and timeout evidence, and verifies the entire signed
+  Boolean assignment against every source clause if a SAT outcome occurs.
+  It independently reconstructs the 80-byte Bitcoin header and the
+  full target double-SHA256 before accepting any SAT result.
+- Every result records matrix transport time, timed solver work,
+  overall time, CNF digest, matrix root and whether a complete SAT
+  model was supplied. Timed-out search nodes are honestly reported as
+  `UNOBSERVED_ON_TIMEOUT` because the historical watcher does not
+  export a partial visited-node counter.
+
+Hosted workflow: `.github/workflows/pnp-bitcoin-300s-matrix-search.yml`.
+
+**Evidence boundary:** this combined gate performs exact native matrix
+transport and measured heuristic-guided SAT search on the same authenticated
+Bitcoin source. The currently transported ternary frames encode a known
+public Bitcoin reference header. The SAT search operates on the original
+CNF clauses and is never initialized with that known reference assignment.
+A later controlled experiment must route the *live search state and
+learned constraint transforms* through the matrix before asserting that
+matrix computations themselves accelerated cryptographic preimage search.
+
+The standalone MiniSat/CaDiCaL/PicoSAT 300-second baseline finished
+with six source-verified `HOLD_TIME` outcomes and full independent
+evidence PASS in hosted run #44619920959. A budget HOLD is a measured
+unfinished computation. The new combined workflow, distinct
+historical raised-node workflow and current-head native policy must
+all pass their own hosted acceptance before their new results are
+published as accepted.
