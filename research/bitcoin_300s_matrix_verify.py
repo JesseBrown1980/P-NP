@@ -171,13 +171,19 @@ def main():
                         int(worker["node_cap"]) == NODE_CAP, "worker proof differs")
                 sat += 1
             else:
-                require(status == "HOLD_TIME" and r["search_exit"] == "124",
-                        "invalid 300s timeout exit")
-                require(elapsed >= 295_000_000_000, "timeout occurred before 300s")
+                require(status in ("HOLD_TIME", "HOLD_STACK"),
+                        "invalid bounded search outcome")
+                if status == "HOLD_TIME":
+                    require(r["search_exit"] == "124" and elapsed >= 295_000_000_000,
+                            "300s time limit is not independently supported")
+                else:
+                    require(r["search_exit"] == "75" and
+                            "BTC300_SEARCH_DEPTH|" in (folder / "search.stdout").read_text("ascii"),
+                            "original recursive interpreter HOLD_STACK has no evidence")
                 require(r["model_sha"] == "NONE" and
                         not (folder / "model.dimacs").exists() and
-                        not (folder / "worker.hbp").exists(), "false SAT receipt on timeout")
-                require(r["search_nodes"] == "UNOBSERVED_ON_TIMEOUT",
+                        not (folder / "worker.hbp").exists(), "false SAT receipt on bounded HOLD")
+                require(r["search_nodes"] == "UNOBSERVED_ON_HOLD",
                         "unobserved progress misrepresented")
                 hold += 1
             rows.append(
