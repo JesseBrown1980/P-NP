@@ -83,7 +83,7 @@ jobs:
           ( cd results && sha256sum -c "$ARM-$CASE.sha256" )
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: bitcoin-matrix-300-${{ matrix.arm }}-${{ matrix.case }}
+          name: bitcoin-matrix-300-result-${{ matrix.arm }}-${{ matrix.case }}
           path: results/
           retention-days: 30
           if-no-files-found: error
@@ -103,7 +103,7 @@ jobs:
           path: source
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: bitcoin-matrix-300-*
+          pattern: bitcoin-matrix-300-result-*
           path: results
           merge-multiple: true
       - name: Independently audit six searches and rebuild original matrix evidence
