@@ -1,0 +1,317 @@
+name: "P-NP trained GSLGNN real checkpoint word-wave inference reference"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reference-inference:
+    name: "Pinned trained model + original 93,312-event cascade feedback"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout P-NP native Rust source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original word-language, first and third cascade source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Original trained GNN checkpoint and original model implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Pin Rust toolchain and verify original model Git blobs
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          test "$(git -C source-gnn rev-parse HEAD)" = "c4b2458c88358c46155d3b308c594f9991720847"
+          test "$(git -C source-gnn hash-object src/gsl_gnn.py)" = "886b3b0c0cdbddba983fa8c3ae083c4520d38f0e"
+          test "$(git -C source-gnn hash-object models/gslgnn_w9_3_seq47_v2.pt)" = "e3a9712b50f8e7b31590b0aa944e6a9ba6ea565b"
+          test "$(git -C source-gnn hash-object manifests/gslgnn_w9_3_seq47_v2_manifest.json)" = "f1eb3675ab5e8822d1511ce4b3062d51ee50b2dd"
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+      - name: Install pinned original PyTorch research runtime in isolated environment
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/gnn-reference-env
+          /tmp/gnn-reference-env/bin/python -m pip install --disable-pip-version-check 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/gnn-reference-env/bin/python -m pip install --disable-pip-version-check 'torch-geometric==2.7.0'
+          /tmp/gnn-reference-env/bin/python -c 'import torch, torch_geometric; assert torch.__version__.startswith("2.5.1"); assert torch_geometric.__version__ == "2.7.0"'
+      - name: Load exact trained checkpoint and execute original GSLGNN forward across source waves
+        run: |
+          set -euo pipefail
+          /tmp/gnn-reference-env/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import sys
+          from collections import defaultdict
+          from pathlib import Path
+          
+          import torch
+          import torch_geometric
+          
+          torch.set_num_threads(1)
+          torch.manual_seed(17)
+          sys.path.insert(0, str(Path("source-gnn/src").resolve()))
+          from gsl_gnn import GSLGNN
+          
+          def digest(data):
+              return hashlib.sha256(data).hexdigest()
+          
+          checkpoint_path = Path("source-gnn/models/gslgnn_w9_3_seq47_v2.pt")
+          manifest = json.loads(Path("source-gnn/manifests/gslgnn_w9_3_seq47_v2_manifest.json").read_text())
+          checkpoint_sha = digest(checkpoint_path.read_bytes())
+          assert checkpoint_sha == manifest["checkpoint_sha256"], "original trained checkpoint manifest digest mismatch"
+          assert manifest["model_class"].endswith("::GSLGNN"), "model class source changed"
+          assert manifest["corpus_stats"]["totalEdges"] == 315249, "training provenance corpus changed"
+          
+          model = GSLGNN(node_input_dim=6, hidden_dim=64)
+          weights = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+          assert isinstance(weights, dict) and len(weights) > 15, "checkpoint is not a trained parameter dictionary"
+          reference = model.state_dict()
+          fixed = {}
+          for key, tensor in weights.items():
+              if key in reference:
+                  mapped = key
+              elif key.replace(".lin.bias", ".bias") in reference:
+                  mapped = key.replace(".lin.bias", ".bias")
+              elif key.endswith(".bias") and ".lin." not in key and key.replace(".bias", ".lin.bias") in reference:
+                  mapped = key.replace(".bias", ".lin.bias")
+              else:
+                  mapped = key
+              assert mapped not in fixed, "duplicate checkpoint key after approved service remap"
+              fixed[mapped] = tensor
+          model.load_state_dict(fixed, strict=True)
+          model.eval()
+          
+          actors = ("acer", "liris", "falcon", "felipe", "beast", "dan")
+          verbs = ("scan-dispatch", "scan-result", "drift-detected", "cosign-append", "migration-intent", "heartbeat")
+          targets = ("acer", "liris", "falcon", "federation", "phantom", "witness")
+          states = ("pending", "in-flight", "dispatched", "settled", "failed", "observed")
+          raw = Path("WORD_GRAPH.hbp").read_bytes()
+          lines = raw.decode("utf-8").splitlines()
+          header = dict(p.split("=", 1) for p in lines[0].split("|")[1:])
+          assert header["sampled_words"] == "432" and header["all_source_events"] == "93312"
+          assert header["label_status"] == "NO_ORIGINAL_BINARY_LABELS"
+          assert digest(("\n".join(lines[1:]) + "\n").encode()) == header["word_sha"]
+          rows = []
+          for index, line in enumerate(lines[1:]):
+              marker, *tokens = line.split("|")
+              assert marker == "WORD"
+              fields = dict(part.split("=", 1) for part in tokens)
+              ai, ti, wave = actors.index(fields["actor"]), targets.index(fields["target"]), int(fields["wave"])
+              risk = int(fields["risk"])
+              assert fields["id"] == str(index) and 0 <= risk <= 5 and fields["verb"] in verbs and fields["state"] in states
+              assert wave == index // 36 and ai == (index % 36) // 6 and ti == index % 6
+              word = f'D1:{fields["actor"]}/D2:{fields["verb"]}/D3:{fields["target"]}/D4:{risk}/D5:{fields["state"]}/D6:w{wave}'
+              assert digest(word.encode()) == fields["word_sha"], "word SHA source failure"
+              rows.append((ai, ti, wave, risk, fields["state"]))
+          assert len(rows) == 432 and all(sum(1 for r in rows if r[2] == w) == 36 for w in range(12))
+          
+          # Exactly the original training-time fields and normalizations.
+          # Risk proxy and trust tier are explicit experimental word->GNN adapter assumptions,
+          # not a recovered training schema or a held-out label.
+          def node_features(wave, priors):
+              tally = [dict(n=0, risk_sum=0.0, max_risk=0.0, failures=0) for _ in range(12)]
+              for ai, ti, w, risk, state in rows:
+                  if w != wave:
+                      continue
+                  proxy = min(9.0, risk + 2.0 * priors[ai * 6 + ti])
+                  for node in (ai, 6 + ti):
+                      rec = tally[node]
+                      rec["n"] += 1
+                      rec["risk_sum"] += proxy
+                      rec["max_risk"] = max(rec["max_risk"], proxy)
+                      rec["failures"] += int(state == "failed")
+              features = []
+              for i, rec in enumerate(tally):
+                  n = rec["n"]
+                  assert n > 0
+                  features.append([
+                      min(n / 100.0, 1.0),
+                      rec["risk_sum"] / n / 9.0,
+                      rec["max_risk"] / 9.0,
+                      rec["failures"] / n,
+                      1.0,
+                      (1.0 if i < 6 else 2.0) / 3.0,
+                  ])
+              return torch.tensor(features, dtype=torch.float32)
+          
+          edges = torch.tensor([[a for a in range(6) for _ in range(6)],
+                                [6+t for _ in range(6) for t in range(6)]], dtype=torch.long)
+          assert edges.shape == (2, 36)
+          
+          @torch.no_grad()
+          def scores_for(wave, priors):
+              x = node_features(wave, priors)
+              assert x.shape == (12, 6) and torch.isfinite(x).all()
+              values, adjacency = model(x, edges, return_weights=True)
+              assert values.shape == (36,) and adjacency.shape == (12, 12)
+              assert torch.isfinite(values).all() and torch.isfinite(adjacency).all()
+              assert bool(torch.all((0 <= values) & (values <= 1)))
+              return values.detach().cpu().clone(), adjacency.detach().cpu().clone()
+          
+          source_scores, source_adj = scores_for(8, [0.5] * 36)
+          repeat_scores, repeat_adj = scores_for(8, [0.5] * 36)
+          assert torch.equal(source_scores, repeat_scores) and torch.equal(source_adj, repeat_adj), "deterministic original checkpoint replay failed"
+          # One actual original trained GNN forward score per actor/target pair.
+          initial = [float(v) for v in source_scores]
+          
+          def verdict(risk, state, weight):
+              evidence = "STRONG" if weight < .3 else "WEAK" if weight < .6 else "INSUFFICIENT"
+              accept = risk <= 3 and state != "observed"
+              if accept and evidence == "STRONG":
+                  color = "green"
+              elif not accept or evidence == "INSUFFICIENT":
+                  color = "red"
+              else:
+                  color = "yellow"
+              return color, evidence
+          
+          def feedback(priors, mode):
+              # Three source third-cascade modes + source second-cascade naive rule.
+              # Iterate all 93,312 ORIGINAL source coordinates per pass in their
+              # canonical actor/verb/target/risk/state/wave order.
+              counts = {"green": 0, "yellow": 0, "red": 0}
+              resets = 0
+              idx = 0
+              for ai in range(6):
+                  for _verb in range(6):
+                      for ti in range(6):
+                          key = ai * 6 + ti
+                          for risk in range(6):
+                              for state in states:
+                                  for _wave in range(12):
+                                      weight = priors[key]
+                                      color, evidence = verdict(risk, state, weight)
+                                      counts[color] += 1
+                                      if mode == "periodic-reset" and idx > 0 and idx % 10000 == 0:
+                                          for k in range(36):
+                                              priors[k] = 0.5 + (priors[k] - 0.5) * 0.5
+                                          resets += 1
+                                      magnitude = 0.05 if mode == "naive-second" and color == "red" else 0.02
+                                      delta = magnitude if color == "red" else -0.02 if color == "green" else 0.0
+                                      if mode == "confidence-weighted":
+                                          strength = 0.25 if evidence == "STRONG" else 0.5 if evidence == "WEAK" else 1.0
+                                          delta *= strength
+                                      if delta != 0:
+                                          priors[key] = min(1.0, max(0.0, priors[key] + delta))
+                                      idx += 1
+              assert idx == 93312 and sum(counts.values()) == 93312
+              return counts, resets
+          
+          # Held-out wave slots 8..11 were not used to fit a model or choose variants.
+          # This is a forward sensitivity experiment with no supplied binary labels.
+          result_lines = []
+          for mode in ("naive-second", "symmetric", "confidence-weighted", "periodic-reset"):
+              prior = initial.copy()
+              for pass_idx in range(3):
+                  wave = 8 + pass_idx
+                  before = prior.copy()
+                  predictions, adjacency = scores_for(wave, prior)
+                  colors, resets = feedback(prior, mode)
+                  score_avg = float(predictions.mean())
+                  score_range = float(predictions.max() - predictions.min())
+                  prior_mean = sum(prior) / 36
+                  score_shift = sum(abs(float(v) - before[i]) for i, v in enumerate(predictions)) / 36
+                  saturated = sum(1 for p in prior if p <= 1e-8 or p >= 1 - 1e-8)
+                  row = (
+                      f'GNN_PASS|mode={mode}|pass={pass_idx + 1}|wave={wave}|'
+                      f'points=93312|edges=36|score_mean_ppm={round(score_avg*1000000)}|'
+                      f'score_span_ppm={round(score_range*1000000)}|'
+                      f'score_to_prior_delta_ppm={round(score_shift*1000000)}|'
+                      f'prior_mean_ppm={round(prior_mean*1000000)}|saturated_edges={saturated}|'
+                      f'green={colors["green"]}|yellow={colors["yellow"]}|red={colors["red"]}|'
+                      f'resets={resets}|status=PASS|json=0'
+                  )
+                  result_lines.append(row)
+                  print(row, flush=True)
+          
+          # Control: perturb the observed source risk feature while preserving
+          # tensor shape. This measures sensitivity, not accuracy.
+          with torch.no_grad():
+              x = node_features(8, [0.5] * 36)
+              perturb = x.clone()
+              perturb[:, 1] = torch.flip(perturb[:, 1], dims=(0,))
+              shifted = model(perturb, edges)
+              mean_change = float((shifted - source_scores).abs().mean())
+              assert math.isfinite(mean_change)
+          control_line = f'GNN_CONTROL|kind=risk_feature_reversal|absolute_score_delta_ppm={round(mean_change*1000000)}|status=PASS|json=0'
+          print(control_line, flush=True)
+          result_lines.append(control_line)
+          
+          body = "\n".join(result_lines) + "\n"
+          result_hash = digest(body.encode())
+          source_sha = digest(raw)
+          receipt = (
+              f'GNN_MODEL_FORWARD|schema=1|word_commit={header["source_commit"]}|'
+              f'checkpoint_sha={checkpoint_sha}|model=GSLGNN|weights_loaded=STRICT|'
+              f'input_dim=6|hidden_dim=64|nodes=12|edges=36|heldout_waves=8_11|'
+              f'source_wave_words=432|feedback_points_per_pass=93312|'
+              f'wave_fixture_sha={source_sha}|prediction_rows={len(result_lines)}|'
+              f'predictions_sha={result_hash}|torch={torch.__version__}|pyg={torch_geometric.__version__}|'
+              f'feature_adapter=EXPERIMENTAL_PROXY|original_labels=UNAVAILABLE|'
+              f'heldout_accuracy=NOT_COMPUTED|source_code=PINNED|status=PASS|json=0\n'
+          )
+          Path("GNN_FORWARD.hbp").write_text(receipt + body)
+          Path("GNN_FORWARD.sha256").write_text(digest((receipt+body).encode()) + "  GNN_FORWARD.hbp\n")
+          print(receipt.strip(), flush=True)
+          PY
+          sha256sum -c GNN_FORWARD.sha256
+          grep -Fq '|weights_loaded=STRICT|input_dim=6|hidden_dim=64|nodes=12|edges=36|' GNN_FORWARD.hbp
+          grep -Fq '|heldout_accuracy=NOT_COMPUTED|source_code=PINNED|status=PASS|json=0' GNN_FORWARD.hbp
+          test "$(grep -c '^GNN_PASS|' GNN_FORWARD.hbp)" -eq 12
+      - name: Publish original checkpoint inference and source-wave measurement receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gnn-original-trained-word-waves
+          path: |
+            WORD_GRAPH.hbp
+            GNN_FORWARD.hbp
+            GNN_FORWARD.sha256
+          if-no-files-found: error
+          retention-days: 30
+  independent-source-audit:
+    name: "Independent Rust witness of trained-score input and immutable receipts"
+    needs: [reference-inference]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: gnn-original-trained-word-waves
+          path: proof
+      - name: Independent fixed-word graph replay and proof audit
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe verify source-words proof/WORD_GRAPH.hbp
+          (cd proof && sha256sum -c GNN_FORWARD.sha256)
+          test "$(grep -c '^GNN_PASS|' proof/GNN_FORWARD.hbp)" -eq 12
+          test "$(grep -c '^GNN_CONTROL|' proof/GNN_FORWARD.hbp)" -eq 1
+          grep -Fq '|heldout_accuracy=NOT_COMPUTED|' proof/GNN_FORWARD.hbp
+          echo 'GNN_SOURCE_WITNESS|word_fixture=EXACT|trained_checkpoint=REFERENCED|inference_receipt_sha=PASS|status=PASS|json=0'
