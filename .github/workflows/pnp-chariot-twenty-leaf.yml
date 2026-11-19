@@ -37,6 +37,25 @@ jobs:
           file="$(printf 'forward/forward-%02d.hbp' "$LEAF")"
           native/target/release/chariot_waves forward "$RUN_KEY" "$LEAF" "$file"
           test -s "$file"
+      - name: Produce source-word six-dimensional cascade shard
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          mkdir -p language
+          file="$(printf 'language/language-%02d.hbp' "$LEAF")"
+          native/target/release/language_cascade provenance
+          native/target/release/language_cascade shard "$RUN_KEY" "$LEAF" "$file"
+          test -s "$file"
+      - name: Publish one source-word cascade shard
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-language-${{ matrix.leaf }}
+          path: language/language-*.hbp
+          if-no-files-found: error
+          retention-days: 7
       - name: Seal and upload one immutable leaf artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -61,6 +80,28 @@ jobs:
           pattern: chariot-forward-*
           path: forward
           merge-multiple: true
+      - name: Original word-and-cascade source checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-language
+          persist-credentials: false
+      - name: Check canonical 256-glyph, words and second/third cascade pins
+        run: |
+          set -euo pipefail
+          test "$(git -C source-language rev-parse HEAD)" = "818cc235a6db815e3b2591339cf9b42aad3e85a0"
+          test "$(git -C source-language hash-object packages/deep-wave/src/cascade.ts)" = "b9acdaff9b4537def53eca3d0fdb87a9c0dcab89"
+          test "$(git -C source-language hash-object packages/deep-wave/src/third-cascade.ts)" = "a3e4485ca4a60d1b12cf6ed398c2f886ba358ea7"
+          test "$(git -C source-language hash-object data/behcs/codex/alphabet.json)" = "8d4a3298576ce2c9d4a1683ffab667c8a743fc42"
+          test "$(git -C source-language hash-object tools/behcs/generate-falcon-glyph-language.js)" = "2bf81fbc21a3851c4dbfcddeb227b0226e303836"
+          echo 'CW_SOURCE_PIN|symbols=256|typed_dimensions=6|wave=12|source_sha=PASS|json=0'
+      - name: Download twenty source-word cascade shards
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-language-*
+          path: language
+          merge-multiple: true
       - name: Independently rederive each checkpoint and root
         env:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
@@ -69,6 +110,15 @@ jobs:
           cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
           native/target/release/chariot_waves fanin "$RUN_KEY" forward forward-root.hbp
           test "$(find forward -maxdepth 1 -type f -name 'forward-*.hbp' | wc -l)" -eq 20
+      - name: Independently recompute 93,312 word events and 432 search buckets
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin language_cascade --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          native/target/release/language_cascade fanin "$RUN_KEY" language language-root.hbp
+          grep -Fq 'events=93312|buckets=432|hits_per_bucket=216|' language-root.hbp
       - name: Publish sealed forward wave bundle for reverse workers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -76,6 +126,8 @@ jobs:
           path: |
             forward/forward-*.hbp
             forward-root.hbp
+            language/language-*.hbp
+            language-root.hbp
           if-no-files-found: error
           retention-days: 7
 
@@ -109,6 +161,24 @@ jobs:
           file="$(printf 'reverse/reverse-%02d.hbp' "$LEAF")"
           native/target/release/chariot_waves reverse "$RUN_KEY" "$LEAF" forward-bundle/forward forward-bundle/forward-root.hbp "$file"
           test -s "$file"
+      - name: Reverse the source-word cascade using the frozen language manifest
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          mkdir -p language-reverse
+          file="$(printf 'language-reverse/language-reverse-%02d.hbp' "$LEAF")"
+          native/target/release/language_cascade reverse "$RUN_KEY" "$LEAF" forward-bundle/language forward-bundle/language-root.hbp "$file"
+          test -s "$file"
+      - name: Upload source-word reverse witness
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-word-reverse-${{ matrix.leaf }}
+          path: language-reverse/language-reverse-*.hbp
+          if-no-files-found: error
+          retention-days: 7
       - name: Publish independent source-restoration receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -138,6 +208,12 @@ jobs:
           pattern: chariot-reverse-*
           path: reverse
           merge-multiple: true
+      - name: Download twenty source-word reverse receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-word-reverse-*
+          path: language-reverse
+          merge-multiple: true
       - name: Independently reproduce exact 540-cell reversal and both wave roots
         env:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
@@ -150,6 +226,17 @@ jobs:
           grep -Fq '|status=PASS|json=0' CH20_FINAL.hbp
           sha256sum CH20_FINAL.hbp > CH20_FINAL.sha256
           sha256sum -c CH20_FINAL.sha256
+      - name: Verify all source-word identities after search-lane convergence
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          native/target/release/language_cascade final "$RUN_KEY" forward-bundle/language forward-bundle/language-root.hbp language-reverse CW_FINAL.hbp | tee CW_FINAL.log
+          grep -Fq '|unique_execution=93312|search_buckets=432|collisions_per_bucket=216|' CW_FINAL.hbp
+          grep -Fq '|status=PASS|json=0' CW_FINAL.hbp
+          sha256sum CW_FINAL.hbp > CW_FINAL.sha256
+          sha256sum -c CW_FINAL.sha256
       - name: Archive paid source and exact two-wave result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -158,5 +245,8 @@ jobs:
             CH20_FINAL.hbp
             CH20_FINAL.sha256
             CH20_FINAL.log
+            CW_FINAL.hbp
+            CW_FINAL.sha256
+            CW_FINAL.log
           if-no-files-found: error
           retention-days: 30
