@@ -29,6 +29,13 @@ jobs:
           ref: c4b2458c88358c46155d3b308c594f9991720847
           path: source-gnn
           persist-credentials: false
+      - name: Original healthcare edge-level GNN source lineage
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
       - name: Pin Rust toolchain and verify original model Git blobs
         run: |
           set -euo pipefail
@@ -37,6 +44,12 @@ jobs:
           test "$(git -C source-gnn hash-object src/gsl_gnn.py)" = "886b3b0c0cdbddba983fa8c3ae083c4520d38f0e"
           test "$(git -C source-gnn hash-object models/gslgnn_w9_3_seq47_v2.pt)" = "e3a9712b50f8e7b31590b0aa944e6a9ba6ea565b"
           test "$(git -C source-gnn hash-object manifests/gslgnn_w9_3_seq47_v2_manifest.json)" = "f1eb3675ab5e8822d1511ce4b3062d51ee50b2dd"
+          test "$(git -C source-healthcare rev-parse HEAD)" = "e0048c0ad60705ecb447642f08b14b5c1bde7437"
+          test "$(git -C source-healthcare hash-object backend/anomaly_detector/models/gnn_baseline.py)" = "510f78890ec94b113f0610afbade8bafe6ca20e0"
+          test "$(git -C source-healthcare hash-object backend/anomaly_detector/models/prototype_gnn.py)" = "99e3087a10ee58e90c0935f5ab63b72fd3cdd07e"
+          test "$(git -C source-healthcare hash-object backend/anomaly_detector/models/contrastive_gnn.py)" = "56329e61eb3e6ddb3ee97b46f997dd8dd8c6b39f"
+          test "$(git -C source-healthcare hash-object backend/anomaly_detector/models/gsl_gnn.py)" = "886b3b0c0cdbddba983fa8c3ae083c4520d38f0e"
+          test "$(git -C source-healthcare hash-object backend/anomaly_detector/models/graph_builder.py)" = "d8681cd283111512ff24092b5b377250a7c2e557"
           cargo +1.81.0 test --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked
           cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked -- -D warnings
           cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
@@ -316,6 +329,95 @@ jobs:
               f'original_labels=UNAVAILABLE|calibration=HOLD|status=PASS|json=0'
           )
           
+          # Preserve healthcare's event->edge identity instead of
+          # reducing 432 original words to 36 aggregate relationships.
+          # Load both identical source implementations independently.
+          import importlib.util
+          healthcare_model_path = Path("source-healthcare/backend/anomaly_detector/models/gsl_gnn.py")
+          healthcare_spec = importlib.util.spec_from_file_location("original_healthcare_gsl", healthcare_model_path)
+          assert healthcare_spec is not None and healthcare_spec.loader is not None
+          healthcare_module = importlib.util.module_from_spec(healthcare_spec)
+          healthcare_spec.loader.exec_module(healthcare_module)
+          health_gsl = healthcare_module.GSLGNN(node_input_dim=6, hidden_dim=64)
+          health_gsl.load_state_dict(fixed, strict=True)
+          health_gsl.eval()
+
+          health_baseline_path = str(Path("source-healthcare/backend/anomaly_detector/models").resolve())
+          sys.path.insert(0, health_baseline_path)
+          from gnn_baseline import EdgeLevelGNN
+
+          # One node for each word event, plus 6 actor and 6 target nodes.
+          # The two-hop actor -> word -> target edges retain event identity.
+          wave_11 = []
+          for line in lines[1:]:
+              fields = dict(part.split("=", 1) for part in line.split("|")[1:])
+              if fields["wave"] == "11":
+                  wave_11.append(fields)
+          assert len(wave_11) == 36
+          event_features = []
+          sources, destinations = [], []
+          healthcare_features = torch.zeros((48, 16), dtype=torch.float32)
+          for i in range(6):
+              healthcare_features[i, 0] = 1.0
+              healthcare_features[6+i, 1] = 1.0
+              healthcare_features[i, 10] = i / 5.0
+              healthcare_features[6+i, 11] = i / 5.0
+          for i, event in enumerate(wave_11):
+              actor_i = actors.index(event["actor"])
+              target_i = targets.index(event["target"])
+              risk = int(event["risk"])
+              failure = float(event["state"] == "failed")
+              online = 1.0 - failure
+              event_features.append([0.01, risk / 9.0, risk / 9.0,
+                                     failure, online, 1.0 / 3.0])
+              sources.extend([actor_i, 12 + i])
+              destinations.extend([12 + i, 6 + target_i])
+              healthcare_features[12+i, 2] = 1.0
+              healthcare_features[12+i, 5] = risk / 5.0
+              healthcare_features[12+i, 6] = states.index(event["state"]) / 5.0
+              healthcare_features[12+i, 7] = verbs.index(event["verb"]) / 5.0
+              healthcare_features[12+i, 8] = actor_i / 5.0
+              healthcare_features[12+i, 9] = target_i / 5.0
+              healthcare_features[12+i, 12] = i / 35.0
+          features_48 = torch.cat([
+              node_features(11, [0.5] * 36),
+              torch.tensor(event_features, dtype=torch.float32),
+          ])
+          health_edges = torch.tensor([sources, destinations], dtype=torch.long)
+          assert features_48.shape == (48, 6) and health_edges.shape == (2, 72)
+          assert len({event["word_sha"] for event in wave_11}) == 36
+
+          with torch.no_grad():
+              current_output, current_adj = model(features_48, health_edges, return_weights=True)
+              origin_output, origin_adj = health_gsl(features_48, health_edges, return_weights=True)
+          assert torch.equal(current_output, origin_output) and torch.equal(current_adj, origin_adj), (
+              "healthcare-to-ASOLARIA identical source checkpoint forward parity failed"
+          )
+          event_scores = current_output[1::2]  # word -> target
+          assert event_scores.numel() == 36
+          trained_span = float(event_scores.max() - event_scores.min())
+          # Original healthcare architecture: 16-feature semantic node
+          # typing and an edge-level score, used as UNTRAINED control only.
+          torch.manual_seed(20261118)
+          baseline = EdgeLevelGNN(node_input_dim=16, hidden_dim=32)
+          baseline.eval()
+          with torch.no_grad():
+              base_scores = baseline(healthcare_features, health_edges)
+          baseline_span = float(base_scores[1::2].max() - base_scores[1::2].min())
+          assert torch.isfinite(base_scores).all() and math.isfinite(trained_span)
+          event_row = (
+              "GNN_HEALTHCARE_EVENT_GRAPH|origin=AI-healthCare-project|"
+              "origin_commit=e0048c0ad60705ecb447642f08b14b5c1bde7437|"
+              "gsl_blob=886b3b0c0cdbddba983fa8c3ae083c4520d38f0e|"
+              "model_checkpoint=EXACT_ORIGINAL|trained_origin_forward=BYTE_EQUAL|"
+              "event_word_nodes=36|entity_nodes=12|edges=72|"
+              f"trained_score_span_nano={round(trained_span*1000000000)}|"
+              f"untrained_baseline_span_nano={round(baseline_span*1000000000)}|"
+              "baseline_trained=NO|labelled_accuracy=HOLD|status=PASS|json=0"
+          )
+          print(event_row, flush=True)
+          result_lines.append(event_row)
+
           body = "\n".join(result_lines) + "\n"
           result_hash = digest(body.encode())
           source_sha = digest(raw)
@@ -339,6 +441,7 @@ jobs:
           test "$(grep -c '^GNN_PASS|' GNN_FORWARD.hbp)" -eq 12
           test "$(grep -c '^GNN_HELDOUT|' GNN_FORWARD.hbp)" -eq 4
           test "$(grep -c '^GNN_DIAGNOSTIC|' GNN_FORWARD.hbp)" -eq 4
+          test "$(grep -c '^GNN_HEALTHCARE_EVENT_GRAPH|' GNN_FORWARD.hbp)" -eq 1
           grep -Fq '|calibration=HOLD|status=PASS|json=0' GNN_FORWARD.hbp
       - name: Publish original checkpoint inference and source-wave measurement receipts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -380,6 +483,7 @@ jobs:
           test "$(grep -c '^GNN_CONTROL|' proof/GNN_FORWARD.hbp)" -eq 1
           test "$(grep -c '^GNN_HELDOUT|' proof/GNN_FORWARD.hbp)" -eq 4
           test "$(grep -c '^GNN_DIAGNOSTIC|' proof/GNN_FORWARD.hbp)" -eq 4
+          test "$(grep -c '^GNN_HEALTHCARE_EVENT_GRAPH|' proof/GNN_FORWARD.hbp)" -eq 1
           grep -Fq '|calibration=HOLD|status=PASS|json=0' proof/GNN_FORWARD.hbp
           grep -Fq '|heldout_accuracy=NOT_COMPUTED|' proof/GNN_FORWARD.hbp
           echo 'GNN_SOURCE_WITNESS|word_fixture=EXACT|trained_checkpoint=REFERENCED|inference_receipt_sha=PASS|status=PASS|json=0'
