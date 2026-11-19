@@ -101,7 +101,9 @@ def verify_one(root, source, case, mode):
         need(not (folder / "model.trits").exists(),
              "time-limited worker must not claim an unverified model")
         return {"mode": mode, "case": case, "status": "HOLD_TIME",
-                "nodes": "UNOBSERVED", "frames": "UNOBSERVED",
+                "nodes": "UNOBSERVED", "propagations": "UNOBSERVED",
+                "literal_checks": "UNOBSERVED", "frames": "UNOBSERVED",
+                "matrix_ns": "UNOBSERVED", "paid_bytes": "UNOBSERVED",
                 "total_ns": "UNOBSERVED", "source": expected}
     row = read_hbp(record_path)
     for key, expected_value in [
@@ -161,7 +163,12 @@ def verify_one(root, source, case, mode):
         need(not (folder / "model.trits").exists() and row.get("model_sha256") == "NONE",
              "HOLD_NODE claims an unjustified model")
     return {"mode": mode, "case": case, "status": status, "source": expected,
-            "nodes": str(count["nodes"]), "frames": str(count["frames"]),
+            "nodes": str(count["nodes"]),
+            "propagations": str(count["propagations"]),
+            "literal_checks": str(count["literal_checks"]),
+            "frames": str(count["frames"]),
+            "matrix_ns": str(count["matrix_wall_ns"]),
+            "paid_bytes": str(count["paid_frozen_bytes"] + count["paid_metadata_bytes"]),
             "total_ns": str(count["total_ns"])}
 
 def main():
@@ -190,16 +197,19 @@ def main():
         live = results["live", case]
         if direct["status"] != "HOLD_TIME" and live["status"] != "HOLD_TIME":
             need(direct["status"] == live["status"] and
-                 direct["nodes"] == live["nodes"],
-                 "direct/live search tree diverged under equal node budget")
+                 direct["nodes"] == live["nodes"] and
+                 direct["propagations"] == live["propagations"] and
+                 direct["literal_checks"] == live["literal_checks"],
+                 "direct/live original-CNF DPLL work diverged under equal node budget")
             parity += 1
     lines = []
     for case in CASES:
         for mode in MODES:
             row = results[mode, case]
             lines.append("BTC_LIVE_TRIAL|case={case}|mode={mode}|status={status}|"
-                         "nodes={nodes}|frames={frames}|total_ns={total_ns}|"
-                         "source_sha256={source}|json=0".format(**row))
+                         "nodes={nodes}|propagations={propagations}|literal_checks={literal_checks}|"
+                         "frames={frames}|matrix_ns={matrix_ns}|paid_bytes={paid_bytes}|"
+                         "total_ns={total_ns}|source_sha256={source}|json=0".format(**row))
     body = "\n".join(lines) + "\n"
     header = (
         "BTC_LIVE_FINAL|schema=1|source=BITCOIN_GENESIS_SHA256D|"
