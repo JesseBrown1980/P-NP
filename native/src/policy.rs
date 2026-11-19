@@ -18,10 +18,11 @@ const ACCEPTED_WORKFLOWS: [&str; 7] = [
 ];
 // Explicit research-only model analysis, executed by pinned hosted workflow.
 // Native production and transport still accept only Rust implementations.
-const ACCEPTED_RESEARCH_SOURCE: [&str; 3] = [
+const ACCEPTED_RESEARCH_SOURCE: [&str; 4] = [
     "research/gnn_original_checkpoint_compare.py",
     "research/stone_moss_recovery_verify.py",
     "research/stone_moss_checkpoint_forward.py",
+    "research/stone_moss_provenance_check.py",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
