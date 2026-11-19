@@ -69,10 +69,11 @@ def check():
     a = ap.parse_args()
     must(re.fullmatch("[A-Za-z0-9_-]{1,200}", a.run_key), "run-key syntax")
 
-    manifest = json.loads((a.proof / "SMF_RECOVERY.json").read_bytes())
-    result = json.loads((a.proof / "SMF_GNN_FORWARD.json").read_bytes())
-    forward = (a.proof / "SMF_GNN_FORWARD.hbp").read_bytes()
-    (a.proof / "SMF_GNN_FORWARD.hbp").read_text("ascii")
+    archive = a.proof / "acceptance"
+    manifest = json.loads((archive / "SMF_RECOVERY.json").read_bytes())
+    result = json.loads((archive / "SMF_GNN_FORWARD.json").read_bytes())
+    forward = (archive / "SMF_GNN_FORWARD.hbp").read_bytes()
+    (archive / "SMF_GNN_FORWARD.hbp").read_text("ascii")
     checkout_sha = git(Path("."), "rev-parse", "HEAD")
     must(re.fullmatch("[0-9a-f]{40}", checkout_sha), "checkout commit invalid")
     live_raw, live = exact_snapshot(a.proof / "SMF_IS_REFS.hbp", a.run_key, checkout_sha)
