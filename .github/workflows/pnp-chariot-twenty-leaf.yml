@@ -329,6 +329,35 @@ jobs:
         with:
           name: chariot-two-wave-final
           path: proof
+      - name: Download complete original forward wave for independent replay
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Download every independent Chariot reverse leaf again
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-reverse-*
+          path: reverse
+          merge-multiple: true
+      - name: Download every independent word reverse leaf again
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-word-reverse-*
+          path: language-reverse
+          merge-multiple: true
+      - name: Recompute BOTH original final roots on a separate hosted runner
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --bin language_cascade --release --offline --locked
+          native/target/release/chariot_waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_INDEPENDENT.hbp
+          native/target/release/language_cascade final "$RUN_KEY" forward-bundle/language forward-bundle/language-root.hbp language-reverse CW_INDEPENDENT.hbp
+          cmp -s CH20_INDEPENDENT.hbp proof/CH20_FINAL.hbp
+          cmp -s CW_INDEPENDENT.hbp proof/CW_FINAL.hbp
+          echo 'G3D_TWO_WAVE_INDEPENDENT|leaves=40|word_events=93312|source_replay=BYTE_EQUAL|status=PASS|json=0'
       - name: Verify exact original source and replay immutable graph byte for byte
         env:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
