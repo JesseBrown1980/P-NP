@@ -69,7 +69,13 @@ def search_worker(args):
     )
     # Historical source remains byte-identical; 1,024-node limit is lifted
     # for this separate research arm, while wall time is bounded by the parent.
-    result = original_watched.solve(variables, clauses, priority=order, limit=NODE_CAP)
+    try:
+        result = original_watched.solve(variables, clauses, priority=order, limit=NODE_CAP)
+    except RecursionError:
+        print(f"BTC300_SEARCH_DEPTH|arm={args.arm}|case={args.case}|"
+              f"original_cnf_sha={digest(raw)}|node_cap={NODE_CAP}|"
+              "status=HOLD_STACK|json=0", flush=True)
+        raise SystemExit(75)
     require(result["status"] in ("SAT", "HOLD_BUDGET", "UNSAT_DPLL"),
             "original solver emitted unknown status")
     if result["status"] == "UNSAT_DPLL":
@@ -140,7 +146,8 @@ def orchestrate(args):
     search_ns = monotonic_ns() - start_search
     (args.output / "search.stdout").write_bytes(run.stdout)
     (args.output / "search.stderr").write_bytes(run.stderr)
-    status = "SAT" if run.returncode == 0 else "HOLD_TIME" if run.returncode == 124 else "ERROR"
+    status = ("SAT" if run.returncode == 0 else "HOLD_TIME" if run.returncode == 124
+              else "HOLD_STACK" if run.returncode == 75 else "ERROR")
     require(status != "ERROR", "research search failed rc=" + str(run.returncode) +
             " stderr=" + run.stderr.decode("utf-8", errors="replace")[-1000:])
     if status == "SAT":
@@ -150,8 +157,11 @@ def orchestrate(args):
         require((args.output / "model.dimacs").is_file(), "missing SAT source model")
         model_sha = digest((args.output / "model.dimacs").read_bytes())
     else:
-        require(not (args.output / "worker.hbp").exists(), "unexpected completed worker on timeout")
-        require(not (args.output / "model.dimacs").exists(), "unexpected model on timeout")
+        require(not (args.output / "worker.hbp").exists(), "unexpected completed worker on HOLD")
+        require(not (args.output / "model.dimacs").exists(), "unexpected model on HOLD")
+        if status == "HOLD_STACK":
+            require("BTC300_SEARCH_DEPTH|" in run.stdout.decode("ascii", errors="replace"),
+                    "missing original interpreter stack-limit witness")
         model_sha = "NONE"
     line = (
         f"BTC300_MATRIX_SEARCH|schema=1|arm={args.arm}|case={args.case}|"
@@ -159,7 +169,7 @@ def orchestrate(args):
         f"clauses={manifest['clauses']}|matrix_proof_sha={digest(matrix.read_bytes())}|"
         f"model_sha={model_sha}|matrix_ns={matrix_ns}|search_ns={search_ns}|"
         f"overall_ns={monotonic_ns()-begin}|search_exit={run.returncode}|node_cap={NODE_CAP}|"
-        f"search_nodes={'WORKER_RECEIPT' if status=='SAT' else 'UNOBSERVED_ON_TIMEOUT'}|"
+        f"search_nodes={'WORKER_RECEIPT' if status=='SAT' else 'UNOBSERVED_ON_HOLD'}|"
         f"search_budget_seconds={TIME_SECONDS}|status={status}|json=0\n"
     )
     (args.output / "receipt.hbp").write_text(line, encoding="ascii")
