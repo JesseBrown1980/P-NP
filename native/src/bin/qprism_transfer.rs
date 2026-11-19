@@ -184,11 +184,11 @@ fn checked_root(run: &str, corpus: &Corpus, data: &str)
         let fields: Vec<_> = line.split('|').collect();
         require(fields.len() == 6 && fields[5] == "json=0",
             "root roster field grammar changed")?;
-        let receipt_sha = fields[2].strip_prefix("wire_sha=")
+        let receipt_sha = fields[3].strip_prefix("wire_sha=")
             .ok_or("missing wire SHA field")?;
-        let raw_sha = fields[3].strip_prefix("raw_sha=")
+        let raw_sha = fields[4].strip_prefix("raw_sha=")
             .ok_or("missing source SHA field")?;
-        let actual_receipt = fields[1].strip_prefix("receipt_sha=")
+        let actual_receipt = fields[2].strip_prefix("receipt_sha=")
             .ok_or("missing receipt SHA field")?;
         for value in [receipt_sha, raw_sha, actual_receipt] {
             require(value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit()
