@@ -60,3 +60,40 @@ HOLD independently.
 The discrete-universe model is a motivating hypothesis for this engineering
 architecture, while its physical interpretation and P=NP mathematical
 status remain separate research problems.
+
+## Native exact 27-cell funnel: first integration stage
+
+Source: native/src/bin/bitcoin_matrix_funnel.rs
+Hosted workflow: .github/workflows/pnp-bitcoin-matrix-funnel.yml
+
+The actual historical nonce32 and merkle_nonce288 full Boolean CNFs are
+ingested by the Rust 1.81 binary, authenticated against their pinned SHA256
+digests, and independently parsed as exact DIMACS clauses. The program
+constructs the published Bitcoin genesis 80-byte reference header solely for
+a source-path round-trip experiment. This reference header is excluded from
+the search input supplied to the experimental SAT solvers.
+
+Each header byte is represented by six balanced ternary digits (480 data
+trits total), padded by six neutral cells into 18 exact 27-cell frames.
+Each frame traverses the existing Fischer null-outward addresses and is
+inverted using the pinned prime-tower addressing. Every state is preserved
+through Brown Ledger freeze/play; every transition is preserved through
+exact signed BrownDelta forward/reverse operations. The program reassembles
+all 80 original bytes, independently recomputes the full published Bitcoin
+double-SHA256 digest, and rejects header, source-CNF, receipt, and frozen
+state modifications. It emits exact HBP text, SHA256 evidence roots, and
+elapsed-time metering. Hosted matrix workers run both original source
+cases and a distinct replay/referee step.
+
+This stage tests a real Bitcoin data funnel, source identity, reversible
+transport and exact verification; solver_search=NOT_RUN is an explicit
+receipt field. Measured compute cost includes the parsed source CNF and
+reversible transport; the separate 300-second external-search reference
+provides the first timing baseline.
+
+Following acceptance gate: integrate a genuinely time-bounded,
+nontrivially searchable branch/candidate generator with this Rust transport
+and compare its outcomes under exactly matched 300-second budgets.
+Separate search nodes, state/wave reuse, transport bytes, watchdog checks
+and end-to-end wall duration. The historical 1,024-node stop must be
+removed or treated as a separately reported bounded HOLD.
