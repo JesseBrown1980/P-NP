@@ -162,12 +162,12 @@ mod tests {
 
     #[test]
     fn original_cnf_solver_model_roundtrips_through_live_frames() {
-        use crate::guidance::Guidance;
+        use crate::guidance::{Guidance, Strategy};
         use crate::solver::{solve, Status};
         use crate::ternary::Cnf;
         let source = "p cnf 3 3\n1 2 0\n-1 3 0\n-2 3 0\n";
         let cnf = Cnf::parse(source).expect("original clauses");
-        let guidance = Guidance::natural(&cnf);
+        let guidance = Guidance::for_source(&cnf, Strategy::Base).expect("branch order");
         let solved = solve(&cnf, &guidance, Some(128));
         assert_eq!(solved.status, Status::Sat);
         let model = solved.model.expect("complete SAT assignment");
