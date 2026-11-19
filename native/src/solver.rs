@@ -6,6 +6,7 @@
 use crate::guidance::Guidance;
 use crate::live_sat_matrix::{freeze_live, play_live};
 use crate::matrix::CELLS;
+use crate::matrix_selector::{MatrixSelectionMetrics, MatrixSelector};
 use crate::sha256::hash_bytes;
 use crate::ternary::{Cnf, Trit};
 use std::time::Instant;
@@ -142,6 +143,7 @@ struct Searcher<'a> {
     literal_checks: u64,
     budget: Option<u64>,
     live: Option<LiveObserver<'a>>,
+    selector: Option<MatrixSelector>,
 }
 
 impl Searcher<'_> {
@@ -214,9 +216,18 @@ impl Searcher<'_> {
         if !consistent {
             return Search::Unsat;
         }
-        let choice = self.order.iter()
-            .copied()
-            .find(|&variable| propagated[variable - 1] == Trit::Zero);
+        let choice = if let Some(selector) = &mut self.selector {
+            if self.order.iter().any(|&v| propagated[v - 1] == Trit::Zero) {
+                Some(selector.choose(self.cnf, self.order, &propagated)
+                    .expect("source-verified matrix selector must return an open variable"))
+            } else {
+                None
+            }
+        } else {
+            self.order.iter()
+                .copied()
+                .find(|&variable| propagated[variable - 1] == Trit::Zero)
+        };
         let Some(variable) = choice else {
             return if self.cnf.valid_complete_model(&propagated) {
                 Search::Sat(propagated)
@@ -255,7 +266,8 @@ fn solve_internal(
     guidance: &Guidance,
     budget: Option<u64>,
     live: Option<LiveObserver<'_>>,
-) -> (Solution, Option<LiveSearchMetrics>) {
+    selector: Option<MatrixSelector>,
+) -> (Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>) {
     let mut searcher = Searcher {
         cnf,
         order: &guidance.order,
@@ -264,6 +276,7 @@ fn solve_internal(
         literal_checks: 0,
         budget,
         live,
+        selector,
     };
     let initial = vec![Trit::Zero; cnf.variables];
     let status = searcher.recurse(&initial);
@@ -282,12 +295,13 @@ fn solve_internal(
         literal_checks: searcher.literal_checks,
         budget,
     };
-    (solution, searcher.live.map(|observer| observer.stats))
+    (solution, searcher.live.map(|observer| observer.stats),
+     searcher.selector.map(MatrixSelector::into_metrics))
 }
 
 /// Source-only exact baseline: no matrix work is performed in this path.
 pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
-    solve_internal(cnf, guidance, budget, None).0
+    solve_internal(cnf, guidance, budget, None, None).0
 }
 
 /// The identical exact DPLL propagation and branch logic with live 27-cell
@@ -300,8 +314,29 @@ pub fn solve_with_live_matrix(
     source_sha256: &str,
 ) -> Result<(Solution, LiveSearchMetrics), String> {
     let observer = LiveObserver::new(source_sha256)?;
-    let (solution, stats) = solve_internal(cnf, guidance, budget, Some(observer));
+    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None);
     Ok((solution, stats.expect("live observer must produce exact metrics")))
+}
+
+/// Genuine matrix-driven SAT branch selection: the current ternary solver
+/// assignment is frozen into 27-cell source-bound rooms, replayed, and scored
+/// against its still-active original CNF clauses. Every decision is metered.
+/// This is an experimental exact selector; speedups require separate evidence.
+pub fn solve_with_matrix_guidance(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    source_sha256: &str,
+) -> Result<(Solution, LiveSearchMetrics, MatrixSelectionMetrics), String> {
+    let observer = LiveObserver::new(source_sha256)?;
+    let selector = MatrixSelector::new(cnf, source_sha256)?;
+    let (solution, live, guided) =
+        solve_internal(cnf, guidance, budget, Some(observer), Some(selector));
+    Ok((
+        solution,
+        live.expect("matrix-guided solver must retain live frame receipts"),
+        guided.expect("matrix-guided solver must retain selection receipts"),
+    ))
 }
 
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
