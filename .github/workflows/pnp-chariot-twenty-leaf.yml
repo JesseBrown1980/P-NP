@@ -24,9 +24,9 @@ jobs:
       - name: Native strict build and historical seal verification
         run: |
           set -euo pipefail
-          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin chariot-waves --offline --locked -- -D warnings
-          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
-          native/target/release/chariot-waves provenance
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin chariot_waves --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves provenance
       - name: Produce source-bound checkpoint for this leaf
         env:
           LEAF: ${{ matrix.leaf }}
@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           mkdir -p forward
           file="$(printf 'forward/forward-%02d.hbp' "$LEAF")"
-          native/target/release/chariot-waves forward "$RUN_KEY" "$LEAF" "$file"
+          native/target/release/chariot_waves forward "$RUN_KEY" "$LEAF" "$file"
           test -s "$file"
       - name: Seal and upload one immutable leaf artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -66,8 +66,8 @@ jobs:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
         run: |
           set -euo pipefail
-          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
-          native/target/release/chariot-waves fanin "$RUN_KEY" forward forward-root.hbp
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves fanin "$RUN_KEY" forward forward-root.hbp
           test "$(find forward -maxdepth 1 -type f -name 'forward-*.hbp' | wc -l)" -eq 20
       - name: Publish sealed forward wave bundle for reverse workers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -104,10 +104,10 @@ jobs:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
         run: |
           set -euo pipefail
-          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
           mkdir -p reverse
           file="$(printf 'reverse/reverse-%02d.hbp' "$LEAF")"
-          native/target/release/chariot-waves reverse "$RUN_KEY" "$LEAF" forward-bundle/forward forward-bundle/forward-root.hbp "$file"
+          native/target/release/chariot_waves reverse "$RUN_KEY" "$LEAF" forward-bundle/forward forward-bundle/forward-root.hbp "$file"
           test -s "$file"
       - name: Publish independent source-restoration receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -143,9 +143,9 @@ jobs:
           RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
         run: |
           set -euo pipefail
-          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin chariot-waves --offline --locked
-          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
-          native/target/release/chariot-waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_FINAL.hbp | tee CH20_FINAL.log
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin chariot_waves --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_FINAL.hbp | tee CH20_FINAL.log
           grep -Fq '|checkpoints=40|restored_cells=540|replay=EXACT|' CH20_FINAL.hbp
           grep -Fq '|status=PASS|json=0' CH20_FINAL.hbp
           sha256sum CH20_FINAL.hbp > CH20_FINAL.sha256
