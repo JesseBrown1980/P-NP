@@ -15,6 +15,9 @@ const ACCEPTED_WORKFLOWS: [&str; 6] = [
     ".github/workflows/pnp-gnn-trained-wave-reference.yml",
     ".github/workflows/pnp-original-gnn-family-comparison.yml",
 ];
+// Explicit research-only model analysis, executed by pinned hosted workflow.
+// Native production and transport still accept only Rust implementations.
+const ACCEPTED_RESEARCH_SOURCE: [&str; 1] = ["native/research/gnn_original_checkpoint_compare.py"];
 const EXPECTED_LEGACY: usize = 54;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -122,6 +125,7 @@ pub fn check_repository(root: &Path) -> Result<Audit, String> {
     for file in &filenames {
         if executable_legacy(file) && !ACCEPTED_WORKFLOWS.contains(&file.as_str())
             && !original.contains_key(file)
+            && !ACCEPTED_RESEARCH_SOURCE.contains(&file.as_str())
         {
             return Err(format!("non-native executable is not accepted: {file}"));
         }
