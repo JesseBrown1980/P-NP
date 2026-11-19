@@ -5,6 +5,7 @@
 use pnp_native::behcs_glyph_language;
 use pnp_native::prism;
 use pnp_native::sha256::hash_bytes;
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -124,6 +125,14 @@ fn fanin_root(run: &str, folder: &Path) -> Result<String, String> {
     }
     ensure(point_count == TOTAL, "execution lanes did not cover all events")?;
     ensure(totals.iter().all(|&x| x == 216), "word search convergence changed")?;
+    let mut address_witness = BTreeSet::new();
+    for index in 0..TOTAL {
+        let (word, _) = point(index)?;
+        let address = behcs_glyph_language::address(&word)
+            .ok_or("source word has no address")?;
+        ensure(address_witness.insert(address), "original 64-bit glyph address alias")?;
+    }
+    ensure(address_witness.len() == TOTAL, "source-word glyph address coverage changed")?;
     // A 216:1 projection is intentionally many-to-one. Full source-word
     // identities remain recoverable from their pinned coordinate/corpus.
     Ok(hash_bytes(commits.join("|").as_bytes()))
@@ -164,7 +173,7 @@ fn final_row(run: &str, dir: &Path, root_file: &Path, reverse_dir: &Path) -> Res
     }
     let reverse = hash_bytes(receipts.join("|").as_bytes());
     Ok(format!(
-        "CW_FINAL|schema=1|run={run}|source={ORIGIN}|forward_root={root}|reverse_root={reverse}|events=93312|word_dimension=ACTOR_VERB_TARGET_RISK_STATE_WAVE|glyph_language=ORIGINAL_256_GLYPHS|unique_execution=93312|search_buckets=432|collisions_per_bucket=216|reverse_leaves=20|word_reconstruction=EXACT_FROM_PINNED_WORDS|prism=ROUNDTRIP|trained_gnn=SEPARATE_MODEL_GATE|status=PASS|json=0\n"
+        "CW_FINAL|schema=1|run={run}|source={ORIGIN}|forward_root={root}|reverse_root={reverse}|events=93312|word_dimension=ACTOR_VERB_TARGET_RISK_STATE_WAVE|glyph_language=ORIGINAL_256_GLYPHS|unique_execution=93312|unique_glyph_addresses=93312|search_buckets=432|collisions_per_bucket=216|reverse_leaves=20|word_reconstruction=EXACT_FROM_PINNED_WORDS|prism=ROUNDTRIP|trained_gnn=SEPARATE_MODEL_GATE|status=PASS|json=0\n"
     ))
 }
 fn take(args: &mut impl Iterator<Item=String>, what: &str) -> Result<String, String> {
