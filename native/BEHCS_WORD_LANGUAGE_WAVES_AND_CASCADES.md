@@ -105,3 +105,27 @@ The research gate remains evidence-first: exact source-word
 restoration and authenticated routing are proved by independent
 recomputation, and learned inference has its own checkpoint-forward
 and held-out quality checks.
+
+## Original 256-glyph word address port
+
+`native/src/behcs_glyph_language.rs` now contains **all 256 original
+Unicode glyphs** in the canonical IX-700 source order. It ports the
+original `codex-bridge.js` rule: compute SHA-256 over the complete
+typed word, use the first eight digest bytes, and display those
+byte values as glyphs in low-base-256 digit order. The inverse
+recovers the eight-byte digest prefix, and the source word is
+retained to verify semantic identity. Examples independently
+reproduced from the frozen original source:
+
+- `falcon` → `⁂←α.Vυ(∞`, first eight digest bytes `a84571394b5e99fe`
+- `D1:acer` → `)◎o☢€g│✯`, first eight digest bytes `c3d110b8c6189646`
+
+The 93,312 word events in the hosted cascade now pass both:
+the native Q-PRISM 256→1024→256 source-byte round trip and the
+original BEHCS-256 **word→eight-glyph-address→digest-prefix**
+identity check. This keeps words and glyph addresses distinct
+from physical Host-8 8-byte room stubs and from the 1024-glyph
+representation rung.
+
+The original trained checkpoint weights and learned-feature mapping
+are preserved as the next separate model-forward-parity gate.
