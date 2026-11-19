@@ -149,7 +149,7 @@ jobs:
           set -euo pipefail
           PNP_SHA="$(git rev-parse HEAD)"
           FOLLOW_SHA="$(git ls-remote https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '{print $1}')"
-          SAFE_SHA="$(git ls-remote https://github.com/JesseBrown1980/SAFE-ASI.git refs/heads/main | awk '{print $1}')"
+          SAFE_SHA="$(git ls-remote https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '{print $1}')"
           test "${#PNP_SHA}" -eq 40
           test "${#FOLLOW_SHA}" -eq 40
           test "${#SAFE_SHA}" -eq 40
