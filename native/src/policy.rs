@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 13] = [
+const ACCEPTED_WORKFLOWS: [&str; 14] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
     ".github/workflows/pnp-qprism-hosted-transport.yml",
@@ -21,10 +21,11 @@ const ACCEPTED_WORKFLOWS: [&str; 13] = [
     ".github/workflows/pnp-bitcoin-300s-matrix-search.yml",
     ".github/workflows/pnp-bitcoin-cnf-orchestration-compare.yml",
     ".github/workflows/pnp-bitcoin-live-state-vs-direct.yml",
+    ".github/workflows/pnp-bitcoin-matrix-guided-selector.yml",
 ];
 // Explicit research-only model analysis, executed by pinned hosted workflow.
 // Native production and transport still accept only Rust implementations.
-const ACCEPTED_RESEARCH_SOURCE: [&str; 10] = [
+const ACCEPTED_RESEARCH_SOURCE: [&str; 11] = [
     "research/gnn_original_checkpoint_compare.py",
     "research/stone_moss_recovery_verify.py",
     "research/stone_moss_checkpoint_forward.py",
@@ -35,6 +36,7 @@ const ACCEPTED_RESEARCH_SOURCE: [&str; 10] = [
     "research/bitcoin_300s_matrix_verify.py",
     "research/bitcoin_cnf_pump_compare.py",
     "research/bitcoin_live_sat_referee.py",
+    "research/bitcoin_matrix_guided_referee.py",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
@@ -233,6 +235,7 @@ mod tests {
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[10]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[11]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[12]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[13]));
         assert!(ACCEPTED_RESEARCH_SOURCE.iter().all(|p| p.starts_with("research/")));
         assert!(!ACCEPTED_RESEARCH_SOURCE.contains(&"native/research/gnn_original_checkpoint_compare.py"));
     }
