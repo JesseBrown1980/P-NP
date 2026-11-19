@@ -98,6 +98,12 @@ jobs:
           ref: c4b2458c88358c46155d3b308c594f9991720847
           path: source-gnn
           persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: stone-moss-bank-*
@@ -136,6 +142,43 @@ jobs:
           grep -Fq '|each_exact=TRUE|' acceptance/SMF_RECOVERY.hbp
           ( cd acceptance && sha256sum RESTORE-*.smf > RESTORES.sha256 && sha256sum -c RESTORES.sha256 )
           echo 'SMF_ACCEPT|three_of_three_pairs=PASS|real_word_and_checkpoint_bytes=PASS|physical_source_attested=FALSE|json=0'
+      - name: Install pinned external PyTorch reference in isolated research environment
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/smf-gnn-venv
+          /tmp/smf-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/smf-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch-geometric==2.7.0'
+          /tmp/smf-gnn-venv/bin/python -c 'import torch,torch_geometric; assert torch.__version__.startswith("2.5.1"); assert torch_geometric.__version__ == "2.7.0"'
+      - name: Execute recovered trained checkpoint, compare original-source forward, seal provenance
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          /tmp/smf-gnn-venv/bin/python research/stone_moss_checkpoint_forward.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --graph WORD_GRAPH.hbp --shards shards --recovered acceptance/RESTORE-AP.smf \
+            --recovery-receipt acceptance/SMF_RECOVERY.json --run-key "$RUN_KEY" --out acceptance | tee SMF_FORWARD.log
+          ( cd acceptance && sha256sum -c SMF_GNN_FORWARD.sha256 )
+          grep -Fq '|checkpoint_load=STRICT|recovered_forward=PASS|' acceptance/SMF_GNN_FORWARD.hbp
+          grep -Fq '|original_source_forward_parity=EXACT|balanced_accuracy=NOT_COMPUTED|' acceptance/SMF_GNN_FORWARD.hbp
+          /tmp/smf-gnn-venv/bin/python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path("acceptance")
+          record = json.loads((root / "SMF_GNN_FORWARD.json").read_bytes())
+          hbp = (root / "SMF_GNN_FORWARD.hbp").read_text()
+          roles = record["five_roles"]
+          assert set(roles) == {"HBI", "HBP", "SHA", "SH", "HASH"}
+          assert all(len(value) == 64 for value in roles.values())
+          assert "five_member_root=" + roles["HASH"] in hbp
+          assert record["metrics"]["source_words"] == 144
+          assert sorted(record["wave_forward_parity"]) == ["10", "11", "8", "9"]
+          assert all(row["outputs_equal"] and row["perturbed_outputs_equal"]
+                     for row in record["wave_forward_parity"].values())
+          assert record["balanced_accuracy"] == "NOT_COMPUTED"
+          assert record["external_source_attested"] is False
+          print("SMF_PROVENANCE_WITNESS|five_roles=5|waves=4|source_semantic_calibration=HOLD|status=PASS|json=0")
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: stone-moss-word-gnn-source-recovery
@@ -143,7 +186,11 @@ jobs:
             acceptance/SMF_RECOVERY.hbp
             acceptance/SMF_RECOVERY.json
             acceptance/SMF_RECOVERY.sha256
+            acceptance/SMF_GNN_FORWARD.hbp
+            acceptance/SMF_GNN_FORWARD.json
+            acceptance/SMF_GNN_FORWARD.sha256
             acceptance/RESTORES.sha256
             SMF_ACCEPTANCE.log
+            SMF_FORWARD.log
           if-no-files-found: error
           retention-days: 30
