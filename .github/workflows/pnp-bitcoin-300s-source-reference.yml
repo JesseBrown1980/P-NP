@@ -72,8 +72,8 @@ jobs:
           python3 -s -B research/bitcoin_300s_reference.py run --arm "$ARM" --case "$CASE" --source source --output "results/$ARM/$CASE" | tee BTC300_RUN.hbp
           grep -Fq '|seconds=300|' BTC300_RUN.hbp
           test -s "results/$ARM/$CASE/receipt.txt"
-          ( cd results && find . -type f ! -name FILES.sha256 -print0 | sort -z | xargs -0 sha256sum > FILES.sha256 )
-          ( cd results && sha256sum -c FILES.sha256 )
+          ( cd results && find "$ARM/$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$ARM-$CASE.FILES.sha256" )
+          ( cd results && sha256sum -c "$ARM-$CASE.FILES.sha256" )
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bitcoin300-result-${{ matrix.arm }}-${{ matrix.case }}
@@ -104,6 +104,7 @@ jobs:
           set -euo pipefail
           ( cd evidence/source && sha256sum -c SOURCE.sha256 )
           test "$(find evidence/results -type f -name receipt.txt | wc -l)" -eq 6
+          for arm in minisat cadical picosat; do for case in nonce32 merkle_nonce288; do ( cd evidence/results && sha256sum -c "$arm-$case.FILES.sha256" ); done; done
           python3 -s -B research/bitcoin_300s_reference.py verify --source evidence/source --results evidence/results --out evidence/BTC300_FINAL.hbp | tee evidence/BTC300_REFEREE.log
           grep -Fq '|budget_seconds_each=300|' evidence/BTC300_FINAL.hbp
           grep -Fq '|node_limited_arms_rerun=NO|' evidence/BTC300_FINAL.hbp
