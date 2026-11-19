@@ -161,6 +161,25 @@ mod tests {
     }
 
     #[test]
+    fn original_cnf_solver_model_roundtrips_through_live_frames() {
+        use crate::guidance::Guidance;
+        use crate::solver::{solve, Status};
+        use crate::ternary::Cnf;
+        let source = "p cnf 3 3\n1 2 0\n-1 3 0\n-2 3 0\n";
+        let cnf = Cnf::parse(source).expect("original clauses");
+        let guidance = Guidance::natural(&cnf);
+        let solved = solve(&cnf, &guidance, Some(128));
+        assert_eq!(solved.status, Status::Sat);
+        let model = solved.model.expect("complete SAT assignment");
+        let root = hash_bytes(source.as_bytes());
+        let frozen = freeze_assignment(&root, &model).expect("freeze actual SAT model");
+        let replayed = play_assignment(&root, &frozen, cnf.variables)
+            .expect("play original SAT model");
+        assert!(cnf.valid_complete_model(&replayed));
+        assert_eq!(replayed, model);
+    }
+
+    #[test]
     fn corruption_replay_and_wrong_source_fail() {
         let states = vec![Trit::Plus, Trit::Zero, Trit::Minus];
         let frame = freeze_live(SOURCE, 1, &states).expect("freeze");
