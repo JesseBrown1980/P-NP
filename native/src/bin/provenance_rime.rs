@@ -275,6 +275,17 @@ fn receipt(e: &Evidence) -> String {
             }
         }
     }
+    for (artifact,phase,root) in [
+        ("chariot_final","FORWARD",&e.ch_forward),
+        ("chariot_final","REVERSE",&e.ch_reverse),
+        ("word_final","FORWARD",&e.word_forward),
+        ("word_final","REVERSE",&e.word_reverse),
+    ] {
+        out.push_str(&tuple("ROOT",&[
+            ("artifact",artifact),("phase",phase),("sha",root),
+            ("source","UPSTREAM_NATIVE_VERIFIED"),("identity_exchange","0"),
+        ]));
+    }
     let rime = domain("RIME_SOURCE_IDENTITY_V1", &[&e.run,&e.ch_sha,&e.word_sha]);
     out.push_str(&tuple("RIME",&[
         ("left","chariot_final"),("right","word_final"),
@@ -398,6 +409,7 @@ mod tests {
         assert_eq!(a.matches("\nEDGE|").count(),10);
         assert_eq!(a.matches("\nFAMILY|").count(),6);
         assert_eq!(a.matches("\nVIEW|").count(),24);
+        assert_eq!(a.matches("\nROOT|").count(),4);
         assert_eq!(a.matches("\nLEVEL|").count(),4);
         assert!(a.contains("future_commit=NOT_MEASURED|future_bytes=NOT_MEASURED"));
         assert!(a.contains("live_fabric=NOT_MEASURED"));
@@ -423,7 +435,7 @@ mod tests {
         let a=receipt(&e);
         let b=receipt(&e2);
         assert_ne!(a,b);
-        assert!(a.contains(&format!("historical_follow_main=a1fdf4cf105ab4e86e652a126f249a2407170777")));
+        assert!(a.contains("historical_follow_main=a1fdf4cf105ab4e86e652a126f249a2407170777"));
         assert!(b.contains(&format!("original_graph_sha={GRAPH_SHA}")));
     }
 }
