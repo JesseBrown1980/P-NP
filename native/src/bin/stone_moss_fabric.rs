@@ -270,7 +270,7 @@ mod tests {
         assert!(recover(&a, &forged, "run-42").is_err());
         let mut changed_root = b;
         let i = changed_root.windows(5).position(|w| w == b"root=").unwrap() + 5;
-        changed_root[i] = b'f';
+        changed_root[i] = if changed_root[i] == b'0' { b'1' } else { b'0' };
         assert!(recover(&a, &changed_root, "run-42").is_err());
     }
     #[test]
