@@ -1,0 +1,161 @@
+name: "P-NP Bitcoin live 27-cell matrix-informed SAT selection versus matched controls"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  original-source:
+    name: "Source-pin authentic Bitcoin 32/288-free-bit SHA256d CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check original Bitcoin source and isolated referee
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          python3 -m py_compile research/bitcoin_live_sat_referee.py research/bitcoin_matrix_guided_referee.py
+      - name: Build original complete Bitcoin SHA256d circuit CNFs
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/GENESIS_BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/GENESIS_BUILD.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum nonce32.cnf nonce32.txt merkle_nonce288.cnf merkle_nonce288.txt GENESIS_BUILD.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-guided-source
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  compare:
+    name: "Original Bitcoin ${{ matrix.case }} SAT ${{ matrix.mode }} matrix branch control"
+    needs: original-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [direct, live, guided]
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-guided-source
+          path: source
+      - name: Rust 1.81 native live-branch selection and original truth-class checks
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib matrix_selector::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib solver::tests::direct_and_live_solver_visit_identical_tree_with_exact_event_receipts --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib live_sat_matrix::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin live_sat_benchmark --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin live_sat_benchmark --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin live_sat_benchmark --release --offline --locked
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Match 128 search-node and 300-second budgets with fully metered matrix work
+        env:
+          MODE: ${{ matrix.mode }}
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$MODE/$CASE"
+          set +e
+          /usr/bin/time -f '%M' -o "results/$MODE/$CASE/rss.txt" timeout --kill-after=3s 300s \
+            native/target/release/live_sat_benchmark run "$MODE" "$CASE" \
+            "source/$CASE.cnf" "results/$MODE/$CASE" \
+            > "results/$MODE/$CASE/stdout.log" 2> "results/$MODE/$CASE/stderr.log"
+          code=$?
+          set -e
+          if [ "$code" -eq 124 ]; then
+            test ! -e "results/$MODE/$CASE/receipt.hbp"
+            printf 'PNP_BTC_TIMEOUT|mode=%s|case=%s|wall_budget_s=300|status=HOLD_TIME|partial_nodes=UNOBSERVED|json=0\n' "$MODE" "$CASE" > "results/$MODE/$CASE/timeout.hbp"
+          elif [ "$code" -eq 0 ]; then
+            native/target/release/live_sat_benchmark verify "$MODE" "$CASE" \
+              "source/$CASE.cnf" "results/$MODE/$CASE" | tee "results/$MODE/$CASE/readback.log"
+          else
+            echo "Native source-bound search failed exit $code" >&2
+            tail -n 80 "results/$MODE/$CASE/stderr.log" >&2
+            exit "$code"
+          fi
+          ( cd results && find "$MODE/$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$MODE-$CASE.FILES.sha256" )
+          ( cd results && sha256sum -c "$MODE-$CASE.FILES.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-guided-result-${{ matrix.mode }}-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independently validate all six full-CNF SAT outcomes and charged matrix choices"
+    needs: compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-guided-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-matrix-guided-result-*
+          path: results
+          merge-multiple: true
+      - name: Check source/worker receipts, actual models, source SHA256d and selector evidence
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          test "$(find results -type f \( -name receipt.hbp -o -name timeout.hbp \) | wc -l)" -eq 6
+          for mode in direct live guided; do
+            for case in nonce32 merkle_nonce288; do
+              ( cd results && sha256sum -c "$mode-$case.FILES.sha256" )
+            done
+          done
+          python3 -s -B research/bitcoin_matrix_guided_referee.py \
+            --source source --results results --out BTC_MATRIX_GUIDED_FINAL.hbp \
+            | tee BTC_MATRIX_GUIDED_REFEREE.log
+          grep -Fq 'BTC_MATRIX_GUIDED_FINAL|schema=1|source=BITCOIN_GENESIS_SHA256D|cases=2|modes=3|observations=6|' BTC_MATRIX_GUIDED_FINAL.hbp
+          grep -Fq '|guidance=ORIGINAL_CNF_ACTIVE_CLAUSE_MATRIX27|' BTC_MATRIX_GUIDED_FINAL.hbp
+          mkdir -p acceptance
+          cp BTC_MATRIX_GUIDED_FINAL.hbp BTC_MATRIX_GUIDED_REFEREE.log acceptance/
+          ( cd acceptance && sha256sum BTC_MATRIX_GUIDED_FINAL.hbp BTC_MATRIX_GUIDED_REFEREE.log > ROOT.sha256 && sha256sum -c ROOT.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-guided-accepted
+          path: acceptance/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Read back all six direct, watched and matrix-guided Bitcoin search verdicts"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-guided-accepted
+          path: acceptance
+      - name: Verify published original-source comparison and file hashes
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ROOT.sha256 )
+          test "$(grep -c '^BTC_MATRIX_GUIDED_TRIAL|' acceptance/BTC_MATRIX_GUIDED_FINAL.hbp)" -eq 6
+          grep -Fq '|status=PASS|json=0' acceptance/BTC_MATRIX_GUIDED_FINAL.hbp
+          echo 'BTC_MATRIX_GUIDED_ARCHIVE|original_bitcoin=PINNED|six_trials=CHECKED|status=PASS|json=0'
