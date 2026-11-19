@@ -18,6 +18,8 @@ const SYMBOLS: usize = RAW_BYTES * 4 / 5;
 const WIRE_BYTES: usize = SYMBOLS * 2;
 
 struct Corpus { source: Vec<u8>, cube: Vec<u8>, source_sha: String }
+type LeafDigest = (String, String, String);
+type VerifiedRoot = (String, Vec<LeafDigest>);
 
 fn require(ok: bool, reason: &str) -> Result<(), String> {
     if ok { Ok(()) } else { Err(reason.to_owned()) }
@@ -170,7 +172,7 @@ fn checked_dir_names(dir: &Path, phase: &str) -> Result<(), String> {
     require(names == expected, "incomplete or unexpected artifact roster")
 }
 fn checked_root(run: &str, corpus: &Corpus, data: &str)
-    -> Result<(String, Vec<(String, String, String)>), String>
+    -> Result<VerifiedRoot, String>
 {
     checked_run(run)?;
     require(data.ends_with('\n'), "unterminated root certificate")?;
