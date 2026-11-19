@@ -1,0 +1,162 @@
+name: "P-NP Chariots: 20 hosted forward leaves and 20 reverse leaves"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  forward:
+    name: "Ezequel forward leaf ${{ matrix.leaf }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - name: Checkout immutable source for this run
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install source-locked Rust toolchain
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Native strict build and historical seal verification
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin chariot-waves --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
+          native/target/release/chariot-waves provenance
+      - name: Produce source-bound checkpoint for this leaf
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p forward
+          file="$(printf 'forward/forward-%02d.hbp' "$LEAF")"
+          native/target/release/chariot-waves forward "$RUN_KEY" "$LEAF" "$file"
+          test -s "$file"
+      - name: Seal and upload one immutable leaf artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-forward-${{ matrix.leaf }}
+          path: forward/forward-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  fanin:
+    name: "Lynn forward all-20 barrier"
+    needs: [forward]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - name: Download all 20 independently produced checkpoints
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-forward-*
+          path: forward
+          merge-multiple: true
+      - name: Independently rederive each checkpoint and root
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
+          native/target/release/chariot-waves fanin "$RUN_KEY" forward forward-root.hbp
+          test "$(find forward -maxdepth 1 -type f -name 'forward-*.hbp' | wc -l)" -eq 20
+      - name: Publish sealed forward wave bundle for reverse workers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-forward-bundle
+          path: |
+            forward/forward-*.hbp
+            forward-root.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  reverse:
+    name: "Rebecca reverse leaf ${{ matrix.leaf }}"
+    needs: [fanin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Consume Lynn's verified full forward wave
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Independently rederive all source IDs and reverse assigned leaf
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
+          mkdir -p reverse
+          file="$(printf 'reverse/reverse-%02d.hbp' "$LEAF")"
+          native/target/release/chariot-waves reverse "$RUN_KEY" "$LEAF" forward-bundle/forward forward-bundle/forward-root.hbp "$file"
+          test -s "$file"
+      - name: Publish independent source-restoration receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-reverse-${{ matrix.leaf }}
+          path: reverse/reverse-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  final:
+    name: "Lynn 40-leaf two-wave independent acceptance"
+    needs: [reverse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - name: Fetch immutable forward bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Fetch all 20 reverse checkpoints
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-reverse-*
+          path: reverse
+          merge-multiple: true
+      - name: Independently reproduce exact 540-cell reversal and both wave roots
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin chariot-waves --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot-waves --release --offline --locked
+          native/target/release/chariot-waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_FINAL.hbp | tee CH20_FINAL.log
+          grep -Fq '|checkpoints=40|restored_cells=540|replay=EXACT|' CH20_FINAL.hbp
+          grep -Fq '|status=PASS|json=0' CH20_FINAL.hbp
+          sha256sum CH20_FINAL.hbp > CH20_FINAL.sha256
+          sha256sum -c CH20_FINAL.sha256
+      - name: Archive paid source and exact two-wave result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-two-wave-final
+          path: |
+            CH20_FINAL.hbp
+            CH20_FINAL.sha256
+            CH20_FINAL.log
+          if-no-files-found: error
+          retention-days: 30
