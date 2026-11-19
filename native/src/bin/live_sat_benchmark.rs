@@ -6,7 +6,7 @@
 
 use pnp_native::guidance::{Guidance, Strategy};
 use pnp_native::sha256::hash_bytes;
-use pnp_native::solver::{solve, solve_with_live_matrix, Status};
+use pnp_native::solver::{solve, solve_with_live_matrix, solve_with_matrix_guidance, Status};
 use pnp_native::ternary::{Cnf, Trit};
 use std::env;
 use std::fs;
@@ -39,7 +39,8 @@ fn source(case: &str, bytes: &[u8]) -> Result<(Cnf, String), String> {
 }
 
 fn run(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Result<(), String> {
-    ensure(mode == "direct" || mode == "live", "mode must be direct or live")?;
+    ensure(matches!(mode, "direct" | "live" | "guided"),
+           "mode must be direct, live or guided")?;
     let all_started = Instant::now();
     let original = fs::read(source_path).map_err(|e| format!("read original CNF: {e}"))?;
     let (cnf, sha) = source(case, &original)?;
@@ -48,12 +49,16 @@ fn run(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Result
     let route = Guidance::for_source(&cnf, Strategy::Fischer)?;
     let route_ns = started_route.elapsed().as_nanos();
     let started_solve = Instant::now();
-    let (solution, live) = if mode == "live" {
+    let (solution, live, selector) = if mode == "guided" {
+        let (solution, meters, selector) =
+            solve_with_matrix_guidance(&cnf, &route, Some(MAX_NODES), &sha)?;
+        (solution, Some(meters), Some(selector))
+    } else if mode == "live" {
         let (solution, meters) =
             solve_with_live_matrix(&cnf, &route, Some(MAX_NODES), &sha)?;
-        (solution, Some(meters))
+        (solution, Some(meters), None)
     } else {
-        (solve(&cnf, &route, Some(MAX_NODES)), None)
+        (solve(&cnf, &route, Some(MAX_NODES)), None, None)
     };
     let solve_ns = started_solve.elapsed().as_nanos();
     ensure(
@@ -79,6 +84,16 @@ fn run(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Result
         } else {
             (0, 0, 0, 0, 0, 0, 0, "NONE".to_owned())
         };
+    let (choices, nonfirst, candidates, clause_reads, literal_reads, room_replays,
+         selection_frozen_bytes, selection_metadata_bytes, index_bytes,
+         index_build_ns, selector_ns, selector_root) = if let Some(m) = selector {
+        (m.choices, m.non_first_choices, m.candidate_evaluations,
+         m.clause_reads, m.literal_reads, m.room_replays, m.frozen_bytes,
+         m.metadata_bytes, m.index_bytes, m.index_build_ns,
+         m.selection_wall_ns, m.decision_root)
+    } else {
+        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "NONE".to_owned())
+    };
     let status = match solution.status {
         Status::Sat => "SAT",
         Status::Unsat => return Err("frozen known-SAT genesis source falsely deemed UNSAT".to_owned()),
@@ -95,6 +110,13 @@ fn run(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Result
          matrix_wall_ns={matrix_ns}|source_parse_ns={parsed_ns}|\
          route_ns={route_ns}|search_ns={solve_ns}|total_ns={total_ns}|\
          frame_root={root}|model_sha256={model_sha}|known_nonce_injected=NO|\
+         selector_choices={choices}|selector_nonfirst={nonfirst}|\
+         selector_candidates={candidates}|selector_clause_reads={clause_reads}|\
+         selector_literal_reads={literal_reads}|selector_room_replays={room_replays}|\
+         selector_frozen_bytes={selection_frozen_bytes}|\
+         selector_metadata_bytes={selection_metadata_bytes}|\
+         selector_index_bytes={index_bytes}|selector_index_build_ns={index_build_ns}|\
+         selector_wall_ns={selector_ns}|selector_root={selector_root}|\
          actual_solver_state=YES|json=0\n",
          cnf.variables, cnf.clauses.len(),
          solution.nodes, solution.propagations, solution.literal_checks
@@ -158,6 +180,27 @@ fn verify(mode: &str, case: &str, source_path: &Path, result_root: &Path) -> Res
         ensure(frames == 0 && fields.get("frame_root") == Some(&"NONE"),
                "direct baseline includes hidden matrix processing")?;
     }
+    let selector_count = parse("selector_choices")?;
+    let selector_first = parse("selector_nonfirst")?;
+    let selector_candidates = parse("selector_candidates")?;
+    let selector_rooms = parse("selector_room_replays")?;
+    let selector_bytes = parse("selector_frozen_bytes")?;
+    let selector_meta = parse("selector_metadata_bytes")?;
+    if mode == "guided" {
+        ensure(selector_count > 0 && selector_first <= selector_count,
+               "guided source selector made no verified decisions")?;
+        ensure(selector_candidates >= selector_count
+               && selector_rooms > 0 && selector_bytes > 0,
+               "unpaid or missing guided branch candidates")?;
+        ensure(selector_meta == selector_rooms * 192,
+               "matrix-guided selection metadata differs")?;
+        ensure(fields.get("selector_root").is_some_and(|v| v.len() == 64),
+               "matrix-guided selector receipt root missing")?;
+    } else {
+        ensure(selector_count == 0 && selector_candidates == 0 && selector_rooms == 0
+               && fields.get("selector_root") == Some(&"NONE"),
+               "direct/live controls include unexpected guided selection")?;
+    }
     let status = fields.get("status").ok_or("missing search result")?;
     if *status == "SAT" {
         let model = fs::read_to_string(result_root.join("model.trits"))
@@ -185,7 +228,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let result = (|| -> Result<(), String> {
         if args.len() != 6 {
-            return Err("usage: live_sat_benchmark <run|verify> <direct|live> <nonce32|merkle_nonce288> <source.cnf> <result_folder>".to_owned());
+            return Err("usage: live_sat_benchmark <run|verify> <direct|live|guided> <nonce32|merkle_nonce288> <source.cnf> <result_folder>".to_owned());
         }
         let mode = &args[2];
         let case = &args[3];
