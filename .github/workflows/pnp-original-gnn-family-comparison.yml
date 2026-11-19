@@ -54,7 +54,7 @@ jobs:
       - name: Compare preserved baseline, prototype, contrastive and GSLGNN weights
         run: |
           set -euo pipefail
-          /tmp/original-gnn-venv/bin/python native/research/gnn_original_checkpoint_compare.py \
+          /tmp/original-gnn-venv/bin/python research/gnn_original_checkpoint_compare.py \
             --health source-healthcare --words source-words --models source-gnn \
             --fixture WORD_GRAPH.hbp --output GNN_CHECKPOINTS.hbp | tee GNN_CHECKPOINTS.log
           test "$(grep -c '^GNN_MODEL_COMPARE|' GNN_CHECKPOINTS.hbp)" -eq 7
@@ -131,7 +131,7 @@ jobs:
           set -euo pipefail
           (cd first && sha256sum -c GNN_CHECKPOINTS.sha256)
           cmp -s WORD_GRAPH.hbp first/WORD_GRAPH.hbp
-          /tmp/original-gnn-venv/bin/python native/research/gnn_original_checkpoint_compare.py \
+          /tmp/original-gnn-venv/bin/python research/gnn_original_checkpoint_compare.py \
             --health source-healthcare --words source-words --models source-gnn \
             --fixture WORD_GRAPH.hbp --output GNN_REPLAY.hbp | tee GNN_REPLAY.log
           cmp -s GNN_REPLAY.hbp first/GNN_CHECKPOINTS.hbp
