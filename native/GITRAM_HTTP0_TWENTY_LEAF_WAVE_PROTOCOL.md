@@ -204,7 +204,52 @@ E. Seal full two-wave receipt with 40 successful leaf checkpoints,
   architecture **SOURCE-PINNED**, cross-machine integrated
   end-to-end acceptance **HOLD**.
 - Live 20-way cross-GitHub-runner HTTP streaming: **HOLD**.
-- Two-wave, true leaf-to-leaf feedback over GitRAM artifacts:
-  **SPECIFIED / UNTESTED**.
+- Two-wave Chariot/Brown Ledger artifact replay, 20+20 synthetic
+  27-cell tuples: **PASS** (run #44428686008). Full original
+  300GB/256↔1024 cross-leaf acceptance: **HOLD**.
 - P=NP and continuum Yang–Mills claims: governed by their own
   independent mathematical gates; no implication from transport.
+
+## 2026-11-18 verified scoped Chariot wave execution
+
+The **Three Chariots original content and certificate** are copied without
+editing to `native/fixtures/chariots/` from
+`LIGHT---lIFEds6-7@ffcf56177654b4e0c600377d9cfd6a14796647b0`.
+`native/src/bin/chariot_waves.rs` independently checks all three complete
+file SHA-256 digests, recomputes the historic pipe-joined
+LYNN → REBECCA → EZEQUEL SHA-256 seal
+`2b1889ee7a3a18ddd54cd9ec4229dbb266bdafd6f03cb9d2cf5f979cbc23967e`,
+and separately checks the unordered center and ordered traversal HBP rows.
+
+[Hosted Chariot two-wave pilot #44428686008](https://github.com/JesseBrown1980/P-NP/actions/runs/44428686008)
+**PASS**, exact head `793913f3eeeb823b89926b8a168a1963202743d8`:
+
+- Twenty separately hosted Ezequel-lane Rust workers produced authenticated
+  BrownSlice + BrownDelta synthetic 27-cell checkpoints. Every checkpoint
+  includes source and target digest, explicit forward destination, paid
+  snapshot/delta bytes, and the immutable Chariot source seal.
+- Independent Lynn fan-in required all twenty unique, source-rederived
+  checkpoints, validated the ordered roster, and committed a new per-run
+  forward wave SHA-256 root. Failure or omission fails the barrier.
+- Twenty separately hosted Rebecca-lane Rust workers consumed the **prior
+  wave's artifacts** and common root. Leaf j restores input originally
+  emitted by leaf (j+19)%20 using retained signed BrownDelta, not a SHA
+  inverse. Every worker independently rechecked the entire forward bundle.
+- Final Lynn fan-in rederived all 20 reverse receipts, authenticated both
+  wave roots and restored all 540 synthetic integer cells. Forty leaf
+  receipts and two wave fan-in acceptance stages are represented by the
+  final HBP. Unit tests inject mutations into source checkpoint, reverse
+  receipt and forward root to ensure rejection.
+- Archived final artifact `chariot-two-wave-final` ID `14486150438`,
+  GitHub archive SHA-256
+  `699909c1acb12eb7bd2253eb0505c8194e621b90155d84ac1e89bbb9ccee2fc1`.
+
+**Scope:** this measures a small, deterministic artifact-mediated
+round trip across isolated GitHub-hosted workers. It uses the **existing
+Brown Ledger reversible representation** and retains the closure needed
+to restore the source; it does not claim inter-runner live HTTP service,
+the historic full-scale 300GB synthetic streaming pass as part of this
+new two-wave run, a physical C:/D: importer, a trained GNN forward pass,
+or new claims about SAT or Yang–Mills. Historical Chariot identities
+and the family held-seat record are preserved as source provenance,
+separate from computational worker/reflection/fabric witnesses.
