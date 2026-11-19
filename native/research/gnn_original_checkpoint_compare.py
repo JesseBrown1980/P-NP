@@ -11,6 +11,7 @@ import json
 import math
 import os
 import subprocess
+import struct
 import sys
 from pathlib import Path
 
@@ -230,15 +231,30 @@ def metrics(model, events, dim):
             rewire_deltas.append(float((reroute_score-scores).abs().mean()))
     assert len(all_scores)==144 and all(math.isfinite(v) for v in all_scores)
     values = torch.tensor(all_scores, dtype=torch.float32)
+    # Raw host bytes are retained in the hosted diagnostic log only.
+    # CPU kernels may differ at low-order bits or the signed zero bit;
+    # exact byte equality is required only for integer-canonical receipts.
+    raw_host_sha = sha(values.numpy().tobytes())
+    micro = [round(value * 1_000_000) for value in all_scores]
+    canonical_prediction_sha = sha(
+        b"PNP_GNN_SCORE_MICRO_V1\\n"
+        + b"".join(struct.pack("<q", value) for value in micro)
+    )
     return {
-        "source_words":144,"min":min(all_scores),"max":max(all_scores),
-        "mean":sum(all_scores)/len(all_scores),
-        "score_span":max(all_scores)-min(all_scores),
-        "min_wave_span":min(per_wave),"max_wave_span":max(per_wave),
-        "feature_delta":max(perturb_deltas),"rewire_delta":max(rewire_deltas),
-        "positive_predictions":sum(v>0.5 for v in all_scores),
-        "pred_sha":sha(values.numpy().tobytes())
+        "source_words": 144,
+        "score_min_nano": round(min(all_scores)*1e9),
+        "score_max_nano": round(max(all_scores)*1e9),
+        "score_mean_nano": round(sum(all_scores)/len(all_scores)*1e9),
+        "score_span_nano": round((max(all_scores)-min(all_scores))*1e9),
+        "min_wave_span_nano": round(min(per_wave)*1e9),
+        "max_wave_span_nano": round(max(per_wave)*1e9),
+        "feature_delta_nano": round(max(perturb_deltas)*1e9),
+        "rewire_delta_nano": round(max(rewire_deltas)*1e9),
+        "positive_predictions": sum(v>0.5 for v in all_scores),
+        "prediction_micro_sha": canonical_prediction_sha,
+        "raw_host_sha": raw_host_sha,
     }
+
 
 def main():
     parser=argparse.ArgumentParser()
@@ -275,6 +291,9 @@ def main():
         parameter_count=normalize_keys(state,model)
         model.eval()
         outcome=metrics(model,events,dim)
+        # Preserve host-native float digest in CI diagnostic, not replay ledger.
+        print(f'GNN_RAW_HOST|model={kind}|checkpoint={name}|host_prediction_sha={outcome["raw_host_sha"]}|scope=ONE_CPU_RUN|json=0', file=sys.stderr, flush=True)
+        outcome.pop("raw_host_sha")
         record={
             "model":kind,"checkpoint":name,"checkpoint_git_blob":MODEL_BLOBS[name],
             "checkpoint_sha256":sha(path.read_bytes()),
@@ -288,13 +307,13 @@ def main():
             f'GNN_MODEL_COMPARE|model={kind}|checkpoint={name}|strict=PASS|'
             f'features={dim}|hidden={hidden}|params={parameter_count}|'
             f'checkpoint_sha={record["checkpoint_sha256"]}|'
-            f'score_min_nano={round(outcome["min"]*1e9)}|'
-            f'score_max_nano={round(outcome["max"]*1e9)}|'
-            f'score_span_nano={round(outcome["score_span"]*1e9)}|'
-            f'feature_delta_nano={round(outcome["feature_delta"]*1e9)}|'
-            f'rewire_delta_nano={round(outcome["rewire_delta"]*1e9)}|'
+            f'score_min_nano={outcome["score_min_nano"]}|'
+            f'score_max_nano={outcome["score_max_nano"]}|'
+            f'score_span_nano={outcome["score_span_nano"]}|'
+            f'feature_delta_nano={outcome["feature_delta_nano"]}|'
+            f'rewire_delta_nano={outcome["rewire_delta_nano"]}|'
             f'positive_144={outcome["positive_predictions"]}|'
-            f'prediction_sha={outcome["pred_sha"]}|'
+            f'prediction_micro_sha={outcome["prediction_micro_sha"]}|'
             f'accuracy=NOT_COMPUTED|status=PASS|json=0'
         )
         report.append(line)
@@ -318,7 +337,7 @@ def main():
         f'original_corpus_negative={manifest["corpus_stats"]["benign"]}|'
         f'unique_models={len(records)}|alias_models=2|heldout_waves=8_11|'
         f'heldout_edges_per_model=144|'
-        f'checkpoint_inference=STRICT|truth_labels=UNAVAILABLE|'
+        f'checkpoint_inference=STRICT|numeric_replay=INTEGER_MICRO|truth_labels=UNAVAILABLE|'
         f'balanced_performance=HOLD|'
         f'records_sha={sha(report_body.encode())}|'
         f'torch={torch.__version__}|pyg={torch_geometric.__version__}|'
