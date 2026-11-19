@@ -76,7 +76,7 @@ fn valid_run(run: &str) -> Result<(), String> {
     require(
         !run.is_empty() && run.len() <= 128 &&
         run.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b)),
-        "unsafe or empty run identity",
+        "invalid or empty run identity",
     )
 }
 
