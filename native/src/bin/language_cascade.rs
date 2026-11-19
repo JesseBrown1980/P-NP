@@ -84,7 +84,8 @@ fn shard(run: &str, leaf: usize) -> Result<String, String> {
         bytes += word.len();
         words += 1;
         buckets[bucket] += 1;
-        fingerprint.push_str(&format!("{index}|{word}|{address}\n"));
+        let address_sha = hash_bytes(address.as_bytes());
+        fingerprint.push_str(&format!("{index}|{word}|glyph_sha256={address_sha}\n"));
     }
     let counts = counts_line(&buckets);
     let source_digest = hash_bytes(fingerprint.as_bytes());
