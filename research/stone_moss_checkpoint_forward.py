@@ -99,6 +99,7 @@ def main():
     ap.add_argument("--shards", type=Path, required=True)
     ap.add_argument("--recovered", type=Path, required=True)
     ap.add_argument("--recovery-receipt", type=Path, required=True)
+    ap.add_argument("--live-refs", type=Path, required=True)
     ap.add_argument("--run-key", required=True)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
@@ -176,6 +177,23 @@ def main():
     require(re.fullmatch(r"[0-9a-f]{40}", checkout_sha) is not None, "invalid checkout ref")
     if os.getenv("GITHUB_SHA"):
         require(checkout_sha == os.environ["GITHUB_SHA"], "CI checkout does not match GitHub workflow ref")
+    live_raw = args.live_refs.read_bytes()
+    live_lines = live_raw.decode("ascii").splitlines()
+    require(len(live_lines) == 1, "live GitHub snapshot must be a single exact row")
+    parts = live_lines[0].split("|")
+    require(parts[0] == "G3D_IS_REFS" and parts[-1] == "json=0", "wrong 3-D live snapshot format")
+    live = {}
+    for part in parts[1:-1]:
+        key, sep, val = part.partition("=")
+        require(bool(sep and key and val and key not in live), "duplicate/empty snapshot field")
+        live[key] = val
+    require(set(live) == {"schema", "run", "pnp_sha", "follow_main", "safe_main", "observed"},
+            "unexpected snapshot contract")
+    require(live["schema"] == "1" and live["run"] == args.run_key and
+            live["observed"] == "GITHUB_LS_REMOTE", "snapshot not from current run")
+    require(live["pnp_sha"] == checkout_sha, "snapshot GitHub checkout ref changed")
+    require(all(re.fullmatch(r"[0-9a-f]{40}", live[k]) is not None for k in
+                ("pnp_sha", "follow_main", "safe_main")), "snapshot refs malformed")
     source_ids = {
         "pnp_checkout_sha": checkout_sha,
         "word_commit": smf.WORD_COMMIT,
@@ -195,6 +213,7 @@ def main():
         "source_auth": "PINNED_GIT_OBJECTS",
         "model_execution": "RECOVERED_CHECKPOINT_FORWARD",
         "human_release": "NOT_AUTHORIZED",
+        "measured_live_ref_snapshot_sha256": sha(live_raw),
     }
     graph = {
         "nodes": [
@@ -203,6 +222,7 @@ def main():
             {"id": "source_healthcare_model", "type": "PINNED_MODEL_CODE",
              "sha": original.HEALTH_BLOBS["gsl_gnn.py"]},
             {"id": "word_graph", "type": "SOURCE_WORDS", "sha": sha(word_blob)},
+            {"id": "is_live_refs", "type": "OBSERVED_GITHUB_REFS", "sha": sha(live_raw)},
             *[{"id": "bank_" + k, "type": "INDEPENDENT_GITHUB_WORKER_SHARD",
                "sha": sha((args.shards / (k + ".smfshard")).read_bytes())} for k in ("A", "B", "P")],
             {"id": "recovered_archive", "type": "EXACT_RECONSTRUCTED_ARCHIVE", "sha": sha(raw)},
@@ -211,6 +231,7 @@ def main():
         ],
         "edges": [
             {"from": "source_words", "to": "word_graph", "relation": "GENERATES"},
+            {"from": "is_live_refs", "to": "inference", "relation": "TEMPORAL_OBSERVATION"},
             {"from": "source_checkpoint", "to": "bank_A", "relation": "ENCODED_IN"},
             {"from": "source_checkpoint", "to": "bank_B", "relation": "ENCODED_IN"},
             {"from": "source_checkpoint", "to": "bank_P", "relation": "ENCODED_IN"},
@@ -233,6 +254,8 @@ def main():
         "temporal": {
             "WAS": {"original_word_commit": smf.WORD_COMMIT, "original_model_commit": smf.MODEL_COMMIT},
             "IS": {"workflow_ref": checkout_sha, "run_key": args.run_key,
+                   "follow_main": live["follow_main"], "safe_main": live["safe_main"],
+                   "snapshot_sha256": sha(live_raw),
                    "recovery": "PASS", "trained_forward": "PASS"},
             "WILL": {"balanced_evaluation": "NOT_MEASURED", "future_state": "UNCOMMITTED"},
         },
@@ -253,7 +276,7 @@ def main():
         "word_feature_alignment": "EXPERIMENTAL_PROXY",
         "model_score_sensitivity": "MEASURED_SEPARATELY",
         "external_source_attested": False,
-        "github_live_branch_refs_measured": False,
+        "github_live_branch_refs_measured": True,
         "verdict": "PASS_RECOVERED_CHECKPOINT_FORWARD",
     }
     args.out.mkdir(parents=True, exist_ok=True)
@@ -264,7 +287,7 @@ def main():
         f'SMF_GNN_FORWARD|schema=1|run={args.run_key}|archive_sha={sha(raw)}|'
         f'checkpoint_sha={sha(recovered_checkpoint)}|word_graph_sha={sha(word_blob)}|'
         f'prediction_micro_sha={metrics_recovered["prediction_micro_sha"]}|'
-        f'five_member_root={roles["HASH"]}|bank_pairs=AB_AP_BP|'
+        f'five_member_root={roles["HASH"]}|snapshot_sha={sha(live_raw)}|bank_pairs=AB_AP_BP|'
         f'checkpoint_load=STRICT|recovered_forward=PASS|'
         f'original_source_forward_parity=EXACT|balanced_accuracy=NOT_COMPUTED|'
         f'source_attested=PINNED_GIT_ONLY|status=PASS|json=0\n'
