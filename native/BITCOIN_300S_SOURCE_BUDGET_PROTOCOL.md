@@ -182,3 +182,44 @@ unfinished computation. The new combined workflow, distinct
 historical raised-node workflow and current-head native policy must
 all pass their own hosted acceptance before their new results are
 published as accepted.
+
+## Live search-state matrix integration and same-budget direct controls
+
+The latest Rust-native extension in `native/src/solver.rs` preserves the same
+watched-free exact DPLL propagation and Boolean branch decisions in two
+modes. `direct` executes the original solver path. `live` performs actual
+`BrownSlice` freeze/play and a second watcher reconstruction of the live
+27-cell partial assignment at each selected decision and each changed unit-
+propagation frame. Every frame binds to the complete original source SHA256
+and exact variable address; a domain-separated rolling root commits the
+ordered frame events. Frame storage bytes, source/digest metadata bytes,
+watcher reads, branch/propagation frames, and matrix processing wall time
+are metered in the same execution rather than estimated.
+
+`native/src/bin/live_sat_benchmark.rs` reads only original source CNFs and
+computes the same source-only native Fischer variable order for both modes.
+It has no known Bitcoin answer injection. Both modes receive **128 search
+nodes and a 300-second wall-clock ceiling** per case. Native code checks
+any finished SAT model against every original CNF clause; the standard-
+library independent research referee also reconstructs the full original
+Bitcoin SHA256d header digest and tests eight corrupted-header controls.
+The workflow runs four distinct workers across `nonce32`/`merkle_nonce288`
+and `direct`/`live`, then publishes a fully source-addressed paired receipt.
+The exact node limit is an intentional bounded calibration; a worker ending
+with `HOLD_NODE` is distinct from `HOLD_TIME`. A wall-time-killed worker
+cannot report unobserved partial nodes or frame counts, so the archived
+receipt labels those metrics `UNOBSERVED`. Matched pairs that finish their
+node-limited experiment must preserve verdict, nodes, propagations and
+literal checks while measuring additional live matrix overhead.
+
+The source is a historical full Bitcoin SHA256d constraint graph, not a
+preselected solution to search. The native matrix receives **actual solver
+states** rather than the known reference genesis header. This first
+instrumentation stage checks exactness and real orchestration costs before
+introducing matrix-derived variable ordering, learned reductions, or
+cross-run memoized search. Current-hosted acceptance remains a separate
+gate for the exact branch head; draft PR #57 and `main` retain their current
+states.
+
+[Hosted workflow](../.github/workflows/pnp-bitcoin-live-state-vs-direct.yml)
+
