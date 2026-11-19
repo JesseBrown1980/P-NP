@@ -119,6 +119,6 @@ mod tests {
         assert_eq!(hash_bytes(fixture.as_bytes()).len(),64);
         let mut corrupted=fixture.into_bytes();
         corrupted[100]^=1;
-        assert_ne!(hash_bytes(&corrupted),hash_bytes(&materialize().expect("fixture")));
+        assert_ne!(hash_bytes(&corrupted),hash_bytes(materialize().expect("fixture").as_bytes()));
     }
 }
