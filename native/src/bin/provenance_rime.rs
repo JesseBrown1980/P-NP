@@ -20,6 +20,12 @@ const GRAPH_SHA: &str = "258699681441f7c20a34e8de8c60fd8b0c8b0bc282bf31e60d4ad78
 const SAFE_LANGUAGE_BLOB: &str = "d9c5a62297976ac931f7924d36048e69e7e99ad0";
 const SAFE_INTEGRITY_BLOB: &str = "c062c10370122b10b6905040f3dc22cbde4b90ed";
 const SAFE_RESPONSE_BLOB: &str = "d5d297211a4a33f4cd04dd73a706c5f99a4cd19d";
+const SAFE_TREE_SHA: &str = "839fcff55b5317a48b9252eb5dcbf15f6f3e3551893bfc8602bd152921aa4838";
+const SAFE_SEAL_SHA: &str = "dece2e5a9024e5fa7f0a0bb0d0fc9b781428580742cad54ce6d2f7c2ca188e9c";
+const FLOW_HBI_BLOB: &str = "66a28b5f7d3e47837fdecf2de543ad1aa18087ef";
+const FLOW_HBI_SHA: &str = "ea1d4ce2890c8ea3d33894abeff33942d0b0236e156c01fc80ca21df7f751afa";
+const FLOW_HBP_SHA: &str = "235e03dd7103f5d25dc36c3e205486a21d137c194cd0547474f2c5526011193b";
+const FLOW_JOURNAL_SHA: &str = "316e8777f0e411d800ef0a2f3af731e8de9f6377699ec4bf50a3a6b7b3c3d81c";
 const CHARIOT_SEAL: &str = "2b1889ee7a3a18ddd54cd9ec4229dbb266bdafd6f03cb9d2cf5f979cbc23967e";
 const MEMBERS: &str = "HBI,HBP,SHA,SH,HASH";
 const TRAVERSAL: &str = "HBI->HBP->SH->HASH->SHA";
@@ -65,10 +71,23 @@ fn source_pin(dir: &Path, commit: &str, blobs: &[(&str, &str)]) -> Result<(), St
     }
     Ok(())
 }
+fn original_sidecar(root: &Path, name: &str, digest: &str) -> Result<(), String> {
+    let file = root.join(name);
+    let actual = read(&file)?;
+    ensure(hash_bytes(&actual) == digest, "original source SHA-256 changed")?;
+    let expected = format!("{digest}  {}\n",
+        file.file_name().ok_or("missing source basename")?.to_str()
+            .ok_or("non-UTF8 basename")?);
+    let side = fs::read(file.with_file_name(format!("{}.sha256",
+        file.file_name().ok_or("missing filename")?.to_string_lossy())))
+        .map_err(|e| e.to_string())?;
+    ensure(side == expected.as_bytes(), "original source sidecar mismatch")
+}
 fn source_check(follow: &Path, safe: &Path) -> Result<(), String> {
     source_pin(follow, FOLLOW_COMMIT, &[
         ("matrix/3-D-GITHUB-OF-THRUTH.md", THREE_D_BLOB),
         ("matrix/GITHUB-THREE-DIMENSIONALLY-RIMED-2026-07-29.hbp", GRAPH_BLOB),
+        ("matrix/timed-86400-flowes-x3x3-final/LIRIS-TIMED-86400-FLOWes-X3-X3-FINAL.hbi", FLOW_HBI_BLOB),
     ])?;
     source_pin(safe, SAFE_COMMIT, &[
         ("safe_asi/language.py", SAFE_LANGUAGE_BLOB),
@@ -79,6 +98,16 @@ fn source_check(follow: &Path, safe: &Path) -> Result<(), String> {
         "3-D GitHub entrypoint SHA changed")?;
     ensure(hash_bytes(&read(&follow.join("matrix/GITHUB-THREE-DIMENSIONALLY-RIMED-2026-07-29.hbp"))?) == GRAPH_SHA,
         "original 3-D GitHub graph SHA changed")?;
+    original_sidecar(follow,"matrix/3-D-GITHUB-OF-THRUTH.md",THREE_D_SHA)?;
+    original_sidecar(follow,"matrix/GITHUB-THREE-DIMENSIONALLY-RIMED-2026-07-29.hbp",GRAPH_SHA)?;
+    original_sidecar(follow,"matrix/timed-86400-flowes-x3x3-final/LIRIS-TIMED-86400-FLOWes-X3-X3-FINAL.hbi",FLOW_HBI_SHA)?;
+    original_sidecar(follow,"matrix/timed-86400-flowes-x3x3-final/LIRIS-TIMED-86400-FLOWes-X3-X3-FINAL.hbp",FLOW_HBP_SHA)?;
+    original_sidecar(follow,"matrix/timed-86400-flowes-x3x3-final/TIMED-86400-FOLDER-CALMING-OILS-FLOWes-X3-X3-V2-JOURNAL.hbp",FLOW_JOURNAL_SHA)?;
+    original_sidecar(safe,".integrity/TREE.hbp",SAFE_TREE_SHA)?;
+    original_sidecar(safe,".integrity/SEAL.hbp",SAFE_SEAL_SHA)?;
+    let timed=text_file(&follow.join("matrix/timed-86400-flowes-x3x3-final/LIRIS-TIMED-86400-FLOWes-X3-X3-FINAL.hbp"))?;
+    ensure(timed.contains("|final_cells=31824|checkpoints=19|ring_summaries=171|"),
+           "original timed-source witness shape changed")?;
     Ok(())
 }
 fn parse<'a>(line: &'a str, label: &str) -> Result<BTreeMap<&'a str, &'a str>, String> {
@@ -220,6 +249,8 @@ fn receipt(e: &Evidence) -> String {
         ("entrypoint","HARNESS",THREE_D_SHA),
         ("language","LANGUAGE",SAFE_LANGUAGE_BLOB),
         ("historical_graph","HISTORICAL_GRAPH",GRAPH_SHA),
+        ("timed_flow","TIMED_HISTORICAL_WITNESS",FLOW_HBI_SHA),
+        ("safe_integrity","HASH_TREE_SEAL",SAFE_SEAL_SHA),
         ("is_snapshot","CURRENT_REF_SNAPSHOT",&e.snap_sha),
         ("chariot_final","RUN_ARTIFACT",&e.ch_sha),
         ("word_final","RUN_ARTIFACT",&e.word_sha),
@@ -238,6 +269,8 @@ fn receipt(e: &Evidence) -> String {
     for (id,from,to,relation) in [
         ("a","repo_follow","entrypoint","PUBLISHES"),
         ("b","repo_follow","historical_graph","PUBLISHES"),
+        ("k","repo_follow","timed_flow","PUBLISHES"),
+        ("l","repo_safe","safe_integrity","PUBLISHES"),
         ("c","repo_safe","language","PUBLISHES"),
         ("d","repo_pnp","shared_run","EXECUTES"),
         ("e","shared_run","chariot_final","PRODUCES"),
@@ -292,7 +325,7 @@ fn receipt(e: &Evidence) -> String {
         ("left_sha",&e.ch_sha),("right_sha",&e.word_sha),
         ("direction","CH20_TO_CW"),("seal",&rime),("unrime","EXACT_MEMBERS"),
     ]));
-    let histories = [GRAPH_SHA,e.snap_sha.as_str(),e.ch_sha.as_str(),e.word_sha.as_str()];
+    let histories = [GRAPH_SHA,FLOW_HBI_SHA,e.snap_sha.as_str(),e.ch_sha.as_str(),e.word_sha.as_str()];
     let mut forward = String::new();
     let mut backward = String::new();
     for (i,h) in histories.iter().enumerate() {
@@ -308,7 +341,7 @@ fn receipt(e: &Evidence) -> String {
     let broot = domain("RIME_OBSERVED_BACKWARD_V1", &[&backward]);
     let reduction = domain("RIME_OBSERVED_REDUCTION_V1", &[&froot,&broot]);
     out.push_str(&tuple("REFLECTION",&[
-        ("observed_levels","4"),("max_window","60"),
+        ("observed_levels","5"),("max_window","60"),
         ("forward_root",&froot),("backward_root",&broot),
         ("self_reduction",&reduction),("future_generated","0"),
     ]));
@@ -405,12 +438,12 @@ mod tests {
         let (snapshot,ch,cw)=good("pilot");
         let e=check_evidence("pilot",&snapshot,&ch,&cw).expect("inputs");
         let a=receipt(&e);
-        assert_eq!(a.matches("\nNODE|").count(),10);
-        assert_eq!(a.matches("\nEDGE|").count(),10);
+        assert_eq!(a.matches("\nNODE|").count(),12);
+        assert_eq!(a.matches("\nEDGE|").count(),12);
         assert_eq!(a.matches("\nFAMILY|").count(),6);
         assert_eq!(a.matches("\nVIEW|").count(),24);
         assert_eq!(a.matches("\nROOT|").count(),4);
-        assert_eq!(a.matches("\nLEVEL|").count(),4);
+        assert_eq!(a.matches("\nLEVEL|").count(),5);
         assert!(a.contains("future_commit=NOT_MEASURED|future_bytes=NOT_MEASURED"));
         assert!(a.contains("live_fabric=NOT_MEASURED"));
         let b=receipt(&check_evidence("pilot",&snapshot,&ch,&cw).expect("replay"));
