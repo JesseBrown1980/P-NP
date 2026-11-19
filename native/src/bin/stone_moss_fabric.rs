@@ -258,7 +258,9 @@ mod tests {
         let stale = shard(&src, b'P', "run-41").unwrap();
         assert!(recover(&a, &stale, "run-42").is_err());
         let mut corrupted = b.clone();
-        *corrupted.last_mut().unwrap() ^= 1;
+        let payload_start = SHARD_MAGIC.len()
+            + corrupted[SHARD_MAGIC.len()..].iter().position(|&v| v == b'\n').unwrap() + 1;
+        corrupted[payload_start] ^= 1;
         assert!(recover(&a, &corrupted, "run-42").is_err());
         let mut extra = b.clone();
         extra.push(0);
@@ -281,7 +283,7 @@ mod tests {
         more.push(0);
         assert!(verify_archive(&more).is_err());
         let mut corrupt = src;
-        corrupt[MAGIC.len()] = 0;
+        corrupt[MAGIC.len() + 1] ^= 1;
         assert!(verify_archive(&corrupt).is_err());
     }
 }
