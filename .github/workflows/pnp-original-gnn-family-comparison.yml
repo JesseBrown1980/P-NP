@@ -1,0 +1,139 @@
+name: "P-NP original healthcare prototype contrastive GNN checkpoint parity"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-checkpoint-comparison:
+    name: "Strict actual checkpoint loads with BEHCS source-word graph controls"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout P-NP Rust and comparator sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original healthcare GNN family
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
+      - name: Original typed-word and cascade geometry
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Original trained GNN checkpoint family
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install Rust 1.81.0 native fixture
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+      - name: Install pinned original PyTorch CPU runtime
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/original-gnn-venv
+          /tmp/original-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/original-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch-geometric==2.7.0'
+          /tmp/original-gnn-venv/bin/python -c 'import torch, torch_geometric; assert torch.__version__.startswith("2.5.1"); assert torch_geometric.__version__ == "2.7.0"'
+      - name: Compare preserved baseline, prototype, contrastive and GSLGNN weights
+        run: |
+          set -euo pipefail
+          /tmp/original-gnn-venv/bin/python native/research/gnn_original_checkpoint_compare.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --fixture WORD_GRAPH.hbp --output GNN_CHECKPOINTS.hbp | tee GNN_CHECKPOINTS.log
+          test "$(grep -c '^GNN_MODEL_COMPARE|' GNN_CHECKPOINTS.hbp)" -eq 7
+          test "$(grep -c '^GNN_WEIGHT_ALIAS|' GNN_CHECKPOINTS.hbp)" -eq 2
+          grep -Fq '|checkpoint_inference=STRICT|truth_labels=UNAVAILABLE|balanced_performance=HOLD|' GNN_CHECKPOINTS.hbp
+          sha256sum GNN_CHECKPOINTS.hbp GNN_CHECKPOINTS.json WORD_GRAPH.hbp > GNN_CHECKPOINTS.sha256
+          sha256sum -c GNN_CHECKPOINTS.sha256
+      - name: Archive original checkpoint compatibility and sensitivity receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: original-gnn-family-checkpoint-comparison
+          path: |
+            WORD_GRAPH.hbp
+            GNN_CHECKPOINTS.hbp
+            GNN_CHECKPOINTS.json
+            GNN_CHECKPOINTS.sha256
+            GNN_CHECKPOINTS.log
+          if-no-files-found: error
+          retention-days: 30
+
+  independent-replay:
+    name: "Independent hosted replay of frozen trained checkpoints"
+    needs: [original-checkpoint-comparison]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout P-NP Rust and comparator sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original healthcare GNN family
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
+      - name: Original typed-word and cascade geometry
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Original trained GNN checkpoint family
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install Rust 1.81.0 native fixture
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+      - name: Install pinned original PyTorch CPU runtime
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/original-gnn-venv
+          /tmp/original-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/original-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch-geometric==2.7.0'
+          /tmp/original-gnn-venv/bin/python -c 'import torch, torch_geometric; assert torch.__version__.startswith("2.5.1"); assert torch_geometric.__version__ == "2.7.0"'
+      - name: Download independently pinned model result
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: original-gnn-family-checkpoint-comparison
+          path: first
+      - name: Recompute checkpoint scores and match complete receipts exactly
+        run: |
+          set -euo pipefail
+          (cd first && sha256sum -c GNN_CHECKPOINTS.sha256)
+          cmp -s WORD_GRAPH.hbp first/WORD_GRAPH.hbp
+          /tmp/original-gnn-venv/bin/python native/research/gnn_original_checkpoint_compare.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --fixture WORD_GRAPH.hbp --output GNN_REPLAY.hbp | tee GNN_REPLAY.log
+          cmp -s GNN_REPLAY.hbp first/GNN_CHECKPOINTS.hbp
+          cmp -s GNN_REPLAY.json first/GNN_CHECKPOINTS.json
+          echo 'GNN_FAMILY_REPLAY|source=PINNED|checkpoint=STRICT|receipt=BYTE_EQUAL|status=PASS|json=0'
