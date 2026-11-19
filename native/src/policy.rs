@@ -7,12 +7,13 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 5] = [
+const ACCEPTED_WORKFLOWS: [&str; 6] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
     ".github/workflows/pnp-qprism-hosted-transport.yml",
     ".github/workflows/pnp-real-corpus-parity.yml",
     ".github/workflows/pnp-gnn-trained-wave-reference.yml",
+    ".github/workflows/pnp-original-gnn-family-comparison.yml",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
@@ -202,5 +203,6 @@ mod tests {
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[2]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[3]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[4]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[5]));
     }
 }
