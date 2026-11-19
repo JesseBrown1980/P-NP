@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 8] = [
+const ACCEPTED_WORKFLOWS: [&str; 9] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
     ".github/workflows/pnp-qprism-hosted-transport.yml",
@@ -16,6 +16,7 @@ const ACCEPTED_WORKFLOWS: [&str; 8] = [
     ".github/workflows/pnp-original-gnn-family-comparison.yml",
     ".github/workflows/pnp-stone-moss-source-recovery.yml",
     ".github/workflows/pnp-bitcoin-300s-source-reference.yml",
+    ".github/workflows/pnp-bitcoin-matrix-funnel.yml",
 ];
 // Explicit research-only model analysis, executed by pinned hosted workflow.
 // Native production and transport still accept only Rust implementations.
@@ -218,6 +219,7 @@ mod tests {
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[5]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[6]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[7]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[8]));
         assert!(ACCEPTED_RESEARCH_SOURCE.iter().all(|p| p.starts_with("research/")));
         assert!(!ACCEPTED_RESEARCH_SOURCE.contains(&"native/research/gnn_original_checkpoint_compare.py"));
     }
