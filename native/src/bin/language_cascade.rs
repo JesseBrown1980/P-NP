@@ -146,9 +146,8 @@ fn verify_root(run: &str, dir: &Path, root_file: &Path) -> Result<String, String
         "language wave root is not the accepted source set")?;
     Ok(root)
 }
-fn reverse_row(run: &str, leaf: usize, dir: &Path, root_file: &Path) -> Result<String, String> {
+fn reverse_with_verified_root(run: &str, leaf: usize, dir: &Path, root: &str) -> Result<String, String> {
     ensure(leaf < N, "invalid reverse leaf")?;
-    let root = verify_root(run, dir, root_file)?;
     let from = (leaf + N - 1) % N;
     let body = fs::read_to_string(path(dir, "language", from)).map_err(|e| e.to_string())?;
     recheck_shard(run, from, &body)?;
@@ -160,6 +159,10 @@ fn reverse_row(run: &str, leaf: usize, dir: &Path, root_file: &Path) -> Result<S
         hash_bytes(body.as_bytes()),
     ))
 }
+fn reverse_row(run: &str, leaf: usize, dir: &Path, root_file: &Path) -> Result<String, String> {
+    let root = verify_root(run, dir, root_file)?;
+    reverse_with_verified_root(run, leaf, dir, &root)
+}
 fn final_row(run: &str, dir: &Path, root_file: &Path, reverse_dir: &Path) -> Result<String, String> {
     let root = verify_root(run, dir, root_file)?;
     ensure(fs::read_dir(reverse_dir).map_err(|e| e.to_string())?.count() == N,
@@ -168,7 +171,8 @@ fn final_row(run: &str, dir: &Path, root_file: &Path, reverse_dir: &Path) -> Res
     for leaf in 0..N {
         let actual = fs::read_to_string(path(reverse_dir, "language-reverse", leaf))
             .map_err(|e| e.to_string())?;
-        ensure(actual == reverse_row(run, leaf, dir, root_file)?, "reverse word provenance diverged")?;
+        ensure(actual == reverse_with_verified_root(run, leaf, dir, &root)?,
+            "reverse word provenance diverged")?;
         receipts.push(hash_bytes(actual.as_bytes()));
     }
     let reverse = hash_bytes(receipts.join("|").as_bytes());
