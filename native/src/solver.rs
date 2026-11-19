@@ -4,7 +4,11 @@
 //! 3/27/81 are routing arities, not extra Boolean truth values.
 
 use crate::guidance::Guidance;
+use crate::live_sat_matrix::{freeze_live, play_live};
+use crate::matrix::CELLS;
+use crate::sha256::hash_bytes;
 use crate::ternary::{Cnf, Trit};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Status {
@@ -33,6 +37,97 @@ pub struct Solution {
     pub budget: Option<u64>,
 }
 
+
+/// Accounting for genuine solver search-state snapshots and decision frames.
+/// A receipt root commits the ordered source-bound reversible frame events.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LiveSearchMetrics {
+    pub source_sha256: String,
+    pub decision_frames: u64,
+    pub propagation_frames: u64,
+    pub freeze_play_pairs: u64,
+    pub watcher_reads: u64,
+    pub frozen_bytes: u64,
+    pub digest_metadata_bytes: u64,
+    pub matrix_wall_ns: u128,
+    pub event_root: String,
+}
+
+struct LiveObserver<'a> {
+    source_sha256: &'a str,
+    stats: LiveSearchMetrics,
+}
+
+impl<'a> LiveObserver<'a> {
+    fn new(source_sha256: &'a str) -> Result<Self, String> {
+        if source_sha256.len() != 64
+            || !source_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("live SAT search requires a full original source SHA256".to_owned());
+        }
+        let seed = hash_bytes(format!("PNP_SAT_LIVE_SEARCH_V1|{source_sha256}").as_bytes());
+        Ok(Self {
+            source_sha256,
+            stats: LiveSearchMetrics {
+                source_sha256: source_sha256.to_owned(),
+                decision_frames: 0,
+                propagation_frames: 0,
+                freeze_play_pairs: 0,
+                watcher_reads: 0,
+                frozen_bytes: 0,
+                digest_metadata_bytes: 0,
+                matrix_wall_ns: 0,
+                event_root: seed,
+            },
+        })
+    }
+
+    fn record(&mut self, assignment: &[Trit], variable: usize, phase: &str) {
+        assert!((1..=assignment.len()).contains(&variable));
+        assert!(matches!(phase, "BRANCH" | "UNIT"));
+        let start = ((variable - 1) / CELLS) * CELLS;
+        let end = (start + CELLS).min(assignment.len());
+        let began = Instant::now();
+        let frame = freeze_live(self.source_sha256, start + 1, &assignment[start..end])
+            .expect("source-bound live SAT frame must freeze");
+        // Explicit second replay is the watcher read. The freeze function
+        // also checks its own first playback, and every byte is charged.
+        let watched = play_live(&frame, self.source_sha256)
+            .expect("live SAT watcher must reconstruct source-bound frame");
+        assert_eq!(watched, assignment[start..end], "matrix watcher differs from live solver");
+        let next_root = hash_bytes(format!(
+            "PNP_SAT_EVENT_V1|{}|{}|{}|{}|{}|{}",
+            self.stats.event_root, phase, start + 1, frame.used,
+            frame.state_sha256, hash_bytes(&frame.frozen)
+        ).as_bytes());
+        self.stats.event_root = next_root;
+        self.stats.frozen_bytes = self.stats.frozen_bytes
+            .checked_add(frame.frozen.len() as u64).expect("frozen meter overflow");
+        // A 64-digit frozen state digest, 64-digit source SHA, and the
+        // rolling 64-digit event digest are explicit receipt metadata.
+        self.stats.digest_metadata_bytes = self.stats.digest_metadata_bytes
+            .checked_add(192).expect("metadata meter overflow");
+        self.stats.freeze_play_pairs += 1;
+        self.stats.watcher_reads += 1;
+        if phase == "BRANCH" {
+            self.stats.decision_frames += 1;
+        } else {
+            self.stats.propagation_frames += 1;
+        }
+        self.stats.matrix_wall_ns += began.elapsed().as_nanos();
+    }
+
+    fn propagate_changes(&mut self, before: &[Trit], after: &[Trit]) {
+        assert_eq!(before.len(), after.len());
+        for first in (0..before.len()).step_by(CELLS) {
+            let end = (first + CELLS).min(before.len());
+            if before[first..end] != after[first..end] {
+                self.record(after, first + 1, "UNIT");
+            }
+        }
+    }
+}
+
 enum Search {
     Sat(Vec<Trit>),
     Unsat,
@@ -46,6 +141,7 @@ struct Searcher<'a> {
     propagations: u64,
     literal_checks: u64,
     budget: Option<u64>,
+    live: Option<LiveObserver<'a>>,
 }
 
 impl Searcher<'_> {
@@ -111,7 +207,11 @@ impl Searcher<'_> {
         }
         self.nodes = self.nodes.checked_add(1).expect("node counter overflow");
         let mut propagated = original.to_vec();
-        if !self.propagate(&mut propagated) {
+        let consistent = self.propagate(&mut propagated);
+        if let Some(observer) = &mut self.live {
+            observer.propagate_changes(original, &propagated);
+        }
+        if !consistent {
             return Search::Unsat;
         }
         let choice = self.order.iter()
@@ -133,6 +233,9 @@ impl Searcher<'_> {
             if !self.assign(&mut next, variable, branch) {
                 continue;
             }
+            if let Some(observer) = &mut self.live {
+                observer.record(&next, variable, "BRANCH");
+            }
             match self.recurse(&next) {
                 Search::Sat(model) => return Search::Sat(model),
                 Search::Hold => saw_hold = true,
@@ -147,7 +250,12 @@ impl Searcher<'_> {
     }
 }
 
-pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
+fn solve_internal(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    live: Option<LiveObserver<'_>>,
+) -> (Solution, Option<LiveSearchMetrics>) {
     let mut searcher = Searcher {
         cnf,
         order: &guidance.order,
@@ -155,6 +263,7 @@ pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
         propagations: 0,
         literal_checks: 0,
         budget,
+        live,
     };
     let initial = vec![Trit::Zero; cnf.variables];
     let status = searcher.recurse(&initial);
@@ -167,12 +276,32 @@ pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
         Search::Unsat => (Status::Unsat, None),
         Search::Hold => (Status::Hold, None),
     };
-    Solution {
+    let solution = Solution {
         status, model, nodes: searcher.nodes,
         propagations: searcher.propagations,
         literal_checks: searcher.literal_checks,
         budget,
-    }
+    };
+    (solution, searcher.live.map(|observer| observer.stats))
+}
+
+/// Source-only exact baseline: no matrix work is performed in this path.
+pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
+    solve_internal(cnf, guidance, budget, None).0
+}
+
+/// The identical exact DPLL propagation and branch logic with live 27-cell
+/// freeze/play at actual decisions and every changed unit-propagation frame.
+/// Known public Bitcoin witnesses are never injected into the search.
+pub fn solve_with_live_matrix(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    source_sha256: &str,
+) -> Result<(Solution, LiveSearchMetrics), String> {
+    let observer = LiveObserver::new(source_sha256)?;
+    let (solution, stats) = solve_internal(cnf, guidance, budget, Some(observer));
+    Ok((solution, stats.expect("live observer must produce exact metrics")))
 }
 
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
@@ -227,6 +356,55 @@ mod tests {
                         "independent exhaustive SAT verification");
             }
         }
+    }
+
+    #[test]
+    fn direct_and_live_solver_visit_identical_tree_with_exact_event_receipts() {
+        use crate::sha256::hash_bytes;
+        let examples = [
+            "p cnf 3 2\n1 2 0\n-2 3 0\n",
+            "p cnf 2 4\n1 2 0\n-1 2 0\n1 -2 0\n-1 -2 0\n",
+            "p cnf 4 3\n1 0\n-1 2 0\n-2 3 0\n",
+        ];
+        for source in examples {
+            let cnf = Cnf::parse(source).expect("source");
+            let guide = Guidance::for_source(&cnf, Strategy::Base).expect("guidance");
+            let sha = hash_bytes(source.as_bytes());
+            for budget in [Some(0), Some(1), Some(3), Some(32), None] {
+                let direct = solve(&cnf, &guide, budget);
+                let (live, metrics) = solve_with_live_matrix(&cnf, &guide, budget, &sha)
+                    .expect("live matrix");
+                assert_eq!(direct, live, "matrix frame must preserve DPLL work and verdict");
+                assert_eq!(metrics.source_sha256, sha);
+                assert_eq!(metrics.freeze_play_pairs,
+                    metrics.decision_frames + metrics.propagation_frames);
+                assert_eq!(metrics.watcher_reads, metrics.freeze_play_pairs);
+                assert_eq!(metrics.digest_metadata_bytes,
+                    192 * metrics.freeze_play_pairs);
+                assert!(check_against_exhaustive(&cnf, &live));
+                if live.nodes > 0 && live.propagations > 0 {
+                    assert!(metrics.freeze_play_pairs > 0);
+                    assert!(metrics.frozen_bytes > 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn live_witness_receipt_changes_with_branch_and_source() {
+        use crate::sha256::hash_bytes;
+        let one = "p cnf 2 1\n1 2 0\n";
+        let other = "p cnf 2 1\n-1 2 0\n";
+        let a = Cnf::parse(one).expect("one");
+        let b = Cnf::parse(other).expect("other");
+        let ag = Guidance::for_source(&a, Strategy::Base).expect("order a");
+        let bg = Guidance::for_source(&b, Strategy::Base).expect("order b");
+        let sha_a = hash_bytes(one.as_bytes());
+        let sha_b = hash_bytes(other.as_bytes());
+        let (_, ma) = solve_with_live_matrix(&a, &ag, Some(8), &sha_a).expect("a");
+        let (_, mb) = solve_with_live_matrix(&b, &bg, Some(8), &sha_b).expect("b");
+        assert_ne!(ma.event_root, mb.event_root);
+        assert!(solve_with_live_matrix(&a, &ag, Some(8), "bad").is_err());
     }
 
     #[test]
