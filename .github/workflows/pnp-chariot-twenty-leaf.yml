@@ -233,7 +233,7 @@ jobs:
           set -euo pipefail
           cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
           native/target/release/language_cascade final "$RUN_KEY" forward-bundle/language forward-bundle/language-root.hbp language-reverse CW_FINAL.hbp | tee CW_FINAL.log
-          grep -Fq '|unique_execution=93312|search_buckets=432|collisions_per_bucket=216|' CW_FINAL.hbp
+          grep -Fq '|unique_execution=93312|unique_glyph_addresses=93312|search_buckets=432|collisions_per_bucket=216|' CW_FINAL.hbp
           grep -Fq '|status=PASS|json=0' CW_FINAL.hbp
           sha256sum CW_FINAL.hbp > CW_FINAL.sha256
           sha256sum -c CW_FINAL.sha256
