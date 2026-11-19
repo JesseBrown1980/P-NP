@@ -212,3 +212,69 @@ jobs:
             SMF_FORWARD.log
           if-no-files-found: error
           retention-days: 30
+  
+  independent-provenance:
+    name: "Independent source, recovery, live-ref and five-role provenance referee"
+    needs: [recover-and-referee]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: stone-moss-word-gnn-source-recovery
+          path: proof
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: stone-moss-bank-*
+          path: shards
+          merge-multiple: true
+      - name: Independent source graph re-derivation and archived sidecar validation
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+          ( cd proof && sha256sum -c SMF_RECOVERY.sha256 )
+          ( cd proof && sha256sum -c SMF_GNN_FORWARD.sha256 )
+          ( cd proof && sha256sum -c SMF_IS_REFS.sha256 )
+          test "$(find shards -maxdepth 1 -name '*.smfshard' -type f | wc -l)" -eq 3
+          test "$(find shards -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 3
+      - name: Independently reconstruct original bytes and verify typed WAS IS WILL roots
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 research/stone_moss_provenance_check.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --graph WORD_GRAPH.hbp --shards shards --proof proof --run-key "$RUN_KEY" \
+            | tee SMF_PROVENANCE_CHECK.log
+          grep -Fq '|pairs=3|five_roles=5|forward_receipt=VERIFIED|' SMF_PROVENANCE_CHECK.log
+          grep -Fq '|independent_neural_replay=NOT_PERFORMED|balanced_accuracy=NOT_COMPUTED|status=PASS|json=0' SMF_PROVENANCE_CHECK.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stone-moss-independent-five-role-provenance
+          path: SMF_PROVENANCE_CHECK.log
+          if-no-files-found: error
+          retention-days: 30
