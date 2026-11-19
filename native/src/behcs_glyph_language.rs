@@ -317,6 +317,12 @@ mod tests {
         assert!(GLYPHS.iter().all(|glyph| glyph.chars().count() == 1));
     }
     #[test]
+    fn original_codex_example_matches_unchanged() {
+        assert_eq!(address("falcon").as_deref(), Some("⁂←α.Vυ(∞"));
+        assert_eq!(decode_address("⁂←α.Vυ(∞"), Some([0xa8, 0x45, 0x71, 0x39, 0x4b, 0x5e, 0x99, 0xfe]));
+        assert_eq!(address("D1:acer").as_deref(), Some(")◎o☢€g│✯"));
+    }
+    #[test]
     fn canonical_word_addresses_preserve_the_first_eight_sha_bytes() {
         for word in [
             "falcon", "asolaria", "BEHCS", "D1:acer",
