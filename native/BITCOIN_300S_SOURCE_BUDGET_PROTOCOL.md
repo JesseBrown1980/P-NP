@@ -159,9 +159,10 @@ and original research-arm experiments:
   full target double-SHA256 before accepting any SAT result.
 - Every result records matrix transport time, timed solver work,
   overall time, CNF digest, matrix root and whether a complete SAT
-  model was supplied. Timed-out search nodes are honestly reported as
-  `UNOBSERVED_ON_TIMEOUT` because the historical watcher does not
-  export a partial visited-node counter.
+  model was supplied. Timed-out or interpreter-stack-limited search nodes are honestly
+  reported as `UNOBSERVED_ON_HOLD` because the historical watcher does
+  not export a partial visited-node counter. A recursive interpreter
+  limit is classified separately as `HOLD_STACK` with its own exit code.
 
 Hosted workflow: `.github/workflows/pnp-bitcoin-300s-matrix-search.yml`.
 
