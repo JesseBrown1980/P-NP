@@ -42,7 +42,7 @@ fn nibble(byte: u8) -> Option<u8> {
     }
 }
 fn hex_bytes(hex: &str) -> Result<Vec<u8>> {
-    ensure(hex.len().is_multiple_of(2), "odd-length hex source")?;
+    ensure(hex.len() % 2 == 0, "odd-length hex source")?;
     let mut output = Vec::with_capacity(hex.len() / 2);
     for chunk in hex.as_bytes().chunks_exact(2) {
         let high = nibble(chunk[0]).ok_or("invalid high hex nibble")?;
@@ -117,6 +117,7 @@ fn transport(bytes: &[u8]) -> Result<(usize, usize, String, String, usize)> {
     let mut proof = Vec::new();
     let mut recorded_slices = Vec::new();
     let mut recorded_deltas = Vec::new();
+    let mut recorded_states = Vec::new();
     let mut visits = 0_usize;
     for (frame, cells) in trits.chunks_exact(CELLS).enumerate() {
         let state: [i64; CELLS] = cells.try_into()
@@ -149,6 +150,7 @@ fn transport(bytes: &[u8]) -> Result<(usize, usize, String, String, usize)> {
         proof.extend_from_slice(hash_bytes(&delta_bytes).as_bytes());
         recorded_slices.push(frozen_bytes);
         recorded_deltas.push(delta_bytes);
+        recorded_states.push(state);
         previous = state;
     }
     let mut all_trits = Vec::with_capacity(data_trits + pad);
@@ -163,14 +165,17 @@ fn transport(bytes: &[u8]) -> Result<(usize, usize, String, String, usize)> {
         .map(byte_from_trits).collect::<Result<Vec<u8>>>()?;
     ensure(decoded == bytes, "funnel failed source-byte reconstruction")?;
     let mut backwards = previous;
-    for delta in recorded_deltas.iter().rev() {
-        let object = BrownDelta::load(delta.clone(),
-            &[0_i64; CELLS]); // replaced below: Reverse requires the actual target.
-        ensure(object.is_err() || delta.len() >= 130,
-               "unexpected invalid delta input accepted")?;
-        // The forward/return symmetry was checked at the source state above.
+    for index in (0..recorded_deltas.len()).rev() {
+        let before = if index == 0 { [0_i64; CELLS] }
+                     else { recorded_states[index - 1] };
+        let delta = BrownDelta::load(recorded_deltas[index].clone(), &before)
+            .map_err(str::to_owned)?;
+        backwards = delta.play(&backwards, Direction::Reverse)
+            .map_err(str::to_owned)?;
+        ensure(backwards == before, "full matrix reverse traversal failed")?;
     }
-    let _ = &mut backwards;
+    ensure(backwards == [0_i64; CELLS],
+           "reverse replay did not return to null matrix")?;
     ensure(recorded_slices.len() == 18 && visits == 18 * CELLS,
            "80-byte source did not reach exactly 18 27-cell rooms")?;
     Ok((data_trits, pad, hash_bytes(&proof), hash_bytes(&decoded),
