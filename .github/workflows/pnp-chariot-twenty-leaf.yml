@@ -275,9 +275,9 @@ jobs:
           native/target/release/provenance_rime sources source-follow source-safe
           native/target/release/provenance_rime emit "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
           native/target/release/provenance_rime verify "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
-          grep -Fq '|observed_levels=4|max_window=60|' G3D_RIME.hbp
-          test "$(grep -c '^NODE|' G3D_RIME.hbp)" -eq 10
-          test "$(grep -c '^EDGE|' G3D_RIME.hbp)" -eq 10
+          grep -Fq '|observed_levels=5|max_window=60|' G3D_RIME.hbp
+          test "$(grep -c '^NODE|' G3D_RIME.hbp)" -eq 12
+          test "$(grep -c '^EDGE|' G3D_RIME.hbp)" -eq 12
           test "$(grep -c '^FAMILY|' G3D_RIME.hbp)" -eq 6
           test "$(grep -c '^VIEW|' G3D_RIME.hbp)" -eq 24
           test "$(grep -c '^ROOT|' G3D_RIME.hbp)" -eq 4
