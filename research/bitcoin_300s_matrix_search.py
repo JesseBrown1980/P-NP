@@ -158,7 +158,7 @@ def orchestrate(args):
         f"original_cnf_sha={digest(raw)}|variables={manifest['variables']}|"
         f"clauses={manifest['clauses']}|matrix_proof_sha={digest(matrix.read_bytes())}|"
         f"model_sha={model_sha}|matrix_ns={matrix_ns}|search_ns={search_ns}|"
-        f"overall_ns={monotonic_ns()-begin}|node_cap={NODE_CAP}|"
+        f"overall_ns={monotonic_ns()-begin}|search_exit={run.returncode}|node_cap={NODE_CAP}|"
         f"search_nodes={'WORKER_RECEIPT' if status=='SAT' else 'UNOBSERVED_ON_TIMEOUT'}|"
         f"search_budget_seconds={TIME_SECONDS}|status={status}|json=0\n"
     )
