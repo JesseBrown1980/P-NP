@@ -185,12 +185,13 @@ def rejects(fn):
     return False
 
 
-def negative_controls(shards, expected_raw):
+def negative_controls(shards, expected_raw, entries, shard_paths, run_key):
     a, b, p = (shards[k] for k in ("A", "B", "P"))
     controls = {}
     for lane in ("A", "B", "P"):
         controls["single_bank_" + lane] = rejects(lambda lane=lane: restore([shards[lane]]))
     controls["duplicate_lane"] = rejects(lambda: restore([a, a]))
+    controls["wrong_run_epoch"] = rejects(lambda: read_shard(shard_paths["A"], run_key + "-old"))
     controls["different_source_root"] = rejects(lambda: restore([a, {**p, "root": "0"*64}]))
     corrupt = bytes([b["payload"][0] ^ 1]) + b["payload"][1:]
     controls["altered_payload"] = rejects(lambda: restore([a, {**b, "payload": corrupt}]))
@@ -198,11 +199,16 @@ def negative_controls(shards, expected_raw):
     controls["corrupt_individual_archive_record"] = rejects(
         lambda: parse_archive(expected_raw[:-1] + bytes([expected_raw[-1] ^ 1])))
     controls["trailing_unaudited_archive_byte"] = rejects(lambda: parse_archive(expected_raw + b"X"))
-    # A fully self-consistent alternate source root can pass local algebra,
-    # but differs from the separately frozen immutable original source.
-    forged = expected_raw[:-1] + bytes([expected_raw[-1] ^ 1])
-    forged_root = h(forged)
-    controls["new_consistent_source_does_not_match_frozen_root"] = (forged_root != h(expected_raw))
+    # A coherent replacement archive is internally valid: each altered record
+    # has its own recomputed record SHA and a recomputed top-level source SHA.
+    # An independently pinned original root still rejects this forged origin.
+    alternate = dict(entries)
+    checkpoint_name = "gnn/gslgnn_w9_3_seq47_v2.pt"
+    original_checkpoint = alternate[checkpoint_name]
+    alternate[checkpoint_name] = bytes([original_checkpoint[0] ^ 1]) + original_checkpoint[1:]
+    forged = canonical_archive(alternate)
+    controls["coherent_alternate_archive_self_consistent"] = parse_archive(forged) == alternate
+    controls["coherent_alternate_rejected_by_pinned_original_root"] = (h(forged) != h(expected_raw))
     # Explicit information insufficiency witness: A alone is compatible with
     # two different values for the unknown B half, both with the same A.
     first_a = a["payload"][:WIDTH]
@@ -238,7 +244,9 @@ def main():
         must(restored == reference, "independently generated source archive bytes differ")
         must(parse_archive(restored) == entries, "independent file-by-file source mismatch")
         pair_roots[pair] = h(restored)
-    controls = negative_controls(shards, reference)
+    controls = negative_controls(shards, reference, entries,
+                                 {k: args.shards / (k + ".smfshard") for k in shards},
+                                 args.run_key)
     report = {
         "schema": "STONE-MOSS-REAL-WORD-GNN-ERASURE-V1",
         "run_key": args.run_key,
