@@ -97,3 +97,40 @@ and compare its outcomes under exactly matched 300-second budgets.
 Separate search nodes, state/wave reuse, transport bytes, watchdog checks
 and end-to-end wall duration. The historical 1,024-node stop must be
 removed or treated as a separately reported bounded HOLD.
+
+## Extended historical research-arm search: 300s and one million nodes
+
+The newly submitted research-only hosted contest is:
+.github/workflows/pnp-bitcoin-300s-research-extended.yml
+
+It runs all four originally recorded research arms (HXF-1, Yang-Mills
+Fischer order, modern RIME/Fischer, and byte-original historical Fischer)
+on the same nonce32 and merkle_nonce288 full-SHA256d original CNFs.
+Each of the eight individual hosted jobs gets a true 300-second wall cap
+and a separately declared 1,000,000-node bound, compared with the old
+20-second / 1,024-node research restrictions.
+
+The original historical arm, watcher, bitblast generator, Fischer/RIME
+source implementations and exact solver-model/header checks remain
+byte-identical. A research-only external wrapper changes just the node
+budget at the actual historical function call boundaries. This enables
+an apples-to-apples longer search experiment without claiming those
+historical non-Rust programs have acquired native production acceptance.
+
+Every result must be explicitly labeled SAT, HOLD_TIME, HOLD_BUDGET,
+or HOLD_STACK if the historical recursive interpreter reaches its
+call-stack limit. The separate referee rechecks original input SHA,
+case dimensions, time and node budgets, actual Bitcoin full-SHA256d
+candidate headers when SAT, eight corrupted-header controls, all eight
+receipts and the archive manifest.
+
+Stage boundaries remain explicit: this test measures longer original
+research search; the Rust matrix-funnel test independently measures
+source-addressed reversible transport; a later combined solver must
+feed its matrix-derived transformations directly into measured search
+and outperform direct controls on the same source under full cost
+accounting.
+
+This work is committed on the PR branch. Hosted acceptance is always
+reported by the exact-commit Actions run results rather than inferred
+from the presence of executable code.
