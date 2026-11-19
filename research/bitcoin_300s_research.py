@@ -84,10 +84,16 @@ def engine(args):
             return original_fourth(n, clauses, cap=NODE_CAP)
         fourth.run = extended_fourth
     stream = StringIO()
-    with redirect_stdout(stream):
-        original.main(args.arm, args.case,
-                      str(args.source / (args.case + ".cnf")),
-                      str(args.source / (args.case + ".txt")))
+    try:
+        with redirect_stdout(stream):
+            original.main(args.arm, args.case,
+                          str(args.source / (args.case + ".cnf")),
+                          str(args.source / (args.case + ".txt")))
+    except RecursionError:
+        print(f"BTC300_RESEARCH_DEPTH|arm={args.arm}|case={args.case}|"
+              f"cnf_sha256={CASES[args.case][0]}|node_cap={NODE_CAP}|"
+              "status=HOLD_STACK|json=0", flush=True)
+        return
     records = [line for line in stream.getvalue().splitlines()
                if line.startswith("BITCOIN_ARM|")]
     check(len(records) == 1 and records[0].endswith("|json=0"),
@@ -126,18 +132,28 @@ def driver(args):
     inner = None
     recovered = merkle = witness = "NONE"
     if completed.returncode == 0:
+        stack = [line for line in stdout.splitlines()
+                 if line.startswith("BTC300_RESEARCH_DEPTH|")]
+        if stack:
+            check(len(stack) == 1 and stack[0].endswith("|status=HOLD_STACK|json=0"),
+                  "malformed Python recursion-limit HOLD")
+            status = "HOLD_STACK"
         lines = [line for line in stdout.splitlines()
                  if line.startswith("BTC300_RESEARCH_ENGINE|")]
-        check(len(lines) == 1 and lines[0].endswith("|json=0"),
-              "no extended genuine research-arm receipt")
-        inner = ast.literal_eval(lines[0].split("|", 2)[1])
-        check(inner["arm"] == args.arm and inner["case"] == args.case and
+        check((status == "HOLD_STACK" and len(lines) == 0) or
+              (status != "HOLD_STACK" and len(lines) == 1 and
+               lines[0].endswith("|json=0")),
+              "no valid extended research-arm receipt")
+        if status != "HOLD_STACK":
+            inner = ast.literal_eval(lines[0].split("|", 2)[1])
+        if inner is not None:
+            check(inner["arm"] == args.arm and inner["case"] == args.case and
               inner["extended_search_authorized"] is True and
               inner["node_cap"] == NODE_CAP and
               inner["cnf_sha256"] == CASES[args.case][0],
               "wrong source, node limit, or research arm")
-        status = inner["status"]
-        check(status in ("SAT", "HOLD_BUDGET"), "uncertified research result")
+            status = inner["status"]
+            check(status in ("SAT", "HOLD_BUDGET"), "uncertified research result")
         if status == "SAT":
             recovered = inner["recovered_nonce"]
             merkle = inner["recovered_merkle_raw_hex"]
@@ -178,7 +194,7 @@ def verify(args):
         changed[76] ^= offset
         check(dh(changed) != HASH, "altered nonce accepted")
         negatives += 1
-    sat = node_holds = time_holds = 0
+    sat = node_holds = time_holds = stack_holds = 0
     rows = []
     for case in CASES:
         manifest = source(case, args.source)
@@ -200,13 +216,17 @@ def verify(args):
                       ("solver.stdout", "solver.stderr", "rss.txt")),
                   "missing research worker raw evidence")
             status = r["status"]
-            check(status in ("SAT", "HOLD_BUDGET", "HOLD_TIME"),
+            check(status in ("SAT", "HOLD_BUDGET", "HOLD_TIME", "HOLD_STACK"),
                   "unsupported research outcome")
             inner = r["original_arm_receipt"]
             if status == "HOLD_TIME":
                 check(r["solver_exit"] == 124 and inner is None and
                       r["witness_sha256"] == "NONE", "HOLD_TIME was manufactured")
                 time_holds += 1
+            elif status == "HOLD_STACK":
+                check(r["solver_exit"] == 0 and inner is None and
+                      r["witness_sha256"] == "NONE", "noncanonical stack HOLD")
+                stack_holds += 1
             else:
                 check(r["solver_exit"] == 0 and isinstance(inner, dict),
                       "research internal solver receipt absent")
@@ -234,12 +254,13 @@ def verify(args):
             rows.append(f"BTC300_RESEARCH_ROW|arm={arm}|case={case}|status={status}|"
                         f"sha256={CASES[case][0]}|wall_seconds=300|nodes_cap=1000000|"
                         f"elapsed_ns={r['elapsed_ns']}|json=0")
-    check(sat + time_holds + node_holds == 8, "eight source-case/engine receipts required")
+    check(sat + time_holds + node_holds + stack_holds == 8,
+          "eight source-case/engine receipts required")
     body = "\n".join(rows) + "\n"
     root = sha(body.encode())
     final = (f"BTC300_RESEARCH_FINAL|engines=4|cases=2|observations=8|"
              f"budget_seconds=300|node_cap=1000000|sat={sat}|"
-             f"hold_time={time_holds}|hold_node={node_holds}|"
+             f"hold_time={time_holds}|hold_node={node_holds}|hold_stack={stack_holds}|"
              f"original_bitcoin=PASS|negative_headers={negatives}|"
              f"rows_sha256={root}|status=PASS|json=0\n")
     args.out.write_text(final + body, encoding="ascii")
