@@ -59,7 +59,7 @@ jobs:
             --fixture WORD_GRAPH.hbp --output GNN_CHECKPOINTS.hbp | tee GNN_CHECKPOINTS.log
           test "$(grep -c '^GNN_MODEL_COMPARE|' GNN_CHECKPOINTS.hbp)" -eq 7
           test "$(grep -c '^GNN_WEIGHT_ALIAS|' GNN_CHECKPOINTS.hbp)" -eq 2
-          grep -Fq '|checkpoint_inference=STRICT|truth_labels=UNAVAILABLE|balanced_performance=HOLD|' GNN_CHECKPOINTS.hbp
+          grep -Fq '|checkpoint_inference=STRICT|numeric_replay=INTEGER_MICRO|truth_labels=UNAVAILABLE|balanced_performance=HOLD|' GNN_CHECKPOINTS.hbp
           sha256sum GNN_CHECKPOINTS.hbp GNN_CHECKPOINTS.json WORD_GRAPH.hbp > GNN_CHECKPOINTS.sha256
           sha256sum -c GNN_CHECKPOINTS.sha256
       - name: Archive original checkpoint compatibility and sensitivity receipts
