@@ -7,7 +7,10 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOW: &str = ".github/workflows/pnp-native-certification.yml";
+const ACCEPTED_WORKFLOWS: [&str; 2] = [
+    ".github/workflows/pnp-native-certification.yml",
+    ".github/workflows/pnp-chariot-twenty-leaf.yml",
+];
 const EXPECTED_LEGACY: usize = 54;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -113,7 +116,7 @@ pub fn check_repository(root: &Path) -> Result<Audit, String> {
     }
     let mut native = 0;
     for file in &filenames {
-        if executable_legacy(file) && file != ACCEPTED_WORKFLOW
+        if executable_legacy(file) && !ACCEPTED_WORKFLOWS.contains(&file.as_str())
             && !original.contains_key(file)
         {
             return Err(format!("non-native executable is not accepted: {file}"));
@@ -191,6 +194,7 @@ mod tests {
         assert!(inventory.contains_key("sat/engine.py"));
         assert!(inventory.contains_key("experiments/mtp_nnest/hybrid.py"));
         assert!(inventory.contains_key(".github/workflows/bitcoin-genesis-7.yml"));
-        assert!(!inventory.contains_key(ACCEPTED_WORKFLOW));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[0]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[1]));
     }
 }
