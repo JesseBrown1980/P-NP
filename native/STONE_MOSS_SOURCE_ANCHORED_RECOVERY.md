@@ -63,9 +63,14 @@ GitHub Actions artifacts rather than an always-on HTTP streaming fabric.
 The historical stone, light bank, wave, rebirth, watcher, and chariot terms
 refer here to byte archives, deterministic erasure stripes, independently
 reproduced content, source provenance checks, and separate computation jobs.
-The stored GNN checkpoint is genuinely the original source checkpoint; this
-recovery experiment does not execute its trained model or establish a
-word-to-trained-feature mapping. Those are measured in separate workflows.
+The B3 source-bank test reconstructs the original GNN bytes independently.
+The next acceptance stage invokes the trained checkpoint from the AP-recovered
+archive, strictly loads it into the pinned healthcare-origin GSLGNN code,
+executes four waves (8–11; 144 word-event scores), and compares the same
+operations against an independently loaded original checkpoint. This is
+real model-forward execution on source-derived word graph inputs. The
+six-feature word adapter remains an explicitly experimental proxy; training
+label recovery and balanced model accuracy remain separate scientific gates.
 
 Keep these flags distinct: input Git source pinned, six source records
 verified, three pairs recoverable, external source authenticated, trained
@@ -78,3 +83,66 @@ No source repositories, historic Stone-to-Moss receipts, Hugging Face data,
 or P-NP main files are mutated by the draft PR. The separate external Python
 trained-inference harness lives outside native/ so the production native
 directory remains Rust-only under mandatory CI.
+
+## Continued 2026-11-19 integration: recovered forward and fresh evidence graph
+
+Current implementation branch: `research/brown-ledger-reversible-nested-matrix-20261118`
+on P-NP draft PR #57. All new receipts are generated during each hosted run;
+the historical Stone-to-Moss material and original model files are immutable.
+
+1. `research/stone_moss_checkpoint_forward.py` uses the actual Rust
+   `RESTORE-AP.smf` archive, not a replacement checkpoint path. Its independent
+   Python archive parser checks all six original records, the original GNN
+   manifest SHA, all three B3 pair roots, three worker shard sidecars, the
+   432-word exact source fixture and the current run identity before any
+   PyTorch load. The model loads with `weights_only=True` and strict
+   parameter matching; an independently instantiated original checkpoint
+   must yield elementwise equal raw scores on four complete waves, including
+   controlled input perturbations. Metric comparisons use the same original
+   source-compatible adapter and preserve measured prediction-score variation.
+2. A newly measured `SMF_IS_REFS.hbp` snapshot captures the actual GitHub
+   workflow checkout SHA, contemporaneously observed FOLLOW main SHA, SAFE-ASI
+   main SHA, and the current GitHub run key. This is a bounded observation, not
+   a future prediction or signed independent timestamp. The provenance graph
+   retains distinct `WAS`, `IS`, and `WILL` statements.
+3. Source, recovery, original trained-model code, word fixture, A/B/P
+   independent worker shards, live-ref observation and trained forward
+   result become typed, linked graph nodes. Four domain-separated commitment
+   roles (`HBI`, `HBP`, `SHA`, `SH`) feed a fifth (`HASH`). Their
+   explicit hashes are computed over different source, recipe, content, graph
+   and measured-output contracts; graph coordinates do not substitute for
+   object identity. The recovered forward receipt is `SMF_GNN_FORWARD.hbp`
+   with matching JSON and SHA sidecars.
+4. `research/stone_moss_provenance_check.py`, running on a fifth independent
+   GitHub worker, re-derives the Rust word fixture, original source archive,
+   all three A/B/P repairs, original model and graph Git identities, source
+   snapshot integrity, typed graph relationships and all five SHA commitments
+   without importing the model-scoring implementation. This independently
+   verifies provenance and receipt consistency; its
+   `independent_neural_replay=NOT_PERFORMED` flag is deliberate. The
+   preceding inference job performs the source-vs-recovered numeric comparison.
+5. The mandatory Rust native policy explicitly allows only the seven accepted
+   named workflows and four research-side external Python scripts. No Python
+   source is allowed into `native/`, and the original 54 pinned historical
+   executable files remain strictly byte protected.
+
+### Source and inference acceptance separation
+
+| Measurement | Owning gate |
+| --- | --- |
+| Source Git commits, Git blobs and original checkpoint manifest | Original-source/referee jobs |
+| All three bank pairs reproduce original archive bytes | Python and Rust recovery jobs plus fifth referee |
+| Reconstructed `.pt` checkpoint executes genuine trained forward | External pinned PyTorch recovered-model step |
+| Recovered and original models produce equal prediction tensors | Forward parity step on the same CPU job |
+| Fresh GitHub refs are captured in an exact run-keyed observation | Live-ref `IS` snapshot, independently rehashed |
+| Five role commitments and typed graph links are internally valid | Fifth independent source/provenance worker |
+| Training-label alignment or balanced anomaly accuracy | `NOT_MEASURED` / `NOT_COMPUTED` |
+| Independent external physical custody, GPU/HTTP transport latency | `NOT_ATTESTED` / separately measured gates |
+
+The last explicitly evidenced completed B3-only recovery was
+[run #44611594676](https://github.com/JesseBrown1980/P-NP/actions/runs/44611594676),
+which passed all four jobs at `46727249`. The same commit's mandatory
+native job failed at the missing workflow/source-script policy allowlist;
+the Rust tests and Clippy passed before that policy check. The subsequent
+allowlist correction and this five-job combined extension must achieve fresh
+same-head acceptance before declaring the combined integration PASS.
