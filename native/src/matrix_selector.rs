@@ -223,7 +223,7 @@ mod tests {
         let sha = hash_bytes(source.as_bytes());
         let mut matrix = MatrixSelector::new(&cnf, &sha).expect("selector");
         let choice = matrix.choose(&cnf, &[1, 2, 3, 4],
-            &vec![Trit::Zero; 4]).expect("live choice");
+            &[Trit::Zero; 4]).expect("live choice");
         assert_eq!(choice, 3);
         let report = matrix.into_metrics();
         assert_eq!(report.choices, 1);
