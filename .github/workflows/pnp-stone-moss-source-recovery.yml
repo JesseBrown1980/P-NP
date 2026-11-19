@@ -256,8 +256,8 @@ jobs:
           cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
           native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
           native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
-          ( cd proof && sha256sum -c SMF_RECOVERY.sha256 )
-          ( cd proof && sha256sum -c SMF_GNN_FORWARD.sha256 )
+          ( cd proof/acceptance && sha256sum -c SMF_RECOVERY.sha256 )
+          ( cd proof/acceptance && sha256sum -c SMF_GNN_FORWARD.sha256 )
           ( cd proof && sha256sum -c SMF_IS_REFS.sha256 )
           test "$(find shards -maxdepth 1 -name '*.smfshard' -type f | wc -l)" -eq 3
           test "$(find shards -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 3
