@@ -7,9 +7,10 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 2] = [
+const ACCEPTED_WORKFLOWS: [&str; 3] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
+    ".github/workflows/pnp-qprism-hosted-transport.yml",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
@@ -196,5 +197,6 @@ mod tests {
         assert!(inventory.contains_key(".github/workflows/bitcoin-genesis-7.yml"));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[0]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[1]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[2]));
     }
 }
