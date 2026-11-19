@@ -1,0 +1,340 @@
+name: "P-NP retained BEHCS and GNN model byte parity: native / HTTP / GitRAM"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: "Native and localhost backend HTTP reference on exact retained bytes"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+
+      - name: Checkout native source at job commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned BEHCS-256 word and cascade sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Checkout pinned public trained GNN model files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+
+      - name: Strict Rust tests and benchmark
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin qprism_real_corpus --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin qprism_real_corpus --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_real_corpus --release --offline --locked
+          native/target/release/qprism_real_corpus bench "$RUN_KEY" source-words source-gnn BENCH.hbp
+          grep -Fq '|http_loopback=PASS|native=PASS|' BENCH.hbp
+      - name: Publish identical-input benchmark receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-corpus-baseline
+          path: BENCH.hbp
+          retention-days: 7
+          if-no-files-found: error
+
+  sender:
+    name: "GNN/word corpus real 1024-symbol sender ${{ matrix.leaf }}"
+    needs: [baseline]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+
+      - name: Checkout native source at job commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned BEHCS-256 word and cascade sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Checkout pinned public trained GNN model files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+
+      - name: Build native real-corpus Q-PRISM encoder
+        run: cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_real_corpus --release --offline --locked
+      - name: Transcode exact original file bytes and seal sender
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          LEAF: ${{ matrix.leaf }}
+        run: |
+          set -euo pipefail
+          started="$(date +%s%N)"
+          native/target/release/qprism_real_corpus forward "$RUN_KEY" source-words source-gnn "$LEAF" forward | tee forward.log
+          finished="$(date +%s%N)"
+          echo "QPR_REAL_SENDER_TIME|leaf=$LEAF|elapsed_ns=$((finished-started))|source_mode=RETAINED_FILES|json=0"
+          test -s "forward/$(printf 'real-symbol-%02d.bin' "$LEAF")"
+      - name: Upload actual Q-PRISM 1024-symbol binary and provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-corpus-forward-${{ matrix.leaf }}
+          path: forward/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  fanin:
+    name: "20 real GNN/word symbol replicas integrity and source fan-in"
+    needs: [sender]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+
+      - name: Checkout native source at job commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned BEHCS-256 word and cascade sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Checkout pinned public trained GNN model files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+
+      - name: Gather original transported glyph binary artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: real-corpus-forward-*
+          path: forward
+          merge-multiple: true
+      - name: Recompute original Git blobs, bytes, glyphs, inverse, and root
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_real_corpus --release --offline --locked
+          native/target/release/qprism_real_corpus fanin "$RUN_KEY" source-words source-gnn forward root.hbp
+          test "$(find forward -maxdepth 1 -type f | wc -l)" -eq 40
+          grep -Fq '|leaves=20|replica_semantics=IDENTICAL_PINNED_CORPUS|status=PASS|' root.hbp
+      - name: Publish independent 20-member source commitment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-corpus-root
+          path: root.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  receiver:
+    name: "Independent inverse worker ${{ matrix.receiver }} from ${{ matrix.sender }}"
+    needs: [fanin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - receiver: 0
+            sender: 19
+          - receiver: 1
+            sender: 0
+          - receiver: 2
+            sender: 1
+          - receiver: 3
+            sender: 2
+          - receiver: 4
+            sender: 3
+          - receiver: 5
+            sender: 4
+          - receiver: 6
+            sender: 5
+          - receiver: 7
+            sender: 6
+          - receiver: 8
+            sender: 7
+          - receiver: 9
+            sender: 8
+          - receiver: 10
+            sender: 9
+          - receiver: 11
+            sender: 10
+          - receiver: 12
+            sender: 11
+          - receiver: 13
+            sender: 12
+          - receiver: 14
+            sender: 13
+          - receiver: 15
+            sender: 14
+          - receiver: 16
+            sender: 15
+          - receiver: 17
+            sender: 16
+          - receiver: 18
+            sender: 17
+          - receiver: 19
+            sender: 18
+    steps:
+
+      - name: Checkout native source at job commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned BEHCS-256 word and cascade sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Checkout pinned public trained GNN model files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+
+      - name: Download predecessor's actual ten-bit symbols
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: real-corpus-forward-${{ matrix.sender }}
+          path: received
+      - name: Download independently accepted root
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: real-corpus-root
+          path: root
+      - name: Independently recover original retained word and GNN bytes
+        env:
+          RECEIVER: ${{ matrix.receiver }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_real_corpus --release --offline --locked
+          mkdir -p recovered
+          started="$(date +%s%N)"
+          native/target/release/qprism_real_corpus reverse "$RUN_KEY" source-words source-gnn "$RECEIVER" received root/root.hbp "$(printf 'recovered/real-reverse-%02d.hbp' "$RECEIVER")" | tee received.log
+          finished="$(date +%s%N)"
+          echo "QPR_REAL_RECEIVER_TIME|receiver=$RECEIVER|elapsed_ns=$((finished-started))|json=0"
+      - name: Archive remote source-restoration receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-corpus-reverse-${{ matrix.receiver }}
+          path: recovered/*
+          if-no-files-found: error
+          retention-days: 7
+
+  final:
+    name: "Independent original BEHCS/GNN data transport and three-mode acceptance"
+    needs: [receiver]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+
+      - name: Checkout native source at job commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned BEHCS-256 word and cascade sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - name: Checkout pinned public trained GNN model files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+
+      - name: Recover original baseline benchmark
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: real-corpus-baseline
+          path: benchmark
+      - name: Recover all twenty original encoded payloads
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: real-corpus-forward-*
+          path: forward
+          merge-multiple: true
+      - name: Recover all twenty independent inverse receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: real-corpus-reverse-*
+          path: reverse
+          merge-multiple: true
+      - name: Recover accepted 20-member root
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: real-corpus-root
+          path: root
+      - name: Independently verify matching payload digest across all three modes
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_real_corpus --release --offline --locked
+          native/target/release/qprism_real_corpus final "$RUN_KEY" source-words source-gnn forward root/root.hbp reverse benchmark/BENCH.hbp REAL_FINAL.hbp | tee REAL_FINAL.log
+          grep -Fq '|independent_inversion=PASS|native=PASS|http_loopback=PASS|gitram_artifacts=PASS|' REAL_FINAL.hbp
+          grep -Fq '|forward_workers=20|reverse_workers=20|replicas=20|' REAL_FINAL.hbp
+          sha256sum REAL_FINAL.hbp BENCH.hbp 2>/dev/null || true
+          sha256sum REAL_FINAL.hbp benchmark/BENCH.hbp root/root.hbp > REAL_FINAL.sha256
+          sha256sum -c REAL_FINAL.sha256
+      - name: Retain complete exact-data benchmark receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: real-corpus-three-mode-final
+          path: |
+            REAL_FINAL.hbp
+            REAL_FINAL.sha256
+            REAL_FINAL.log
+            benchmark/BENCH.hbp
+            root/root.hbp
+          if-no-files-found: error
+          retention-days: 30
