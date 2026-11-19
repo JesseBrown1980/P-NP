@@ -237,6 +237,52 @@ jobs:
           grep -Fq '|status=PASS|json=0' CW_FINAL.hbp
           sha256sum CW_FINAL.hbp > CW_FINAL.sha256
           sha256sum -c CW_FINAL.sha256
+      - name: Original 3D GitHub harness at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS
+          ref: 8712368c851abe347ddf97a25bfbd96275d4316c
+          path: source-follow
+          persist-credentials: false
+      - name: Original SAFE-ASI language at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS
+          ref: 6e3e082d574a4ad45bceb06ccf0b86ac44f942cc
+          path: source-safe
+          persist-credentials: false
+      - name: Remeasure GitHub public refs for current IS separate from historical WAS
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          follow=$(git ls-remote --exit-code https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          safe=$(git ls-remote --exit-code https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          test "$(expr length "$follow")" -eq 40
+          test "$(expr length "$safe")" -eq 40
+          pnp=$(git rev-parse HEAD)
+          test "$pnp" = "$GITHUB_SHA"
+          printf 'G3D_IS_REFS|schema=1|run=%s|pnp_sha=%s|follow_main=%s|safe_main=%s|observed=GITHUB_LS_REMOTE|json=0\n' "$RUN_KEY" "$pnp" "$follow" "$safe" > IS_REFS.hbp
+          echo "G3D_REF_CAPTURE|follow=$follow|safe=$safe|pnp=$pnp|status=PASS|json=0"
+      - name: Bind 3D graph and four-root temporal RIME to accepted Chariot and words
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin provenance_rime --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin provenance_rime --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin provenance_rime --release --offline --locked
+          native/target/release/provenance_rime sources source-follow source-safe
+          native/target/release/provenance_rime emit "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
+          native/target/release/provenance_rime verify "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
+          grep -Fq '|observed_levels=4|max_window=60|' G3D_RIME.hbp
+          test "$(grep -c '^NODE|' G3D_RIME.hbp)" -eq 10
+          test "$(grep -c '^EDGE|' G3D_RIME.hbp)" -eq 10
+          test "$(grep -c '^FAMILY|' G3D_RIME.hbp)" -eq 6
+          test "$(grep -c '^VIEW|' G3D_RIME.hbp)" -eq 24
+          test "$(grep -c '^ROOT|' G3D_RIME.hbp)" -eq 4
+          sha256sum G3D_RIME.hbp IS_REFS.hbp > G3D_RIME.sha256
+          sha256sum -c G3D_RIME.sha256
       - name: Archive paid source and exact two-wave result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -248,5 +294,76 @@ jobs:
             CW_FINAL.hbp
             CW_FINAL.sha256
             CW_FINAL.log
+            IS_REFS.hbp
+            G3D_RIME.hbp
+            G3D_RIME.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  provenance-replay:
+    name: "Independent source-pinned 3D RIME graph replay"
+    needs: [final]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout P-NP verifier
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original 3D GitHub harness at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS
+          ref: 8712368c851abe347ddf97a25bfbd96275d4316c
+          path: source-follow
+          persist-credentials: false
+      - name: Original SAFE-ASI language at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS
+          ref: 6e3e082d574a4ad45bceb06ccf0b86ac44f942cc
+          path: source-safe
+          persist-credentials: false
+      - name: Download first runner's sealed graph and true source outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-two-wave-final
+          path: proof
+      - name: Verify exact original source and replay immutable graph byte for byte
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          (cd proof && sha256sum -c G3D_RIME.sha256)
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin provenance_rime --release --offline --locked
+          native/target/release/provenance_rime verify "$RUN_KEY" source-follow source-safe proof/IS_REFS.hbp proof/CH20_FINAL.hbp proof/CW_FINAL.hbp proof/G3D_RIME.hbp
+          native/target/release/provenance_rime emit "$RUN_KEY" source-follow source-safe proof/IS_REFS.hbp proof/CH20_FINAL.hbp proof/CW_FINAL.hbp G3D_REPLAY.hbp
+          cmp -s G3D_REPLAY.hbp proof/G3D_RIME.hbp
+          echo 'G3D_REPLAY|sources=PINNED|history=OBSERVED_ONLY|graph=BYTE_EQUAL|status=PASS|json=0'
+      - name: Separately remeasure GitHub IS refs and retain possible branch advance
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          follow=$(git ls-remote --exit-code https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          safe=$(git ls-remote --exit-code https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          test "$(expr length "$follow")" -eq 40
+          test "$(expr length "$safe")" -eq 40
+          old_follow=$(sed -n 's/.*|follow_main=\([0-9a-f]*\)|safe_main=.*/\1/p' proof/IS_REFS.hbp)
+          old_safe=$(sed -n 's/.*|safe_main=\([0-9a-f]*\)|observed=.*/\1/p' proof/IS_REFS.hbp)
+          moved=0
+          if [ "$follow" != "$old_follow" ] || [ "$safe" != "$old_safe" ]; then moved=1; fi
+          printf 'G3D_REF_REMEASURE|run=%s|follow_now=%s|safe_now=%s|prior_capture_stable=%s|historical_snapshot_preserved=1|status=PASS|json=0\n' "$RUN_KEY" "$follow" "$safe" "$((1-moved))" > G3D_REMEASURE.hbp
+          sha256sum G3D_REPLAY.hbp G3D_REMEASURE.hbp > G3D_REPLAY.sha256
+          sha256sum -c G3D_REPLAY.sha256
+      - name: Archive second independent temporal graph receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-three-dimensional-provenance-replay
+          path: |
+            G3D_REPLAY.hbp
+            G3D_REMEASURE.hbp
+            G3D_REPLAY.sha256
           if-no-files-found: error
           retention-days: 30
