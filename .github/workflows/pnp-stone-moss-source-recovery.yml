@@ -142,6 +142,21 @@ jobs:
           grep -Fq '|each_exact=TRUE|' acceptance/SMF_RECOVERY.hbp
           ( cd acceptance && sha256sum RESTORE-*.smf > RESTORES.sha256 && sha256sum -c RESTORES.sha256 )
           echo 'SMF_ACCEPT|three_of_three_pairs=PASS|real_word_and_checkpoint_bytes=PASS|physical_source_attested=FALSE|json=0'
+      - name: Remeasure live 3-D GitHub refs for this exact acceptance epoch
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          PNP_SHA="$(git rev-parse HEAD)"
+          FOLLOW_SHA="$(git ls-remote https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '{print $1}')"
+          SAFE_SHA="$(git ls-remote https://github.com/JesseBrown1980/SAFE-ASI.git refs/heads/main | awk '{print $1}')"
+          test "${#PNP_SHA}" -eq 40
+          test "${#FOLLOW_SHA}" -eq 40
+          test "${#SAFE_SHA}" -eq 40
+          printf 'G3D_IS_REFS|schema=1|run=%s|pnp_sha=%s|follow_main=%s|safe_main=%s|observed=GITHUB_LS_REMOTE|json=0\n' \
+            "$RUN_KEY" "$PNP_SHA" "$FOLLOW_SHA" "$SAFE_SHA" > SMF_IS_REFS.hbp
+          sha256sum SMF_IS_REFS.hbp > SMF_IS_REFS.sha256
+          sha256sum -c SMF_IS_REFS.sha256
       - name: Install pinned external PyTorch reference in isolated research environment
         run: |
           set -euo pipefail
@@ -157,7 +172,8 @@ jobs:
           /tmp/smf-gnn-venv/bin/python research/stone_moss_checkpoint_forward.py \
             --health source-healthcare --words source-words --models source-gnn \
             --graph WORD_GRAPH.hbp --shards shards --recovered acceptance/RESTORE-AP.smf \
-            --recovery-receipt acceptance/SMF_RECOVERY.json --run-key "$RUN_KEY" --out acceptance | tee SMF_FORWARD.log
+            --recovery-receipt acceptance/SMF_RECOVERY.json --live-refs SMF_IS_REFS.hbp \
+            --run-key "$RUN_KEY" --out acceptance | tee SMF_FORWARD.log
           ( cd acceptance && sha256sum -c SMF_GNN_FORWARD.sha256 )
           grep -Fq '|checkpoint_load=STRICT|recovered_forward=PASS|' acceptance/SMF_GNN_FORWARD.hbp
           grep -Fq '|original_source_forward_parity=EXACT|balanced_accuracy=NOT_COMPUTED|' acceptance/SMF_GNN_FORWARD.hbp
@@ -189,6 +205,8 @@ jobs:
             acceptance/SMF_GNN_FORWARD.hbp
             acceptance/SMF_GNN_FORWARD.json
             acceptance/SMF_GNN_FORWARD.sha256
+            SMF_IS_REFS.hbp
+            SMF_IS_REFS.sha256
             acceptance/RESTORES.sha256
             SMF_ACCEPTANCE.log
             SMF_FORWARD.log
