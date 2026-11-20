@@ -94,6 +94,9 @@ def independent_trial(case, mode, source, output):
         "selector_room_replays", "selector_frozen_bytes",
         "selector_metadata_bytes", "selector_index_ns", "selector_ns",
     )}
+    if NODES != 128:
+        need(row.get("internal_deadline_s") == "285",
+             "raised-node Bitcoin GGUF worker lacks internal time stop")
     need(ints["nodes"] <= NODES and
          ints["total_ns"] >= ints["solver_ns"] and
          ints["live_frames"] == ints["live_watcher_reads"] and
@@ -150,7 +153,20 @@ def independent_trial(case, mode, source, output):
              "non-guided control used extra selector")
         need(row.get("selector_root") == "NONE", "unexpected guided receipt")
     status = row.get("status")
-    need(status in ("SAT", "HOLD_NODE"), "unsupported exact SAT result")
+    need(status in ("SAT", "HOLD_NODE", "HOLD_TIME", "HOLD_STACK"),
+         "unsupported exact SAT result")
+    if NODES == 128:
+        need(status in ("SAT", "HOLD_NODE"), "pilot search reported raised-only status")
+    if status == "HOLD_TIME":
+        need(row.get("time_exhausted") == "true",
+             "internal wall hold without timer event")
+    if status == "HOLD_STACK":
+        need(row.get("stack_exhausted") == "true",
+             "stack hold without bounded recursive guard")
+    if status in ("SAT", "HOLD_NODE"):
+        need(row.get("time_exhausted") == "false"
+             and row.get("stack_exhausted") == "false",
+             "completed/node-limited run contains unreported time or stack hold")
     if status == "SAT":
         model = (directory / "model.trits").read_bytes()
         need(sha(model) == row.get("model_sha256") and
@@ -196,13 +212,15 @@ def verify_bitcoin_header(case, selected):
          "complete source SAT witness does not hash to Bitcoin genesis target")
 
 def main():
-    global SOURCES_DIR
+    global SOURCES_DIR, NODES
     parser = argparse.ArgumentParser()
+    parser.add_argument("--node-cap", type=int, choices=(128, 1_000_000_000_000), default=128)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     SOURCES_DIR = args.source
+    NODES = args.node_cap
     origin = bitcoin.PREFIX + bitcoin.NONCE.to_bytes(4, "little")
     need(bitcoin.double_sha(origin) == bitcoin.TARGET,
          "independent original Bitcoin header hash differs")
@@ -228,7 +246,7 @@ def main():
     parity = 0
     for case in CASES:
         a, b = known["direct", case], known["gguf", case]
-        if a["status"] != "HOLD_TIME" and b["status"] != "HOLD_TIME":
+        if a["status"] in ("SAT", "HOLD_NODE") and b["status"] in ("SAT", "HOLD_NODE"):
             need(all(a[key] == b[key] for key in
                      ("status", "nodes", "propagations", "literal_checks")),
                  "GGUF playback altered exact source-Fischer DPLL tree")
@@ -248,7 +266,7 @@ def main():
         "BTC_GGUF_SAT_FINAL|schema=1|"
         "source=ORIGINAL_BITCOIN_GENESIS_SHA256D|"
         "cases=2|modes=3|trials=6|"
-        "node_cap_each=128|wall_seconds_each=300|"
+        f"node_cap_each={NODES}|wall_seconds_each=300|"
         "states=REAL_REPLAYED_GGUF|"
         f"direct_gguf_tree_parity_pairs={parity}|"
         f"wrong_header_controls={corrupted}|"
