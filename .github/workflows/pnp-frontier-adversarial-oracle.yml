@@ -1,0 +1,32 @@
+name: "P-NP independent adversarial SAT oracle: exact three-shadow frontier backtracking"
+on:
+  push:
+    branches: [research/frontier-adversarial-sat-oracle-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pnp-frontier-hard-oracle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adversarial-oracle:
+    name: "Rust 1.81: 144 genuine SAT/UNSAT all-assignment CNFs against exhaustive oracle and restart parity"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Source-only native Rust 1.81 / strict no-unsafe acceptance
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --offline --locked -- -D warnings
+      - name: Independent nontrivial SAT and UNSAT truth-table oracle and 3 independent restart schedules
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib frontier_adversarial_tests::tests --offline --locked -- --nocapture
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib frontier_independent_tests::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib continuous_frontier::tests --offline --locked
+          echo 'FRONTIER_ADVERSARIAL_ORACLE|cases=144|nontrivial=YES|exact_truth_table=PASS|three_modes=PASS|restart_schedules=3|status=PASS|json=0'

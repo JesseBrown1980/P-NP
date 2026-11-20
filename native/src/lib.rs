@@ -8,6 +8,8 @@ pub mod bitcoin_gguf;
 pub mod continuous_frontier;
 #[cfg(test)]
 mod frontier_independent_tests;
+#[cfg(test)]
+mod frontier_adversarial_tests;
 pub mod bitcoin_rimesphere_stream;
 pub mod brown_ledger;
 pub mod checkpoint;
