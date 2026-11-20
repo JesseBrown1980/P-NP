@@ -289,6 +289,10 @@ impl Searcher<'_> {
     }
 }
 
+// Both original matrix and independent three-shadow routing are optional
+// private modes on a shared exact DPLL core. Keep one narrowly scoped lint
+// allowance rather than weakening the repository's strict Clippy gate.
+#[allow(clippy::too_many_arguments)]
 fn solve_internal(
     cnf: &Cnf,
     guidance: &Guidance,
