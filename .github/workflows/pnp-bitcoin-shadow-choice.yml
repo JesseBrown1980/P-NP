@@ -1,0 +1,186 @@
+name: "P-NP original Bitcoin one-shadow versus three-shadow actual SAT branch choices"
+on:
+  push:
+    branches: [research/bitcoin-shadow-branch-selector-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pnp-shadow-live-sat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-pinned:
+    name: "Recover accepted original Bitcoin SHA256d and three-shadow GGUF identities"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - name: Source-frozen prior acceptance and referee syntax
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          python3 -m py_compile research/bitcoin_shadow_selector_referee.py research/bitcoin_gguf_fischer_referee.py research/bitcoin_live_sat_referee.py
+          echo 'BTC_SHADOW_SOURCE_PIN|original_rime_run=44652775916|three_shadow_run=44725165515|source=EXACT|status=PASS'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-shadow-choice-source
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  compare:
+    name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: exact original-CNF 2-node shadow DPLL"
+    needs: source-pinned
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+        mode: [direct, one, three]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-shadow-choice-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: accepted
+      - name: Verify source and real previously accepted three-shadow frozen GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "accepted/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "accepted/$CASE/BITCOIN.three_shadows.replayed.cnf"
+      - name: Rust 1.81 exact independent shadow-choice and SAT correctness tests
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib shadow_selector::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib solver::tests::one_and_three_shadow_guided_exact_sat_and_unsat_complete --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_shadow_compare --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_shadow_compare --release --offline --locked
+      - name: Execute exact source SAT decisions, including live shadow and GGUF costs
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$MODE/$CASE"
+          /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' \
+            -o "results/$MODE/$CASE/worker_time.hbp" \
+            native/target/release/bitcoin_shadow_compare run "$MODE" "$CASE" \
+            "source/$CASE.cnf" "accepted/$CASE/BITCOIN.three_shadows.gguf" \
+            "results/$MODE/$CASE" \
+            > "results/$MODE/$CASE/stdout.log" 2> "results/$MODE/$CASE/stderr.log"
+          grep -Fq "BTC_THREE_SHADOW_SEARCH|schema=1|case=$CASE|mode=$MODE|" "results/$MODE/$CASE/receipt.hbp"
+          grep -Fq '|artificial_timer=NO|known_nonce_injected=NO|' "results/$MODE/$CASE/receipt.hbp"
+          ( cd "results/$MODE/$CASE" && sha256sum \
+            receipt.hbp worker_time.hbp stdout.log stderr.log > RESULT.sha256 && \
+            sha256sum -c RESULT.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-shadow-choice-${{ matrix.mode }}-${{ matrix.case }}
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+
+  independent:
+    name: "Independently verify six original Bitcoin source and three-shadow live DPLL receipts"
+    needs: compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-shadow-choice-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-nonce32
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: accepted
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-merkle_nonce288
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: accepted
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-shadow-choice-*
+          path: results
+          merge-multiple: true
+      - name: Independently check exact complete original Bitcoin data and actual shadow decisions
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          for case in nonce32 merkle_nonce288; do
+            ( cd "accepted/$case" && sha256sum -c SHADOW.sha256 )
+            for mode in direct one three; do
+              ( cd "results/$mode/$case" && sha256sum -c RESULT.sha256 )
+            done
+          done
+          mkdir -p accepted_result
+          /usr/bin/time -f 'referee_peak_rss_kib=%M|referee_wall_seconds=%e' \
+            -o accepted_result/REFEREE_TIME.hbp \
+            python3 -s -B research/bitcoin_shadow_selector_referee.py \
+              --source source --accepted accepted --results results \
+              --out accepted_result/BTC_SHADOW_FINAL.hbp \
+              > accepted_result/REFEREE.log
+          grep -Fq 'BTC_SHADOW_FINAL|schema=1|original_cases=2|modes=3|trials=6|' accepted_result/BTC_SHADOW_FINAL.hbp
+          grep -Fq '|independent_gguf_and_full_source=PASS|' accepted_result/BTC_SHADOW_FINAL.hbp
+          test "$(grep -c '^BTC_SHADOW_COMPARE|' accepted_result/BTC_SHADOW_FINAL.hbp)" -eq 2
+          cat accepted_result/BTC_SHADOW_FINAL.hbp
+          ( cd accepted_result && sha256sum BTC_SHADOW_FINAL.hbp REFEREE.log REFEREE_TIME.hbp \
+            > ACCEPTANCE.sha256 && sha256sum -c ACCEPTANCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-shadow-choice-accepted
+          path: accepted_result/
+          retention-days: 30
+          if-no-files-found: error
+
+  readback:
+    name: "Independent final original Bitcoin six-trial branch decision readback"
+    needs: independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-shadow-choice-accepted
+          path: accepted_result
+      - name: Verify all six SAT/hold receipts and both original 3D-shadow decisions
+        run: |
+          set -euo pipefail
+          ( cd accepted_result && sha256sum -c ACCEPTANCE.sha256 )
+          test "$(grep -c '^BTC_SHADOW_TRIAL|' accepted_result/BTC_SHADOW_FINAL.hbp)" -eq 6
+          test "$(grep -c '^BTC_SHADOW_COMPARE|' accepted_result/BTC_SHADOW_FINAL.hbp)" -eq 2
+          echo 'BTC_SHADOW_FINAL_ARCHIVE|cases=2|modes=3|trials=6|live_source=REAL_BITCOIN|original_source=VERIFIED|status=PASS|json=0'
