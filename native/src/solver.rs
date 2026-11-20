@@ -267,6 +267,7 @@ fn solve_internal(
     budget: Option<u64>,
     live: Option<LiveObserver<'_>>,
     selector: Option<MatrixSelector>,
+    starting: Option<&[Trit]>,
 ) -> (Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>) {
     let mut searcher = Searcher {
         cnf,
@@ -278,8 +279,14 @@ fn solve_internal(
         live,
         selector,
     };
-    let initial = vec![Trit::Zero; cnf.variables];
-    let status = searcher.recurse(&initial);
+    let zero;
+    let initial = if let Some(source) = starting {
+        source
+    } else {
+        zero = vec![Trit::Zero; cnf.variables];
+        &zero
+    };
+    let status = searcher.recurse(initial);
     let (status, model) = match status {
         Search::Sat(values) => {
             assert!(cnf.valid_complete_model(&values),
@@ -301,7 +308,7 @@ fn solve_internal(
 
 /// Source-only exact baseline: no matrix work is performed in this path.
 pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
-    solve_internal(cnf, guidance, budget, None, None).0
+    solve_internal(cnf, guidance, budget, None, None, None).0
 }
 
 /// The identical exact DPLL propagation and branch logic with live 27-cell
@@ -314,7 +321,7 @@ pub fn solve_with_live_matrix(
     source_sha256: &str,
 ) -> Result<(Solution, LiveSearchMetrics), String> {
     let observer = LiveObserver::new(source_sha256)?;
-    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None);
+    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None, None);
     Ok((solution, stats.expect("live observer must produce exact metrics")))
 }
 
@@ -331,12 +338,67 @@ pub fn solve_with_matrix_guidance(
     let observer = LiveObserver::new(source_sha256)?;
     let selector = MatrixSelector::new(cnf, source_sha256)?;
     let (solution, live, guided) =
-        solve_internal(cnf, guidance, budget, Some(observer), Some(selector));
+        solve_internal(cnf, guidance, budget, Some(observer), Some(selector), None);
     Ok((
         solution,
         live.expect("matrix-guided solver must retain live frame receipts"),
         guided.expect("matrix-guided solver must retain selection receipts"),
     ))
+}
+
+/// Preserve an authenticated GGUF's genuine partial assignment as the exact
+/// DPLL root, leaving the original clauses, propagation and branch semantics
+/// unchanged. A constrained branch may legitimately be UNSAT even if the
+/// unconditioned Bitcoin source is known satisfiable.
+pub fn solve_from_assignment(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+) -> Result<Solution, String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF resumed assignment differs from original CNF width".to_owned());
+    }
+    Ok(solve_internal(cnf, guidance, budget, None, None, Some(starting)).0)
+}
+
+/// Same root and exact search tree as solve_from_assignment, with reversible
+/// 27-cell snapshots and separate live watcher metering.
+pub fn solve_live_from_assignment(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+) -> Result<(Solution, LiveSearchMetrics), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF resumed live assignment differs from original CNF width".to_owned());
+    }
+    let observer = LiveObserver::new(source_sha256)?;
+    let (solution, metrics, _) =
+        solve_internal(cnf, guidance, budget, Some(observer), None, Some(starting));
+    Ok((solution, metrics.expect("live GGUF root observer missing")))
+}
+
+/// Replayed GGUF assignment is the DPLL starting state; original source
+/// constraints and real live ternary frames drive the 27-cell selector.
+pub fn solve_guided_from_assignment(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+) -> Result<(Solution, LiveSearchMetrics, MatrixSelectionMetrics), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF resumed guided assignment differs from original CNF width".to_owned());
+    }
+    let observer = LiveObserver::new(source_sha256)?;
+    let selector = MatrixSelector::new(cnf, source_sha256)?;
+    let (solution, live, matrix) = solve_internal(
+        cnf, guidance, budget, Some(observer), Some(selector), Some(starting)
+    );
+    Ok((solution, live.expect("live witness missing"),
+        matrix.expect("matrix-guided witness missing")))
 }
 
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
@@ -440,6 +502,48 @@ mod tests {
         let (_, mb) = solve_with_live_matrix(&b, &bg, Some(8), &sha_b).expect("b");
         assert_ne!(ma.event_root, mb.event_root);
         assert!(solve_with_live_matrix(&a, &ag, Some(8), "bad").is_err());
+    }
+
+    #[test]
+    fn gguf_starting_state_preserves_direct_passive_and_guided_sat_semantics() {
+        use crate::bitcoin_gguf::{freeze, thaw};
+        use crate::sha256::hash_bytes;
+        let source = "p cnf 3 2\n1 2 0\n-2 3 0\n";
+        let cnf = Cnf::parse(source).expect("source");
+        let guidance = Guidance::for_source(&cnf, Strategy::Base).expect("guidance");
+        let sha = hash_bytes(source.as_bytes());
+        for initial in [
+            [Trit::Zero, Trit::Zero, Trit::Zero],
+            [Trit::Plus, Trit::Zero, Trit::Zero],
+            [Trit::Minus, Trit::Zero, Trit::Zero],
+        ] {
+            let archive = freeze(source.as_bytes(), &initial).expect("frozen GGUF");
+            let restored = thaw(&archive).expect("played GGUF");
+            assert_eq!(restored.states, initial);
+            let baseline = solve_from_assignment(&cnf, &guidance, Some(64), &initial)
+                .expect("baseline seeded");
+            let (passive, watch) = solve_live_from_assignment(
+                &cnf, &guidance, Some(64), &restored.states, &sha
+            ).expect("watched seeded");
+            assert_eq!(baseline, passive, "GGUF passive replay changed DPLL tree");
+            let (guided, live, selector) = solve_guided_from_assignment(
+                &cnf, &guidance, Some(64), &restored.states, &sha
+            ).expect("guided seeded");
+            assert_eq!(guided.status, baseline.status);
+            assert!(guided.model.as_ref().is_none_or(|m| cnf.valid_complete_model(m)));
+            assert_eq!(watch.watcher_reads, watch.freeze_play_pairs);
+            assert_eq!(live.watcher_reads, live.freeze_play_pairs);
+            assert!(selector.choices > 0);
+        }
+        assert!(solve_from_assignment(
+            &cnf, &guidance, None, &[Trit::Zero]
+        ).is_err());
+        let impossible = Cnf::parse("p cnf 1 1\n1 0\n").expect("unit");
+        let g = Guidance::for_source(&impossible, Strategy::Base).expect("guide");
+        let contradictory = solve_from_assignment(
+            &impossible, &g, Some(10), &[Trit::Minus]
+        ).expect("contradictory seed");
+        assert_eq!(contradictory.status, Status::Unsat);
     }
 
     #[test]
