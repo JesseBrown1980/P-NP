@@ -8,6 +8,7 @@ use crate::live_sat_matrix::{freeze_live, play_live};
 use crate::matrix::CELLS;
 use crate::matrix_selector::{MatrixSelectionMetrics, MatrixSelector};
 use crate::sha256::hash_bytes;
+use crate::shadow_selector::{ShadowMetrics, ShadowMode, ShadowSelector};
 use crate::ternary::{Cnf, Trit};
 use std::time::Instant;
 
@@ -148,6 +149,7 @@ struct Searcher<'a> {
     budget: Option<u64>,
     live: Option<LiveObserver<'a>>,
     selector: Option<MatrixSelector>,
+    shadow: Option<ShadowSelector>,
     deadline: Option<Instant>,
     time_exhausted: bool,
     stack_exhausted: bool,
@@ -242,6 +244,13 @@ impl Searcher<'_> {
             } else {
                 None
             }
+        } else if let Some(shadow) = &mut self.shadow {
+            if self.order.iter().any(|&v| propagated[v - 1] == Trit::Zero) {
+                Some(shadow.choose(self.cnf, self.order, &propagated)
+                    .expect("source-verified one/three shadow guide must choose an open variable"))
+            } else {
+                None
+            }
         } else {
             self.order.iter()
                 .copied()
@@ -280,6 +289,10 @@ impl Searcher<'_> {
     }
 }
 
+// Both original matrix and independent three-shadow routing are optional
+// private modes on a shared exact DPLL core. Keep one narrowly scoped lint
+// allowance rather than weakening the repository's strict Clippy gate.
+#[allow(clippy::too_many_arguments)]
 fn solve_internal(
     cnf: &Cnf,
     guidance: &Guidance,
@@ -288,7 +301,8 @@ fn solve_internal(
     selector: Option<MatrixSelector>,
     starting: Option<&[Trit]>,
     deadline: Option<Instant>,
-) -> (Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>) {
+    shadow: Option<ShadowSelector>,
+) -> (Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>, Option<ShadowMetrics>) {
     let mut searcher = Searcher {
         cnf,
         order: &guidance.order,
@@ -298,6 +312,7 @@ fn solve_internal(
         budget,
         live,
         selector,
+        shadow,
         deadline,
         time_exhausted: false,
         stack_exhausted: false,
@@ -328,12 +343,13 @@ fn solve_internal(
         stack_exhausted: searcher.stack_exhausted,
     };
     (solution, searcher.live.map(|observer| observer.stats),
-     searcher.selector.map(MatrixSelector::into_metrics))
+     searcher.selector.map(MatrixSelector::into_metrics),
+     searcher.shadow.map(ShadowSelector::into_metrics))
 }
 
 /// Source-only exact baseline: no matrix work is performed in this path.
 pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
-    solve_internal(cnf, guidance, budget, None, None, None, None).0
+    solve_internal(cnf, guidance, budget, None, None, None, None, None).0
 }
 
 /// The identical exact DPLL propagation and branch logic with live 27-cell
@@ -346,7 +362,7 @@ pub fn solve_with_live_matrix(
     source_sha256: &str,
 ) -> Result<(Solution, LiveSearchMetrics), String> {
     let observer = LiveObserver::new(source_sha256)?;
-    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None, None, None);
+    let (solution, stats, _, _) = solve_internal(cnf, guidance, budget, Some(observer), None, None, None, None);
     Ok((solution, stats.expect("live observer must produce exact metrics")))
 }
 
@@ -362,8 +378,8 @@ pub fn solve_with_matrix_guidance(
 ) -> Result<(Solution, LiveSearchMetrics, MatrixSelectionMetrics), String> {
     let observer = LiveObserver::new(source_sha256)?;
     let selector = MatrixSelector::new(cnf, source_sha256)?;
-    let (solution, live, guided) =
-        solve_internal(cnf, guidance, budget, Some(observer), Some(selector), None, None);
+    let (solution, live, guided, _) =
+        solve_internal(cnf, guidance, budget, Some(observer), Some(selector), None, None, None);
     Ok((
         solution,
         live.expect("matrix-guided solver must retain live frame receipts"),
@@ -384,7 +400,7 @@ pub fn solve_from_assignment(
     if starting.len() != cnf.variables {
         return Err("GGUF resumed assignment differs from original CNF width".to_owned());
     }
-    Ok(solve_internal(cnf, guidance, budget, None, None, Some(starting), None).0)
+    Ok(solve_internal(cnf, guidance, budget, None, None, Some(starting), None, None).0)
 }
 
 /// Same root and exact search tree as solve_from_assignment, with reversible
@@ -400,8 +416,8 @@ pub fn solve_live_from_assignment(
         return Err("GGUF resumed live assignment differs from original CNF width".to_owned());
     }
     let observer = LiveObserver::new(source_sha256)?;
-    let (solution, metrics, _) =
-        solve_internal(cnf, guidance, budget, Some(observer), None, Some(starting), None);
+    let (solution, metrics, _, _) =
+        solve_internal(cnf, guidance, budget, Some(observer), None, Some(starting), None, None);
     Ok((solution, metrics.expect("live GGUF root observer missing")))
 }
 
@@ -419,8 +435,8 @@ pub fn solve_guided_from_assignment(
     }
     let observer = LiveObserver::new(source_sha256)?;
     let selector = MatrixSelector::new(cnf, source_sha256)?;
-    let (solution, live, matrix) = solve_internal(
-        cnf, guidance, budget, Some(observer), Some(selector), Some(starting), None
+    let (solution, live, matrix, _) = solve_internal(
+        cnf, guidance, budget, Some(observer), Some(selector), Some(starting), None, None
     );
     Ok((solution, live.expect("live witness missing"),
         matrix.expect("matrix-guided witness missing")))
@@ -459,9 +475,62 @@ pub fn solve_resumed_until(
     } else {
         None
     };
-    Ok(solve_internal(
-        cnf, guidance, budget, live, selector, Some(starting), Some(deadline)
-    ))
+    let (solution, live, selector, _) = solve_internal(
+        cnf, guidance, budget, live, selector, Some(starting), Some(deadline), None
+    );
+    Ok((solution, live, selector))
+}
+
+/// Same original CNF/DPLL propagation and Boolean branch semantics in all
+/// modes. The source-frozen GGUF supplies the starting ternary assignment;
+/// the selectable heuristic uses one X shadow or three independent X/Y/Z
+/// projected 2-D signed planes. Only three mode reconstructs all 27 cells
+/// with the exact eight-trit witness before any score is accepted.
+pub fn solve_shadow_until(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+    mode: ShadowMode,
+    deadline: Instant,
+) -> Result<(Solution, LiveSearchMetrics, ShadowMetrics), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF initial trits differ from original shadow-CNF width".to_owned());
+    }
+    let observer = LiveObserver::new(source_sha256)?;
+    let selector = ShadowSelector::new(cnf, source_sha256, mode)?;
+    let (solution, live, _, shadow) = solve_internal(
+        cnf, guidance, budget, Some(observer), None, Some(starting),
+        Some(deadline), Some(selector),
+    );
+    Ok((solution, live.expect("shadow watcher disappeared"),
+        shadow.expect("shadow guide disappeared")))
+}
+
+/// Timer-free finite-node research pilot. It evaluates the original source
+/// CNF and true live 27-cell shadow guidance, with the node budget counted
+/// as work rather than a wall-clock lifetime. Independent host runner limits
+/// are separate from the source SAT engine.
+pub fn solve_shadow_from_assignment(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+    mode: ShadowMode,
+) -> Result<(Solution, LiveSearchMetrics, ShadowMetrics), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF shadow starting-state width differs from original CNF".to_owned());
+    }
+    let observer = LiveObserver::new(source_sha256)?;
+    let selector = ShadowSelector::new(cnf, source_sha256, mode)?;
+    let (solution, live, _, shadow) = solve_internal(
+        cnf, guidance, budget, Some(observer), None, Some(starting), None,
+        Some(selector)
+    );
+    Ok((solution, live.expect("exact live shadow frame observer missing"),
+        shadow.expect("exact one/three shadow selector missing")))
 }
 
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
@@ -635,6 +704,40 @@ mod tests {
             assert_eq!(finished.status, Status::Sat);
             assert!(!finished.time_exhausted && !finished.stack_exhausted);
             assert!(check_against_exhaustive(&cnf, &finished));
+        }
+    }
+
+    #[test]
+    fn one_and_three_shadow_guided_exact_sat_and_unsat_complete() {
+        use crate::guidance::{Guidance, Strategy};
+        let sources = [
+            "p cnf 4 2\n1 2 0\n-2 3 0\n",
+            "p cnf 3 8\n1 2 3 0\n1 2 -3 0\n1 -2 3 0\n1 -2 -3 0\n-1 2 3 0\n-1 2 -3 0\n-1 -2 3 0\n-1 -2 -3 0\n",
+        ];
+        for source in sources {
+            let cnf = Cnf::parse(source).expect("parse source");
+            let guidance = Guidance::for_source(&cnf, Strategy::Fischer).expect("fischer");
+            let fingerprint = hash_bytes(source.as_bytes());
+            let direct = solve(&cnf, &guidance, Some(256));
+            for mode in [ShadowMode::One, ShadowMode::Three] {
+                let (candidate, live, projection) = solve_shadow_until(
+                    &cnf, &guidance, Some(256), &vec![Trit::Zero; cnf.variables],
+                    &fingerprint, mode, Instant::now() + std::time::Duration::from_secs(30)
+                ).expect("projected exact SAT");
+                assert_eq!(candidate.status, direct.status);
+                assert!(!candidate.time_exhausted && !candidate.stack_exhausted);
+                assert!(match &candidate.model {
+                    Some(m) => cnf.valid_complete_model(m),
+                    None => true,
+                });
+                assert!(projection.room_projections > 0);
+                assert_eq!(live.freeze_play_pairs, live.watcher_reads);
+                if mode == ShadowMode::Three {
+                    assert!(projection.reconstructed_rooms > 0);
+                } else {
+                    assert_eq!(projection.reconstructed_rooms, 0);
+                }
+            }
         }
     }
 
