@@ -1,0 +1,165 @@
+name: "P-NP Bitcoin three-light three-shadow 3D to 2D exact source reconstruction"
+on:
+  push:
+    branches: [research/bitcoin-three-shadow-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pnp-original-bitcoin-three-shadows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  three-shadow:
+    name: "Project ${{ matrix.case }} complete original Bitcoin RIME 3D rooms into three independent 2D shadows"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Download immutable previously accepted Bitcoin SHA256d source
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - name: Download identical previously verified Bitcoin RimeSphere
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-result-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: prior
+      - name: Original source and prior accepted archive hashes
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "prior/$CASE" && sha256sum -c WORKER.sha256 )
+          cmp "source/$CASE.cnf" "prior/$CASE/BITCOIN.replayed.cnf"
+          python3 -m py_compile research/bitcoin_three_shadow_referee.py
+          echo 'THREE_SHADOW_PRIOR|accepted_run=44652775916|source=BITCOIN_SHA256D|status=PASS'
+      - name: Rust 1.81 exact 3D-to-three-2D geometry and exhaustive interior witnesses
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib three_shadow::tests --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_three_shadows --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_three_shadows --release --offline --locked
+      - name: Freeze three independent signed shadows for every original Bitcoin room
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "output/$CASE"
+          /usr/bin/time -f 'max_rss_kib=%M|wall_seconds=%e' -o "output/$CASE/worker_time.hbp" \
+            native/target/release/bitcoin_three_shadows project "$CASE" \
+            "source/$CASE.cnf" "prior/$CASE" "output/$CASE" \
+            > "output/$CASE/stdout.log" 2> "output/$CASE/stderr.log"
+          grep -Fq 'BITCOIN_THREE_SHADOW_FINAL|schema=1|' "output/$CASE/BITCOIN_THREE_SHADOW.hbp"
+          grep -Fq '|3d_reconstruction=EXACT|gguf_identity=BYTE_EXACT|' "output/$CASE/BITCOIN_THREE_SHADOW.hbp"
+          cmp "source/$CASE.cnf" "output/$CASE/BITCOIN.three_shadows.replayed.cnf"
+          cmp "prior/$CASE/BITCOIN.rimesphere.gguf" "output/$CASE/BITCOIN.three_shadows.gguf"
+          ( cd "output/$CASE" && sha256sum \
+            BITCOIN.three_shadows.bin BITCOIN.three_shadows.hbi \
+            BITCOIN.three_shadows.replayed.cnf BITCOIN.three_shadows.gguf \
+            BITCOIN_THREE_SHADOW.hbp worker_time.hbp stdout.log stderr.log \
+            > SHADOW.sha256 && sha256sum -c SHADOW.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          path: output/
+          retention-days: 30
+          compression-level: 6
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independent exact rank-19 and full Bitcoin three-shadow ${{ matrix.case }} reviewer"
+    needs: three-shadow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-result-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: prior
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          path: output
+      - name: Independently reconstruct all 3D cells from three 2D shadows plus eight witnesses
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "prior/$CASE" && sha256sum -c WORKER.sha256 )
+          ( cd "output/$CASE" && sha256sum -c SHADOW.sha256 )
+          mkdir -p accepted
+          /usr/bin/time -f 'review_max_rss_kib=%M|review_wall_seconds=%e' \
+            -o "accepted/$CASE.REVIEW_TIME.hbp" \
+            python3 -s -B research/bitcoin_three_shadow_referee.py \
+              --case "$CASE" --source "source/$CASE.cnf" \
+              --old "prior/$CASE" --new "output/$CASE" \
+              --out "accepted/$CASE.FINAL.hbp" \
+            > "accepted/$CASE.REFEREE.log"
+          cat "accepted/$CASE.FINAL.hbp"
+          grep -Fq "|case=$CASE|" "accepted/$CASE.FINAL.hbp"
+          grep -Fq '|original_cnf=BYTE_EXACT|three_shadows=RECONSTRUCTED|status=PASS|json=0' "accepted/$CASE.FINAL.hbp"
+          ( cd accepted && sha256sum "$CASE.FINAL.hbp" "$CASE.REFEREE.log" \
+            "$CASE.REVIEW_TIME.hbp" > "$CASE.ACCEPTED.sha256" && \
+            sha256sum -c "$CASE.ACCEPTED.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-three-shadow-accepted-${{ matrix.case }}
+          path: accepted/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Cross-case independent acceptance of three lights, three shadows and exact Bitcoin GGUF"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-three-shadow-accepted-*
+          path: accepted
+          merge-multiple: true
+      - name: Seal both independent full-source three-shadow verdicts
+        run: |
+          set -euo pipefail
+          ( cd accepted && sha256sum -c nonce32.ACCEPTED.sha256 && \
+            sha256sum -c merkle_nonce288.ACCEPTED.sha256 )
+          test "$(grep -l 'BITCOIN_THREE_SHADOW_REFEREE|case=' accepted/*.FINAL.hbp | wc -l)" -eq 2
+          grep -Fq '|shadow_rank=19|missing_dimensions=8|' accepted/nonce32.FINAL.hbp
+          grep -Fq '|shadow_rank=19|missing_dimensions=8|' accepted/merkle_nonce288.FINAL.hbp
+          echo 'BITCOIN_THREE_SHADOW_ARCHIVE|original_cases=2|independent_lights=3|shadows=3|rank=19|witness_trits=8|original_bitcoin=BYTE_EXACT|status=PASS|json=0'
