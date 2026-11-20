@@ -521,9 +521,9 @@ impl Frontier {
         }
         need(reader.offset == bytes.len() - DIGEST_SIZE,
              "checkpoint has undeclared trailing bytes")?;
-        need(!(state == FrontierState::Unsat && !stack.is_empty()),
+        need(state != FrontierState::Unsat || stack.is_empty(),
              "UNSAT certificate contains unresolved original SAT branches")?;
-        need(!(state == FrontierState::Sat && !cnf.valid_complete_model(&assignment)),
+        need(state != FrontierState::Sat || cnf.valid_complete_model(&assignment),
              "SAT certificate fails original complete CNF")?;
         need(nodes >= decisions && propagations >= trail.len() as u64,
              "checkpoint search-work counters impossible")?;
