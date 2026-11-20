@@ -196,6 +196,7 @@ fn parse_num(text: &str, field: &str) -> Result<u64> {
     text.parse::<u64>().map_err(|_| format!("invalid {field} integer"))
 }
 fn read_field<'a>(line: &'a str, key: &str) -> Result<&'a str> {
+    let line = line.trim_end_matches('\n');
     let prefix = format!("{key}=");
     let mut found = line.split('|').filter_map(|field| field.strip_prefix(&prefix));
     let value = found.next().ok_or_else(|| format!("missing field {key}"))?;
@@ -240,7 +241,6 @@ fn old_rime_identity(
     header: &[u8; RIME_HEADER_BYTES],
     expected_slice: u64,
     expected_offset: u64,
-    previous: &str,
 ) -> Result<(usize, usize, String, String)> {
     if &header[..8] != RIME_MAGIC
         || n64(&header[8..16]) != expected_slice
@@ -266,7 +266,6 @@ fn old_rime_identity(
     {
         return Err("invalid original RimeSphere root width".to_owned());
     }
-    let _ = previous;
     Ok((used, rooms, source_sha, root))
 }
 
@@ -276,7 +275,7 @@ fn verify_rime_plane(
     let mut original = Vec::with_capacity(used);
     for six in plane[..used * DIGITS_PER_BYTE].chunks_exact(DIGITS_PER_BYTE) {
         let byte = trits_byte(six)?;
-        if six != byte_trits(byte) {
+        if six != byte_trits(byte).as_slice() {
             return Err("original RimeSphere source ternary projection differs".to_owned());
         }
         original.push(byte);
@@ -302,8 +301,7 @@ pub fn freeze_stream<R: Read, W: Write, I: Write>(
     };
     while let Some(header) = get_header(rime)? {
         let (used, rooms, source_sha, rime_root) =
-            old_rime_identity(&header, stats.slices, stats.source_bytes,
-                              &stats.original_rime_root)?;
+            old_rime_identity(&header, stats.slices, stats.source_bytes)?;
         let plane = take(rime, rooms * CELLS)?;
         verify_rime_plane(&plane, used, &source_sha)?;
         let expected_rime = hash_bytes(format!(
@@ -399,7 +397,7 @@ pub fn play_stream<R: Read, I: BufRead, W: Write>(
         let mut original = Vec::with_capacity(used);
         for six in plane[..used * DIGITS_PER_BYTE].chunks_exact(DIGITS_PER_BYTE) {
             let byte = trits_byte(six)?;
-            if byte_trits(byte) != six {
+            if byte_trits(byte).as_slice() != six {
                 return Err("noncanonical recovered source byte from three shadows".to_owned());
             }
             original.push(byte);
