@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 17] = [
+const ACCEPTED_WORKFLOWS: [&str; 18] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
     ".github/workflows/pnp-qprism-hosted-transport.yml",
@@ -25,10 +25,11 @@ const ACCEPTED_WORKFLOWS: [&str; 17] = [
     ".github/workflows/pnp-bitcoin-fischer-frozen-gguf.yml",
     ".github/workflows/pnp-bitcoin-gguf-sat-resume.yml",
     ".github/workflows/pnp-bitcoin-gguf-raised-300s.yml",
+    ".github/workflows/pnp-bitcoin-rimesphere-stream.yml",
 ];
 // Explicit research-only model analysis, executed by pinned hosted workflow.
 // Native production and transport still accept only Rust implementations.
-const ACCEPTED_RESEARCH_SOURCE: [&str; 13] = [
+const ACCEPTED_RESEARCH_SOURCE: [&str; 14] = [
     "research/gnn_original_checkpoint_compare.py",
     "research/stone_moss_recovery_verify.py",
     "research/stone_moss_checkpoint_forward.py",
@@ -42,6 +43,7 @@ const ACCEPTED_RESEARCH_SOURCE: [&str; 13] = [
     "research/bitcoin_matrix_guided_referee.py",
     "research/bitcoin_gguf_fischer_referee.py",
     "research/bitcoin_gguf_sat_resume_referee.py",
+    "research/bitcoin_rimesphere_stream_referee.py",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
@@ -244,6 +246,7 @@ mod tests {
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[14]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[15]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[16]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[17]));
         assert!(ACCEPTED_RESEARCH_SOURCE.iter().all(|p| p.starts_with("research/")));
         assert!(!ACCEPTED_RESEARCH_SOURCE.contains(&"native/research/gnn_original_checkpoint_compare.py"));
     }
