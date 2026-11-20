@@ -7,7 +7,8 @@ use pnp_native::bitcoin_gguf::{freeze, play_variable, thaw};
 use pnp_native::guidance::{Guidance, Strategy};
 use pnp_native::sha256::hash_bytes;
 use pnp_native::solver::{
-    solve_from_assignment, solve_guided_from_assignment, solve_live_from_assignment, Status,
+    solve_from_assignment, solve_guided_from_assignment, solve_live_from_assignment,
+    solve_resumed_until, ResumeMode, Status,
 };
 use pnp_native::ternary::{Cnf, Trit};
 use std::collections::BTreeSet;
@@ -58,6 +59,24 @@ fn run(mode: &str, case: &str, cnf_path: &Path, out: &Path) -> Result<()> {
     require(matches!(mode, "direct" | "gguf" | "guided"),
             "run mode must be direct, gguf or guided")?;
     let started = Instant::now();
+    let raised_nodes = match env::var("PNP_BTC_NODE_CAP") {
+        Ok(value) => {
+            let cap = value.parse::<u64>().map_err(|_| "invalid raised node cap")?;
+            require(cap >= 1 && cap <= 1_000_000_000_000,
+                    "raised node cap outside documented 1..1e12 range")?;
+            cap
+        }
+        Err(env::VarError::NotPresent) => BUDGET_NODES,
+        Err(_) => return Err("nonunicode raised node cap".to_owned()),
+    };
+    // Keep source parsing, real GGUF I/O, Fischer inverse reads, route,
+    // solver and receipt inside the separate external 300-second gate.
+    // High-cap trials stop at 285 seconds to leave receipt write margin.
+    let raised_deadline = if raised_nodes != BUDGET_NODES {
+        Some(started + std::time::Duration::from_secs(285))
+    } else {
+        None
+    };
     let raw = fs::read(cnf_path).map_err(|e| format!("original source read: {e}"))?;
     let (cnf, sha) = authentic(case, &raw)?;
     let source_parse_ns = started.elapsed().as_nanos();
@@ -115,27 +134,42 @@ fn run(mode: &str, case: &str, cnf_path: &Path, out: &Path) -> Result<()> {
     let guidance = Guidance::for_source(&cnf, Strategy::Fischer)?;
     let route_ns = t.elapsed().as_nanos();
     let t = Instant::now();
-    let (solution, live, selector) = match mode {
-        "direct" => (
-            solve_from_assignment(&cnf, &guidance, Some(BUDGET_NODES), &states)?,
-            None, None
-        ),
-        "gguf" => {
-            let (solution, live) = solve_live_from_assignment(
-                &cnf, &guidance, Some(BUDGET_NODES), &states, &sha
-            )?;
-            (solution, Some(live), None)
+    let (solution, live, selector) = if let Some(deadline) = raised_deadline {
+        let resumed_mode = match mode {
+            "direct" => ResumeMode::Direct,
+            "gguf" => ResumeMode::Played,
+            "guided" => ResumeMode::Guided,
+            _ => return Err("unknown raised-node mode".to_owned()),
+        };
+        solve_resumed_until(
+            &cnf, &guidance, Some(raised_nodes), &states, &sha,
+            resumed_mode, deadline,
+        )?
+    } else {
+        match mode {
+            "direct" => (
+                solve_from_assignment(&cnf, &guidance, Some(BUDGET_NODES), &states)?,
+                None, None
+            ),
+            "gguf" => {
+                let (solution, live) = solve_live_from_assignment(
+                    &cnf, &guidance, Some(BUDGET_NODES), &states, &sha
+                )?;
+                (solution, Some(live), None)
+            }
+            "guided" => {
+                let (solution, live, selector) = solve_guided_from_assignment(
+                    &cnf, &guidance, Some(BUDGET_NODES), &states, &sha
+                )?;
+                (solution, Some(live), Some(selector))
+            }
+            _ => return Err("unsupported mode".to_owned()),
         }
-        "guided" => {
-            let (solution, live, selector) = solve_guided_from_assignment(
-                &cnf, &guidance, Some(BUDGET_NODES), &states, &sha
-            )?;
-            (solution, Some(live), Some(selector))
-        }
-        _ => return Err("unsupported mode".to_owned()),
     };
     let solver_ns = t.elapsed().as_nanos();
-    require(solution.nodes <= BUDGET_NODES, "original solver violated node cap")?;
+    require(solution.nodes <= raised_nodes, "original solver violated node cap")?;
+    let timer_fired = solution.time_exhausted;
+    let stack_fired = solution.stack_exhausted;
     let (status, model) = match (solution.status, solution.model) {
         (Status::Sat, Some(states)) => {
             require(cnf.valid_complete_model(&states),
@@ -145,7 +179,10 @@ fn run(mode: &str, case: &str, cnf_path: &Path, out: &Path) -> Result<()> {
                 .map_err(|e| format!("SAT model write: {e}"))?;
             ("SAT", hash_bytes(text.as_bytes()))
         }
-        (Status::Hold, None) => ("HOLD_NODE", "NONE".to_owned()),
+        (Status::Hold, None) => (
+            if timer_fired { "HOLD_TIME" } else if stack_fired { "HOLD_STACK" }
+            else { "HOLD_NODE" }, "NONE".to_owned()
+        ),
         (Status::Unsat, _) => return Err(
             "original full Bitcoin satisfiable genesis source cannot be UNSAT".to_owned()
         ),
@@ -179,7 +216,9 @@ fn run(mode: &str, case: &str, cnf_path: &Path, out: &Path) -> Result<()> {
          fischer_reads={fischer_reads}|fischer_trace_sha256={fischer_trace_sha}|\
          source_parse_ns={source_parse_ns}|fischer_route_ns={route_ns}|\
          solver_ns={solver_ns}|total_ns={total_ns}|wall_budget_seconds=300|\
-         node_cap={BUDGET_NODES}|nodes={}|propagations={}|literal_checks={}|\
+         node_cap={raised_nodes}|internal_deadline_s={}|\
+         time_exhausted={timer_fired}|stack_exhausted={stack_fired}|\
+         nodes={}|propagations={}|literal_checks={}|\
          live_frames={frames}|live_watcher_reads={watchers}|\
          live_frozen_bytes={frame_bytes}|live_metadata_bytes={metadata_bytes}|\
          live_matrix_ns={matrix_ns}|live_frame_root={frame_root}|\
@@ -191,6 +230,7 @@ fn run(mode: &str, case: &str, cnf_path: &Path, out: &Path) -> Result<()> {
          selector_root={selector_root}|model_sha256={model}|\
          known_bitcoin_nonce_injected=NO|original_clauses=EXACT|json=0\n",
         cnf.variables, cnf.clauses.len(),
+        if raised_deadline.is_some() { 285 } else { 0 },
         solution.nodes, solution.propagations, solution.literal_checks
     );
     fs::write(out.join("receipt.hbp"), &receipt)
