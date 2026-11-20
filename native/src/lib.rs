@@ -5,6 +5,7 @@
 pub mod behcs_glyph_language;
 pub mod binary_ternary_bridge;
 pub mod bitcoin_gguf;
+pub mod bitcoin_rimesphere_stream;
 pub mod brown_ledger;
 pub mod checkpoint;
 pub mod ensemble;
