@@ -270,15 +270,26 @@ def main():
         "shadow_stream_wall_ns","shadow_play_wall_ns","gguf_wall_ns","total_wall_ns"
     )), "unmetered three-shadow processing")
     controls = 0
+    with (args.old/"BITCOIN.rime").open("rb") as stream:
+        need(len(stream.read(HEADER)) == HEADER, "original first room absent")
+        first_original_room = stream.read(ROOM)
+    with (args.new/"BITCOIN.three_shadows.bin").open("rb") as stream:
+        original_shadow_room = stream.read(RECORD)
+    need(len(first_original_room) == ROOM and
+         len(original_shadow_room) == RECORD,
+         "original three-shadow negative control missing")
     for where in (0,26,27,34):
-        with (args.new/"BITCOIN.three_shadows.bin").open("rb") as stream:
-            sample = bytearray(stream.read(RECORD))
+        sample = bytearray(original_shadow_room)
         sample[where] ^= 32
+        need(sha(sample) != sha(original_shadow_room),
+             "tampered 2D shadow record failed to change its hash")
         try:
             played = play_record(bytes(sample))
-            need(played != source[:ROOM], "unexpected unchanged room")
         except ValueError:
             pass
+        else:
+            need(played != first_original_room,
+                 "tampered three-shadow projection unexpectedly preserved 3D source")
         controls += 1
     genesis = btc.PREFIX + btc.NONCE.to_bytes(4,"little")
     need(btc.double_sha(genesis) == btc.TARGET,
