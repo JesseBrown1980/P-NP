@@ -682,8 +682,8 @@ mod tests {
     fn one_and_three_shadow_guided_exact_sat_and_unsat_complete() {
         use crate::guidance::{Guidance, Strategy};
         let sources = [
-            "p cnf 4 2\\n1 2 0\\n-2 3 0\\n",
-            "p cnf 3 8\\n1 2 3 0\\n1 2 -3 0\\n1 -2 3 0\\n1 -2 -3 0\\n-1 2 3 0\\n-1 2 -3 0\\n-1 -2 3 0\\n-1 -2 -3 0\\n",
+            "p cnf 4 2\n1 2 0\n-2 3 0\n",
+            "p cnf 3 8\n1 2 3 0\n1 2 -3 0\n1 -2 3 0\n1 -2 -3 0\n-1 2 3 0\n-1 2 -3 0\n-1 -2 3 0\n-1 -2 -3 0\n",
         ];
         for source in sources {
             let cnf = Cnf::parse(source).expect("parse source");
