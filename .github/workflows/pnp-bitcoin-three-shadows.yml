@@ -45,7 +45,9 @@ jobs:
         run: |
           set -euo pipefail
           ( cd source && sha256sum -c SOURCE.sha256 )
-          ( cd "prior/$CASE" && sha256sum -c WORKER.sha256 )
+          mkdir -p results
+          ln -s "../prior/$CASE" "results/$CASE"
+          sha256sum -c "prior/$CASE/WORKER.sha256"
           cmp "source/$CASE.cnf" "prior/$CASE/BITCOIN.replayed.cnf"
           python3 -m py_compile research/bitcoin_three_shadow_referee.py
           echo 'THREE_SHADOW_PRIOR|accepted_run=44652775916|source=BITCOIN_SHA256D|status=PASS'
@@ -120,7 +122,9 @@ jobs:
         run: |
           set -euo pipefail
           ( cd source && sha256sum -c SOURCE.sha256 )
-          ( cd "prior/$CASE" && sha256sum -c WORKER.sha256 )
+          mkdir -p results
+          ln -s "../prior/$CASE" "results/$CASE"
+          sha256sum -c "prior/$CASE/WORKER.sha256"
           ( cd "output/$CASE" && sha256sum -c SHADOW.sha256 )
           mkdir -p accepted
           /usr/bin/time -f 'review_max_rss_kib=%M|review_wall_seconds=%e' \
