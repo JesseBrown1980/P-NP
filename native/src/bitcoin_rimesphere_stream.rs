@@ -96,8 +96,10 @@ pub fn addressed_trit(
     trits: &[u8],
 ) -> Result<(u64, u64, u8)> {
     if room >= MAX_ROOMS_PER_SLICE || cell >= CELLS
-        || room.checked_mul(CELLS).and_then(|n| n.checked_add(cell))
-            .is_none_or(|index| index >= trits.len())
+        || match room.checked_mul(CELLS).and_then(|n| n.checked_add(cell)) {
+            Some(index) => index >= trits.len(),
+            None => true,
+        }
     {
         return Err(failure("Fischer address exceeds actual RimeSphere slice"));
     }
