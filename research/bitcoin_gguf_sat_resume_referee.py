@@ -7,6 +7,7 @@ HOLD outcomes are checked without injecting the known Bitcoin nonce.
 """
 import argparse
 import hashlib
+import time
 from pathlib import Path
 
 import bitcoin_gguf_fischer_referee as format_ref
@@ -219,9 +220,11 @@ def main():
         need(sha(original) == bitcoin.CASES[case][0],
              "original Bitcoin SHA256d CNF source differs")
         for mode in MODES:
+            verify_started = time.perf_counter_ns()
             known[mode, case] = independent_trial(
                 case, mode, original, args.results
             )
+            known[mode, case]["referee_ns"] = time.perf_counter_ns() - verify_started
     parity = 0
     for case in CASES:
         a, b = known["direct", case], known["gguf", case]
@@ -236,7 +239,8 @@ def main():
             value = known[mode, case]
             records.append(
                 "BTC_GGUF_SAT_TRIAL|case={case}|mode={mode}|status={status}|"
-                "nodes={nodes}|total_ns={time}|gguf_sha256={gguf}|"
+                "nodes={nodes}|total_ns={time}|"
+                "independent_referee_ns={referee_ns}|gguf_sha256={gguf}|"
                 "source_sha256={source}|json=0".format(**value)
             )
     body = "\n".join(records) + "\n"
