@@ -87,12 +87,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "results/$MODE/$CASE"
-          /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' \
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' \
             -o "results/$MODE/$CASE/worker_time.hbp" \
             native/target/release/bitcoin_shadow_compare run "$MODE" "$CASE" \
             "source/$CASE.cnf" "accepted/$CASE/BITCOIN.three_shadows.gguf" \
             "results/$MODE/$CASE" \
-            > "results/$MODE/$CASE/stdout.log" 2> "results/$MODE/$CASE/stderr.log"
+            > "results/$MODE/$CASE/stdout.log" 2> "results/$MODE/$CASE/stderr.log"; then
+            cat "results/$MODE/$CASE/stderr.log" >&2
+            exit 1
+          fi
           grep -Fq "BTC_THREE_SHADOW_SEARCH|schema=1|case=$CASE|mode=$MODE|" "results/$MODE/$CASE/receipt.hbp"
           grep -Fq '|artificial_timer=NO|known_nonce_injected=NO|' "results/$MODE/$CASE/receipt.hbp"
           ( cd "results/$MODE/$CASE" && sha256sum \
