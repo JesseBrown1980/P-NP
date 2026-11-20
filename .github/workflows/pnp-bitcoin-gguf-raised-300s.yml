@@ -1,0 +1,166 @@
+name: "P-NP original Bitcoin GGUF Fischer full 300-second raised-node SAT contest"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  original-source:
+    name: "Generate immutable original Bitcoin SHA256d CNFs (32 and 288 free bits)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original generator source integrity and external referees
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          python3 -m py_compile research/bitcoin_gguf_fischer_referee.py research/bitcoin_live_sat_referee.py research/bitcoin_gguf_sat_resume_referee.py
+      - name: Byte-authenticated Bitcoin SHA256d CNFs
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/BUILD.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum nonce32.cnf nonce32.txt merkle_nonce288.cnf merkle_nonce288.txt BUILD.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-gguf-raised-300s-original-source
+          path: source/
+          if-no-files-found: error
+          retention-days: 30
+
+  matched-search:
+    name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: 1e12-node ceiling and 300s total worker"
+    needs: original-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+        mode: [direct, gguf, guided]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-gguf-raised-300s-original-source
+          path: source
+      - name: Native Rust 1.81 original solver, GGUF, Fischer and matrix acceptance
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib bitcoin_gguf::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib solver::tests::gguf_starting_state_preserves_direct_passive_and_guided_sat_semantics --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib solver::tests::resumed_source_time_and_stack_guards_are_honest --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib matrix_selector::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib fischer_prime_tower::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_gguf_sat_resume --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_gguf_sat_resume --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_gguf_sat_resume --release --offline --locked
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Include true source read, GGUF freeze/write/read/play and search in 300s
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+          PNP_BTC_NODE_CAP: "1000000000000"
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$MODE/$CASE"
+          set +e
+          /usr/bin/time -f '%M' -o "results/$MODE/$CASE/rss.txt" timeout --kill-after=3s 300s \
+            native/target/release/bitcoin_gguf_sat_resume run "$MODE" "$CASE" \
+            "source/$CASE.cnf" "results/$MODE/$CASE" \
+            > "results/$MODE/$CASE/stdout.log" 2> "results/$MODE/$CASE/stderr.log"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 124 ]; then
+            test ! -e "results/$MODE/$CASE/receipt.hbp"
+            test ! -e "results/$MODE/$CASE/model.trits"
+            printf 'PNP_BTC_GGUF_TIMEOUT|mode=%s|case=%s|wall_budget_s=300|status=HOLD_TIME|nodes=UNOBSERVED|json=0\n' "$MODE" "$CASE" > "results/$MODE/$CASE/timeout.hbp"
+          elif [ "$rc" -eq 0 ]; then
+            test -f "results/$MODE/$CASE/receipt.hbp"
+            grep -Fq '|original_clauses=EXACT|json=0' "results/$MODE/$CASE/receipt.hbp"
+          grep -Fq '|node_cap=1000000000000|internal_deadline_s=285|' "results/$MODE/$CASE/receipt.hbp"
+          else
+            echo "native original Bitcoin GGUF search exit code $rc" >&2
+            tail -n 60 "results/$MODE/$CASE/stderr.log" >&2
+            exit "$rc"
+          fi
+          ( cd results && find "$MODE/$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$MODE-$CASE.FILES.sha256" )
+          ( cd results && sha256sum -c "$MODE-$CASE.FILES.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-gguf-raised-300s-result-${{ matrix.mode }}-${{ matrix.case }}
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+
+  independent-referee:
+    name: "Independent original-source SHA256d, standard GGUF, Fischer replay and SAT referee"
+    needs: matched-search
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-gguf-raised-300s-original-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-gguf-raised-300s-result-*
+          path: results
+          merge-multiple: true
+      - name: Independently validate all six original Bitcoin trials
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          for mode in direct gguf guided; do
+            for case in nonce32 merkle_nonce288; do
+              ( cd results && sha256sum -c "$mode-$case.FILES.sha256" )
+            done
+          done
+          python3 -s -B research/bitcoin_gguf_sat_resume_referee.py \
+            --node-cap 1000000000000 --source source --results results --out BTC_GGUF_SAT_FINAL.hbp | tee BTC_GGUF_SAT_REFEREE.log
+          grep -Fq 'BTC_GGUF_SAT_FINAL|schema=1|source=ORIGINAL_BITCOIN_GENESIS_SHA256D|cases=2|modes=3|trials=6|' BTC_GGUF_SAT_FINAL.hbp
+          grep -Fq '|states=REAL_REPLAYED_GGUF|' BTC_GGUF_SAT_FINAL.hbp
+          grep -Fq '|node_cap_each=1000000000000|wall_seconds_each=300|' BTC_GGUF_SAT_FINAL.hbp
+          test "$(grep -c '^BTC_GGUF_SAT_TRIAL|' BTC_GGUF_SAT_FINAL.hbp)" -eq 6
+          mkdir -p acceptance
+          cp BTC_GGUF_SAT_FINAL.hbp BTC_GGUF_SAT_REFEREE.log acceptance/
+          ( cd acceptance && sha256sum BTC_GGUF_SAT_FINAL.hbp BTC_GGUF_SAT_REFEREE.log > ACCEPTANCE.sha256 && sha256sum -c ACCEPTANCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-gguf-raised-300s-accepted
+          path: acceptance/
+          if-no-files-found: error
+          retention-days: 30
+
+  archive-readback:
+    name: "Independent readback of six full Bitcoin GGUF-resumed SAT verdicts"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-gguf-raised-300s-accepted
+          path: acceptance
+      - name: Verify final source-only original Bitcoin comparison receipts
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ACCEPTANCE.sha256 )
+          test "$(grep -c '^BTC_GGUF_SAT_TRIAL|' acceptance/BTC_GGUF_SAT_FINAL.hbp)" -eq 6
+          grep -Fq '|status=PASS|json=0' acceptance/BTC_GGUF_SAT_FINAL.hbp
+          echo 'BTC_GGUF_SAT_ARCHIVE|cases=2|modes=3|trials=6|source=PASS|status=PASS|json=0'
