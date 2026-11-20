@@ -18,7 +18,7 @@ use pnp_native::ternary::{Cnf, Trit};
 const NONCE32: &str =
     "6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3";
 const MERKLE288: &str =
-    "601412f3d918c401b00df22a1b2799e50811d7fb1fa6bb4b";
+    "601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b";
 const NODE_BUDGET: u64 = 2;
 type Result<T> = std::result::Result<T, String>;
 
