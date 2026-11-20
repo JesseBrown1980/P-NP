@@ -498,7 +498,7 @@ impl Frontier {
             assignment[variable - 1] = value;
             trail.push((variable, value));
         }
-        let mut stack = Vec::with_capacity(frame_count);
+        let mut stack: Vec<ChoiceFrame> = Vec::with_capacity(frame_count);
         for _ in 0..frame_count {
             let variable = reader.u32()? as usize;
             let mark = reader.u32()? as usize;
