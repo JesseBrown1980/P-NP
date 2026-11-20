@@ -31,6 +31,9 @@ pub struct ShadowMetrics {
     pub source_sha256: String,
     pub choices: u64,
     pub non_first_choices: u64,
+    pub first_order_candidate: u64,
+    pub first_shadow_candidate: u64,
+    pub first_shadow_score: u64,
     pub room_projections: u64,
     pub pixel_reads: u64,
     pub source_trit_reads: u64,
@@ -88,7 +91,9 @@ impl ShadowSelector {
             source: source.to_owned(), mode, signs,
             metrics: ShadowMetrics {
                 mode, source_sha256: source.to_owned(), choices: 0,
-                non_first_choices: 0, room_projections: 0,
+                non_first_choices: 0, first_order_candidate: 0,
+                first_shadow_candidate: 0, first_shadow_score: 0,
+                room_projections: 0,
                 pixel_reads: 0, source_trit_reads: 0,
                 stored_projection_bytes: 0, reconstructed_rooms: 0,
                 source_index_bytes: u64::try_from(cnf.variables)
@@ -176,6 +181,11 @@ impl ShadowSelector {
             }
         }
         increment(&mut self.metrics.choices, 1);
+        if self.metrics.choices == 1 {
+            self.metrics.first_order_candidate = first as u64;
+            self.metrics.first_shadow_candidate = best as u64;
+            self.metrics.first_shadow_score = max_score;
+        }
         if best != first {
             increment(&mut self.metrics.non_first_choices, 1);
         }
