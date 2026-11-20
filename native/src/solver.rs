@@ -36,6 +36,10 @@ pub struct Solution {
     pub propagations: u64,
     pub literal_checks: u64,
     pub budget: Option<u64>,
+    /// True only when the source-to-receipt experiment's internal deadline fired.
+    pub time_exhausted: bool,
+    /// True if the bounded recursive engine reached its explicit safe stack cap.
+    pub stack_exhausted: bool,
 }
 
 
@@ -144,6 +148,9 @@ struct Searcher<'a> {
     budget: Option<u64>,
     live: Option<LiveObserver<'a>>,
     selector: Option<MatrixSelector>,
+    deadline: Option<Instant>,
+    time_exhausted: bool,
+    stack_exhausted: bool,
 }
 
 impl Searcher<'_> {
@@ -203,7 +210,19 @@ impl Searcher<'_> {
         }
     }
 
-    fn recurse(&mut self, original: &[Trit]) -> Search {
+    fn recurse(&mut self, original: &[Trit], depth: usize) -> Search {
+        // An internal deadline lets the worker publish independently
+        // verifiable HOLD_TIME meters before the external 300-second kill.
+        if self.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            self.time_exhausted = true;
+            return Search::Hold;
+        }
+        // A high node ceiling must not turn a legitimate large-CNF hold
+        // into a process-aborting recursion stack overflow.
+        if self.deadline.is_some() && depth >= 1024 {
+            self.stack_exhausted = true;
+            return Search::Hold;
+        }
         if self.budget.is_some_and(|budget| self.nodes >= budget) {
             return Search::Hold;
         }
@@ -247,7 +266,7 @@ impl Searcher<'_> {
             if let Some(observer) = &mut self.live {
                 observer.record(&next, variable, "BRANCH");
             }
-            match self.recurse(&next) {
+            match self.recurse(&next, depth + 1) {
                 Search::Sat(model) => return Search::Sat(model),
                 Search::Hold => saw_hold = true,
                 Search::Unsat => {}
@@ -268,6 +287,7 @@ fn solve_internal(
     live: Option<LiveObserver<'_>>,
     selector: Option<MatrixSelector>,
     starting: Option<&[Trit]>,
+    deadline: Option<Instant>,
 ) -> (Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>) {
     let mut searcher = Searcher {
         cnf,
@@ -278,6 +298,9 @@ fn solve_internal(
         budget,
         live,
         selector,
+        deadline,
+        time_exhausted: false,
+        stack_exhausted: false,
     };
     let zero;
     let initial = if let Some(source) = starting {
@@ -286,7 +309,7 @@ fn solve_internal(
         zero = vec![Trit::Zero; cnf.variables];
         &zero
     };
-    let status = searcher.recurse(initial);
+    let status = searcher.recurse(initial, 0);
     let (status, model) = match status {
         Search::Sat(values) => {
             assert!(cnf.valid_complete_model(&values),
@@ -301,6 +324,8 @@ fn solve_internal(
         propagations: searcher.propagations,
         literal_checks: searcher.literal_checks,
         budget,
+        time_exhausted: searcher.time_exhausted,
+        stack_exhausted: searcher.stack_exhausted,
     };
     (solution, searcher.live.map(|observer| observer.stats),
      searcher.selector.map(MatrixSelector::into_metrics))
@@ -308,7 +333,7 @@ fn solve_internal(
 
 /// Source-only exact baseline: no matrix work is performed in this path.
 pub fn solve(cnf: &Cnf, guidance: &Guidance, budget: Option<u64>) -> Solution {
-    solve_internal(cnf, guidance, budget, None, None, None).0
+    solve_internal(cnf, guidance, budget, None, None, None, None).0
 }
 
 /// The identical exact DPLL propagation and branch logic with live 27-cell
@@ -321,7 +346,7 @@ pub fn solve_with_live_matrix(
     source_sha256: &str,
 ) -> Result<(Solution, LiveSearchMetrics), String> {
     let observer = LiveObserver::new(source_sha256)?;
-    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None, None);
+    let (solution, stats, _) = solve_internal(cnf, guidance, budget, Some(observer), None, None, None);
     Ok((solution, stats.expect("live observer must produce exact metrics")))
 }
 
@@ -338,7 +363,7 @@ pub fn solve_with_matrix_guidance(
     let observer = LiveObserver::new(source_sha256)?;
     let selector = MatrixSelector::new(cnf, source_sha256)?;
     let (solution, live, guided) =
-        solve_internal(cnf, guidance, budget, Some(observer), Some(selector), None);
+        solve_internal(cnf, guidance, budget, Some(observer), Some(selector), None, None);
     Ok((
         solution,
         live.expect("matrix-guided solver must retain live frame receipts"),
@@ -359,7 +384,7 @@ pub fn solve_from_assignment(
     if starting.len() != cnf.variables {
         return Err("GGUF resumed assignment differs from original CNF width".to_owned());
     }
-    Ok(solve_internal(cnf, guidance, budget, None, None, Some(starting)).0)
+    Ok(solve_internal(cnf, guidance, budget, None, None, Some(starting), None).0)
 }
 
 /// Same root and exact search tree as solve_from_assignment, with reversible
@@ -376,7 +401,7 @@ pub fn solve_live_from_assignment(
     }
     let observer = LiveObserver::new(source_sha256)?;
     let (solution, metrics, _) =
-        solve_internal(cnf, guidance, budget, Some(observer), None, Some(starting));
+        solve_internal(cnf, guidance, budget, Some(observer), None, Some(starting), None);
     Ok((solution, metrics.expect("live GGUF root observer missing")))
 }
 
@@ -395,10 +420,48 @@ pub fn solve_guided_from_assignment(
     let observer = LiveObserver::new(source_sha256)?;
     let selector = MatrixSelector::new(cnf, source_sha256)?;
     let (solution, live, matrix) = solve_internal(
-        cnf, guidance, budget, Some(observer), Some(selector), Some(starting)
+        cnf, guidance, budget, Some(observer), Some(selector), Some(starting), None
     );
     Ok((solution, live.expect("live witness missing"),
         matrix.expect("matrix-guided witness missing")))
+}
+
+/// The entire outer worker has its own 300-second limit. This exact
+/// recursive SAT call also accepts a conservative internal absolute stop
+/// time, so it can return node and replay receipts before host termination.
+/// It supports direct/played/guided models from the same authenticated root.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResumeMode {
+    Direct,
+    Played,
+    Guided,
+}
+
+pub fn solve_resumed_until(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+    mode: ResumeMode,
+    deadline: Instant,
+) -> Result<(Solution, Option<LiveSearchMetrics>, Option<MatrixSelectionMetrics>), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF replay root width does not match full original CNF".to_owned());
+    }
+    let live = if mode != ResumeMode::Direct {
+        Some(LiveObserver::new(source_sha256)?)
+    } else {
+        None
+    };
+    let selector = if mode == ResumeMode::Guided {
+        Some(MatrixSelector::new(cnf, source_sha256)?)
+    } else {
+        None
+    };
+    Ok(solve_internal(
+        cnf, guidance, budget, live, selector, Some(starting), Some(deadline)
+    ))
 }
 
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
@@ -547,6 +610,32 @@ mod tests {
             &impossible, &g, Some(10), &[Trit::Minus]
         ).expect("contradictory seed");
         assert_eq!(contradictory.status, Status::Unsat);
+    }
+
+    #[test]
+    fn resumed_source_time_and_stack_guards_are_honest() {
+        use crate::sha256::hash_bytes;
+        let source = "p cnf 3 2\n1 2 0\n-2 3 0\n";
+        let cnf = Cnf::parse(source).expect("source");
+        let order = Guidance::for_source(&cnf, Strategy::Base).expect("order");
+        let fingerprint = hash_bytes(source.as_bytes());
+        for mode in [ResumeMode::Direct, ResumeMode::Played, ResumeMode::Guided] {
+            let (stopped, _, _) = solve_resumed_until(
+                &cnf, &order, Some(1000), &[Trit::Zero; 3],
+                &fingerprint, mode, Instant::now()
+            ).expect("timeout");
+            assert_eq!(stopped.status, Status::Hold);
+            assert!(stopped.time_exhausted);
+            assert!(!stopped.stack_exhausted);
+            assert_eq!(stopped.nodes, 0);
+            let (finished, _, _) = solve_resumed_until(
+                &cnf, &order, Some(1000), &[Trit::Zero; 3],
+                &fingerprint, mode, Instant::now() + std::time::Duration::from_secs(60)
+            ).expect("complete");
+            assert_eq!(finished.status, Status::Sat);
+            assert!(!finished.time_exhausted && !finished.stack_exhausted);
+            assert!(check_against_exhaustive(&cnf, &finished));
+        }
     }
 
     #[test]
