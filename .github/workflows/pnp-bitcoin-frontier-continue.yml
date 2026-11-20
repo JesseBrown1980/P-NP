@@ -10,6 +10,7 @@ concurrency:
   group: pnp-bitcoin-continuous-frontier-${{ github.ref }}
   cancel-in-progress: true
 
+jobs:
   step8:
     name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: persisted frontier 8 visited nodes"
     runs-on: ubuntu-24.04
