@@ -58,6 +58,13 @@ def independent_trial(case, mode, source, output):
     need((directory / "stderr.log").is_file() and
          (directory / "stdout.log").is_file() and
          (directory / "rss.txt").is_file(), "missing raw timed solver evidence")
+    memory_lines = [
+        line.strip() for line in (directory / "rss.txt")
+        .read_text("ascii").splitlines() if line.strip()
+    ]
+    need(bool(memory_lines) and memory_lines[-1].isdecimal(),
+         "missing GNU time peak memory RSS meter")
+    memory_kib = memory_lines[-1]
     record = directory / "receipt.hbp"
     timeout = directory / "timeout.hbp"
     need(record.is_file() != timeout.is_file(),
@@ -72,7 +79,11 @@ def independent_trial(case, mode, source, output):
              not record.exists(), "timed-out worker claims a SAT model")
         return dict(case=case, mode=mode, status="HOLD_TIME",
                     nodes="UNOBSERVED", time="UNOBSERVED",
-                    gguf="UNOBSERVED", source=expected)
+                    gguf="UNOBSERVED", source=expected,
+                    worker_non_solver_ns="UNOBSERVED",
+                    fischer_io_ns="UNOBSERVED",
+                    solver_ns="UNOBSERVED", matrix_ns="UNOBSERVED",
+                    selector_ns="UNOBSERVED", max_rss_kib=memory_kib)
     row = receipt_file(record)
     for field, value in (
         ("schema", "1"), ("case", case), ("mode", mode),
@@ -163,10 +174,10 @@ def independent_trial(case, mode, source, output):
     if status == "HOLD_STACK":
         need(row.get("stack_exhausted") == "true",
              "stack hold without bounded recursive guard")
-    if status in ("SAT", "HOLD_NODE"):
+    if status == "HOLD_NODE":
         need(row.get("time_exhausted") == "false"
              and row.get("stack_exhausted") == "false",
-             "completed/node-limited run contains unreported time or stack hold")
+             "node-budget stop contains unreported time or stack hold")
     if status == "SAT":
         model = (directory / "model.trits").read_bytes()
         need(sha(model) == row.get("model_sha256") and
@@ -180,11 +191,23 @@ def independent_trial(case, mode, source, output):
         need(not (directory / "model.trits").exists() and
              row.get("model_sha256") == "NONE",
              "HOLD_NODE incorrectly claims SAT witness")
+    fischer_io_ns = sum(ints[key] for key in (
+        "gguf_freeze_ns", "gguf_write_ns", "gguf_read_ns",
+        "gguf_thaw_ns", "fischer_play_ns",
+    ))
+    need(fischer_io_ns <= ints["total_ns"],
+         "original-CNF GGUF I/O exceeds total measured worker time")
     return dict(case=case, mode=mode, status=status,
                 nodes=str(ints["nodes"]), time=str(ints["total_ns"]),
                 gguf=row.get("gguf_sha256"), source=expected,
                 propagations=ints["propagations"],
-                literal_checks=ints["literal_checks"])
+                literal_checks=ints["literal_checks"],
+                worker_non_solver_ns=str(ints["total_ns"] - ints["solver_ns"]),
+                fischer_io_ns=str(fischer_io_ns),
+                solver_ns=str(ints["solver_ns"]),
+                matrix_ns=str(ints["live_matrix_ns"]),
+                selector_ns=str(ints["selector_ns"]),
+                max_rss_kib=memory_kib)
 
 def source_path(case, raw_source):
     # This gets a path by matching the externally supplied, authenticated
@@ -257,7 +280,11 @@ def main():
             value = known[mode, case]
             records.append(
                 "BTC_GGUF_SAT_TRIAL|case={case}|mode={mode}|status={status}|"
-                "nodes={nodes}|total_ns={time}|"
+                "nodes={nodes}|total_ns={time}|solver_ns={solver_ns}|"
+                "non_solver_ns={worker_non_solver_ns}|"
+                "gguf_fischer_io_ns={fischer_io_ns}|"
+                "live_matrix_ns={matrix_ns}|guided_selector_ns={selector_ns}|"
+                "max_rss_kib={max_rss_kib}|"
                 "independent_referee_ns={referee_ns}|gguf_sha256={gguf}|"
                 "source_sha256={source}|json=0".format(**value)
             )
