@@ -1,0 +1,342 @@
+name: "P-NP original Bitcoin continuous frontier: equal-work shadows and 8-32-128 runner restarts"
+on:
+  push:
+    branches: [research/bitcoin-shadow-continuous-frontier-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pnp-bitcoin-continuous-frontier-${{ github.ref }}
+  cancel-in-progress: true
+
+  step8:
+    name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: persisted frontier 8 visited nodes"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+        mode: [direct, one, three]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - name: Authenticate independent original Bitcoin source and GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "gguf/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.replayed.cnf"
+      - name: Rust 1.81 complete frontier acceptance, strict Clippy and native executable
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib continuous_frontier::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib shadow_selector::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib solver::tests::one_and_three_shadow_guided_exact_sat_and_unsat_complete --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_frontier_quantum --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_frontier_quantum --release --offline --locked
+      - name: Resume source-frozen DPLL without replaying earlier branches (8 cumulative nodes)
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE/$MODE/8"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/$MODE/8/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step "$MODE" "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            NEW "results/$CASE/$MODE/8" 8 \
+            > "results/$CASE/$MODE/8/stdout.log" 2> "results/$CASE/$MODE/8/stderr.log"; then
+              cat "results/$CASE/$MODE/8/stderr.log" >&2
+              exit 1
+          fi
+          grep -Fq "BTC_FRONTIER_SESSION|schema=1|case=$CASE|mode=$MODE|" "results/$CASE/$MODE/8/SESSION.hbp"
+          grep -Fq '|algorithmic_timer=NONE|work_quantum=CHECKPOINT_BOUNDARY|json=0' "results/$CASE/$MODE/8/SESSION.hbp"
+          ( cd "results/$CASE/$MODE/8" && sha256sum \
+            FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 \
+            && sha256sum -c RUN.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-frontier-stage8-${{ matrix.case }}-${{ matrix.mode }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  step32:
+    name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: persisted frontier 32 visited nodes"
+    needs: step8
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+        mode: [direct, one, three]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - name: Authenticate independent original Bitcoin source and GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "gguf/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.replayed.cnf"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-frontier-stage8-${{ matrix.case }}-${{ matrix.mode }}
+          path: prior
+      - name: Verify frozen complete DPLL frontier from prior compute runner
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          ( cd "prior/$CASE/$MODE/8" && sha256sum -c RUN.sha256 )
+          test -s "prior/$CASE/$MODE/8/FRONTIER.frt"
+      - name: Rust 1.81 complete frontier acceptance, strict Clippy and native executable
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_frontier_quantum --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_frontier_quantum --release --offline --locked
+      - name: Resume source-frozen DPLL without replaying earlier branches (32 cumulative nodes)
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE/$MODE/32"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/$MODE/32/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step "$MODE" "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            "prior/$CASE/$MODE/8/FRONTIER.frt" "results/$CASE/$MODE/32" 24 \
+            > "results/$CASE/$MODE/32/stdout.log" 2> "results/$CASE/$MODE/32/stderr.log"; then
+              cat "results/$CASE/$MODE/32/stderr.log" >&2
+              exit 1
+          fi
+          grep -Fq "BTC_FRONTIER_SESSION|schema=1|case=$CASE|mode=$MODE|" "results/$CASE/$MODE/32/SESSION.hbp"
+          grep -Fq '|algorithmic_timer=NONE|work_quantum=CHECKPOINT_BOUNDARY|json=0' "results/$CASE/$MODE/32/SESSION.hbp"
+          ( cd "results/$CASE/$MODE/32" && sha256sum \
+            FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 \
+            && sha256sum -c RUN.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-frontier-stage32-${{ matrix.case }}-${{ matrix.mode }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  step128:
+    name: "Bitcoin ${{ matrix.case }} / ${{ matrix.mode }}: persisted frontier 128 visited nodes"
+    needs: step32
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+        mode: [direct, one, three]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - name: Authenticate independent original Bitcoin source and GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "gguf/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.replayed.cnf"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-frontier-stage32-${{ matrix.case }}-${{ matrix.mode }}
+          path: prior
+      - name: Verify frozen complete DPLL frontier from prior compute runner
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          ( cd "prior/$CASE/$MODE/32" && sha256sum -c RUN.sha256 )
+          test -s "prior/$CASE/$MODE/32/FRONTIER.frt"
+      - name: Rust 1.81 complete frontier acceptance, strict Clippy and native executable
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_frontier_quantum --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_frontier_quantum --release --offline --locked
+      - name: Resume source-frozen DPLL without replaying earlier branches (128 cumulative nodes)
+        env:
+          CASE: ${{ matrix.case }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE/$MODE/128"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/$MODE/128/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step "$MODE" "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            "prior/$CASE/$MODE/32/FRONTIER.frt" "results/$CASE/$MODE/128" 96 \
+            > "results/$CASE/$MODE/128/stdout.log" 2> "results/$CASE/$MODE/128/stderr.log"; then
+              cat "results/$CASE/$MODE/128/stderr.log" >&2
+              exit 1
+          fi
+          grep -Fq "BTC_FRONTIER_SESSION|schema=1|case=$CASE|mode=$MODE|" "results/$CASE/$MODE/128/SESSION.hbp"
+          grep -Fq '|algorithmic_timer=NONE|work_quantum=CHECKPOINT_BOUNDARY|json=0' "results/$CASE/$MODE/128/SESSION.hbp"
+          ( cd "results/$CASE/$MODE/128" && sha256sum \
+            FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 \
+            && sha256sum -c RUN.sha256 )
+          mkdir -p "results/$CASE/$MODE/whole128"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/$MODE/whole128/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step "$MODE" "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            NEW "results/$CASE/$MODE/whole128" 128 \
+            > "results/$CASE/$MODE/whole128/stdout.log" 2> "results/$CASE/$MODE/whole128/stderr.log"; then
+              cat "results/$CASE/$MODE/whole128/stderr.log" >&2
+              exit 1
+          fi
+          grep -Fq "|session_node_quota=128|" "results/$CASE/$MODE/whole128/SESSION.hbp"
+          ( cd "results/$CASE/$MODE/whole128" && sha256sum \
+            FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 \
+            && sha256sum -c RUN.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-frontier-stage128-${{ matrix.case }}-${{ matrix.mode }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent:
+    name: "Independent original Bitcoin frontier parser, restart parity and complete branch proof receipts"
+    needs: step128
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-nonce32
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-merkle_nonce288
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-frontier-stage*
+          path: result
+          merge-multiple: true
+      - name: Byte-verified independent reference check of all 24 frontier files
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          for case in nonce32 merkle_nonce288; do
+            ( cd "gguf/$case" && sha256sum -c SHADOW.sha256 )
+            for mode in direct one three; do
+              for stage in 8 32 128 whole128; do
+                ( cd "result/$case/$mode/$stage" && sha256sum -c RUN.sha256 )
+              done
+            done
+          done
+          mkdir -p acceptance
+          /usr/bin/time -f 'referee_peak_rss_kib=%M|referee_wall_seconds=%e' \
+            -o acceptance/REFEREE_TIME.hbp \
+            python3 -s -B research/bitcoin_frontier_referee.py \
+              --source source --gguf gguf --root result \
+              --out acceptance/BTC_FRONTIER_FINAL.hbp \
+            > acceptance/REFEREE.log
+          cat acceptance/BTC_FRONTIER_FINAL.hbp
+          grep -Fq 'BTC_FRONTIER_FINAL|schema=1|original_cases=2|modes=3|' acceptance/BTC_FRONTIER_FINAL.hbp
+          grep -Fq '|complete_frontier_snapshot=SHA256_BOUND|' acceptance/BTC_FRONTIER_FINAL.hbp
+          test "$(grep -c '^BTC_FRONTIER_CASE|' acceptance/BTC_FRONTIER_FINAL.hbp)" -eq 6
+          ( cd acceptance && sha256sum BTC_FRONTIER_FINAL.hbp REFEREE.log REFEREE_TIME.hbp \
+             > ACCEPTED.sha256 && sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-frontier-accepted
+          path: acceptance/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Independent final archived 128-node equal-work Bitcoin shadow and frontier restart acceptance"
+    needs: independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-frontier-accepted
+          path: acceptance
+      - name: Validate all six complete DPLL restarts and original SHA256d roots
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ACCEPTED.sha256 )
+          test "$(grep -c '^BTC_FRONTIER_CASE|' acceptance/BTC_FRONTIER_FINAL.hbp)" -eq 6
+          grep -Fq '|status=PASS|json=0' acceptance/BTC_FRONTIER_FINAL.hbp
+          echo 'BTC_CONTINUOUS_FRONTIER_ARCHIVE|bitcoin_cases=2|modes=3|separate_runner_quanta=8-24-96|uninterrupted_reference=128|source=BYTE_EXACT|status=PASS|json=0'
