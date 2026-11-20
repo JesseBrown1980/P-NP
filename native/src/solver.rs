@@ -504,6 +504,31 @@ pub fn solve_shadow_until(
         shadow.expect("shadow guide disappeared")))
 }
 
+/// Timer-free finite-node research pilot. It evaluates the original source
+/// CNF and true live 27-cell shadow guidance, with the node budget counted
+/// as work rather than a wall-clock lifetime. Independent host runner limits
+/// are separate from the source SAT engine.
+pub fn solve_shadow_from_assignment(
+    cnf: &Cnf,
+    guidance: &Guidance,
+    budget: Option<u64>,
+    starting: &[Trit],
+    source_sha256: &str,
+    mode: ShadowMode,
+) -> Result<(Solution, LiveSearchMetrics, ShadowMetrics), String> {
+    if starting.len() != cnf.variables {
+        return Err("GGUF shadow starting-state width differs from original CNF".to_owned());
+    }
+    let observer = LiveObserver::new(source_sha256)?;
+    let selector = ShadowSelector::new(cnf, source_sha256, mode)?;
+    let (solution, live, _, shadow) = solve_internal(
+        cnf, guidance, budget, Some(observer), None, Some(starting), None,
+        Some(selector)
+    );
+    Ok((solution, live.expect("exact live shadow frame observer missing"),
+        shadow.expect("exact one/three shadow selector missing")))
+}
+
 pub fn check_against_exhaustive(cnf: &Cnf, solution: &Solution) -> bool {
     if cnf.variables > 16 || cnf.variables >= usize::BITS as usize {
         return false;
