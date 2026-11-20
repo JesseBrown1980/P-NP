@@ -30,6 +30,7 @@ pub mod policy;
 pub mod relic;
 pub mod prism;
 pub mod scoring;
+pub mod shadow_selector;
 pub mod sha256;
 pub mod source;
 pub mod solver;
