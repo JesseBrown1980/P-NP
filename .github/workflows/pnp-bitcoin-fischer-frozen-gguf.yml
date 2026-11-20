@@ -77,7 +77,7 @@ jobs:
           VARIABLES=$(case "$CASE" in nonce32) echo 239112;; merkle_nonce288) echo 361188;; esac)
           "$BIN" branch "$CASE" "source/$CASE.cnf" "$DIR/branch28.gguf" "$DIR/final.gguf" "$VARIABLES" - | tee "$DIR/BRANCH_LAST.hbp"
           "$BIN" play "$CASE" "source/$CASE.cnf" "$DIR/final.gguf" "$DIR/final.play.hbp"
-          test "$(grep -c '|fischer_forward_reverse=PASS|' "$DIR/"*.play.hbp)" -eq 3
+          test "$(grep -h -F '|fischer_forward_reverse=PASS|' "$DIR/"*.play.hbp | wc -l)" -eq 3
           grep -Fq '|solver_search=NOT_RUN|' "$DIR/final.play.hbp"
           cp "$DIR/final.gguf" "$DIR/CORRUPT.gguf"
           python3 -s -B -c 'import sys; p=sys.argv[1]; b=bytearray(open(p,"rb").read()); b[-1]^=2; open(p,"wb").write(b)' "$DIR/CORRUPT.gguf"
