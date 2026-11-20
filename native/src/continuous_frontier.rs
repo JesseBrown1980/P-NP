@@ -508,9 +508,12 @@ impl Frontier {
                  "checkpoint decision frame is outside live SAT trail")?;
             need(trail[mark].0 == variable
                  && trail[mark].1 ==
-                    if branch == 1 { Trit::Minus } else { Trit::Plus },
+                    (if branch == 1 { Trit::Minus } else { Trit::Plus }),
                  "checkpoint branch polarity disagrees with actual trail")?;
-            need(stack.last().is_none_or(|last: &ChoiceFrame| last.mark < mark),
+            need(match stack.last() {
+                Some(last) => last.mark < mark,
+                None => true,
+            },
                  "checkpoint nested decision positions are not monotone")?;
             stack.push(ChoiceFrame {
                 variable, mark, minus_branch: branch == 1,
