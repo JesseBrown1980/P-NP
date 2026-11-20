@@ -34,6 +34,7 @@ pub mod sha256;
 pub mod source;
 pub mod solver;
 pub mod ternary;
+pub mod three_shadow;
 pub mod tls_memory;
 pub mod tls_stochastic;
 pub mod tls_omnibit_gc;
