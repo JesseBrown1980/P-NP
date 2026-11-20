@@ -1,0 +1,401 @@
+name: "P-NP Chariots: 20 hosted forward leaves and 20 reverse leaves"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  forward:
+    name: "Ezequel forward leaf ${{ matrix.leaf }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - name: Checkout immutable source for this run
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install source-locked Rust toolchain
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Native strict build and historical seal verification
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin chariot_waves --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves provenance
+      - name: Produce source-bound checkpoint for this leaf
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p forward
+          file="$(printf 'forward/forward-%02d.hbp' "$LEAF")"
+          native/target/release/chariot_waves forward "$RUN_KEY" "$LEAF" "$file"
+          test -s "$file"
+      - name: Produce source-word six-dimensional cascade shard
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          mkdir -p language
+          file="$(printf 'language/language-%02d.hbp' "$LEAF")"
+          native/target/release/language_cascade provenance
+          native/target/release/language_cascade shard "$RUN_KEY" "$LEAF" "$file"
+          test -s "$file"
+      - name: Publish one source-word cascade shard
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-language-${{ matrix.leaf }}
+          path: language/language-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+      - name: Seal and upload one immutable leaf artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-forward-${{ matrix.leaf }}
+          path: forward/forward-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  fanin:
+    name: "Lynn forward all-20 barrier"
+    needs: [forward]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - name: Download all 20 independently produced checkpoints
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-forward-*
+          path: forward
+          merge-multiple: true
+      - name: Original word-and-cascade source checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-language
+          persist-credentials: false
+      - name: Check canonical 256-glyph, words and second/third cascade pins
+        run: |
+          set -euo pipefail
+          test "$(git -C source-language rev-parse HEAD)" = "818cc235a6db815e3b2591339cf9b42aad3e85a0"
+          test "$(git -C source-language hash-object packages/deep-wave/src/cascade.ts)" = "b9acdaff9b4537def53eca3d0fdb87a9c0dcab89"
+          test "$(git -C source-language hash-object packages/deep-wave/src/third-cascade.ts)" = "a3e4485ca4a60d1b12cf6ed398c2f886ba358ea7"
+          test "$(git -C source-language hash-object data/behcs/codex/alphabet.json)" = "8d4a3298576ce2c9d4a1683ffab667c8a743fc42"
+          test "$(git -C source-language hash-object tools/behcs/generate-falcon-glyph-language.js)" = "2bf81fbc21a3851c4dbfcddeb227b0226e303836"
+          echo 'CW_SOURCE_PIN|symbols=256|typed_dimensions=6|wave=12|source_sha=PASS|json=0'
+      - name: Download twenty source-word cascade shards
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-language-*
+          path: language
+          merge-multiple: true
+      - name: Independently rederive each checkpoint and root
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves fanin "$RUN_KEY" forward forward-root.hbp
+          test "$(find forward -maxdepth 1 -type f -name 'forward-*.hbp' | wc -l)" -eq 20
+      - name: Independently recompute 93,312 word events and 432 search buckets
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin language_cascade --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          native/target/release/language_cascade fanin "$RUN_KEY" language language-root.hbp
+          grep -Fq 'events=93312|buckets=432|hits_per_bucket=216|' language-root.hbp
+      - name: Publish sealed forward wave bundle for reverse workers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-forward-bundle
+          path: |
+            forward/forward-*.hbp
+            forward-root.hbp
+            language/language-*.hbp
+            language-root.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  reverse:
+    name: "Rebecca reverse leaf ${{ matrix.leaf }}"
+    needs: [fanin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Consume Lynn's verified full forward wave
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Independently rederive all source IDs and reverse assigned leaf
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          mkdir -p reverse
+          file="$(printf 'reverse/reverse-%02d.hbp' "$LEAF")"
+          native/target/release/chariot_waves reverse "$RUN_KEY" "$LEAF" forward-bundle/forward forward-bundle/forward-root.hbp "$file"
+          test -s "$file"
+      - name: Reverse the source-word cascade using the frozen language manifest
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          mkdir -p language-reverse
+          file="$(printf 'language-reverse/language-reverse-%02d.hbp' "$LEAF")"
+          native/target/release/language_cascade reverse "$RUN_KEY" "$LEAF" forward-bundle/language forward-bundle/language-root.hbp "$file"
+          test -s "$file"
+      - name: Upload source-word reverse witness
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-word-reverse-${{ matrix.leaf }}
+          path: language-reverse/language-reverse-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish independent source-restoration receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-reverse-${{ matrix.leaf }}
+          path: reverse/reverse-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  final:
+    name: "Lynn 40-leaf two-wave independent acceptance"
+    needs: [reverse]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Fetch immutable forward bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Fetch all 20 reverse checkpoints
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-reverse-*
+          path: reverse
+          merge-multiple: true
+      - name: Download twenty source-word reverse receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-word-reverse-*
+          path: language-reverse
+          merge-multiple: true
+      - name: Independently reproduce exact 540-cell reversal and both wave roots
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin chariot_waves --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --release --offline --locked
+          native/target/release/chariot_waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_FINAL.hbp | tee CH20_FINAL.log
+          grep -Fq '|checkpoints=40|restored_cells=540|replay=EXACT|' CH20_FINAL.hbp
+          grep -Fq '|status=PASS|json=0' CH20_FINAL.hbp
+          sha256sum CH20_FINAL.hbp > CH20_FINAL.sha256
+          sha256sum -c CH20_FINAL.sha256
+      - name: Verify all source-word identities after search-lane convergence
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin language_cascade --release --offline --locked
+          native/target/release/language_cascade final "$RUN_KEY" forward-bundle/language forward-bundle/language-root.hbp language-reverse CW_FINAL.hbp | tee CW_FINAL.log
+          grep -Fq '|unique_execution=93312|unique_glyph_addresses=93312|search_buckets=432|collisions_per_bucket=216|' CW_FINAL.hbp
+          grep -Fq '|status=PASS|json=0' CW_FINAL.hbp
+          sha256sum CW_FINAL.hbp > CW_FINAL.sha256
+          sha256sum -c CW_FINAL.sha256
+      - name: Original 3D GitHub harness at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS
+          ref: 8712368c851abe347ddf97a25bfbd96275d4316c
+          path: source-follow
+          persist-credentials: false
+      - name: Original SAFE-ASI language at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS
+          ref: 6e3e082d574a4ad45bceb06ccf0b86ac44f942cc
+          path: source-safe
+          persist-credentials: false
+      - name: Remeasure GitHub public refs for current IS separate from historical WAS
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          follow=$(git ls-remote --exit-code https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          safe=$(git ls-remote --exit-code https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          test "$(expr length "$follow")" -eq 40
+          test "$(expr length "$safe")" -eq 40
+          pnp=$(git rev-parse HEAD)
+          test "$pnp" = "$GITHUB_SHA"
+          printf 'G3D_IS_REFS|schema=1|run=%s|pnp_sha=%s|follow_main=%s|safe_main=%s|observed=GITHUB_LS_REMOTE|json=0\n' "$RUN_KEY" "$pnp" "$follow" "$safe" > IS_REFS.hbp
+          echo "G3D_REF_CAPTURE|follow=$follow|safe=$safe|pnp=$pnp|status=PASS|json=0"
+      - name: Bind 3D graph and four-root temporal RIME to accepted Chariot and words
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin provenance_rime --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin provenance_rime --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin provenance_rime --release --offline --locked
+          native/target/release/provenance_rime sources source-follow source-safe
+          native/target/release/provenance_rime emit "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
+          native/target/release/provenance_rime verify "$RUN_KEY" source-follow source-safe IS_REFS.hbp CH20_FINAL.hbp CW_FINAL.hbp G3D_RIME.hbp
+          grep -Fq '|observed_levels=5|max_window=60|' G3D_RIME.hbp
+          test "$(grep -c '^NODE|' G3D_RIME.hbp)" -eq 12
+          test "$(grep -c '^EDGE|' G3D_RIME.hbp)" -eq 12
+          test "$(grep -c '^FAMILY|' G3D_RIME.hbp)" -eq 6
+          test "$(grep -c '^VIEW|' G3D_RIME.hbp)" -eq 24
+          test "$(grep -c '^ROOT|' G3D_RIME.hbp)" -eq 4
+          sha256sum G3D_RIME.hbp IS_REFS.hbp > G3D_RIME.sha256
+          sha256sum -c G3D_RIME.sha256
+      - name: Archive paid source and exact two-wave result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-two-wave-final
+          path: |
+            CH20_FINAL.hbp
+            CH20_FINAL.sha256
+            CH20_FINAL.log
+            CW_FINAL.hbp
+            CW_FINAL.sha256
+            CW_FINAL.log
+            IS_REFS.hbp
+            G3D_RIME.hbp
+            G3D_RIME.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  provenance-replay:
+    name: "Independent source-pinned 3D RIME graph replay"
+    needs: [final]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout P-NP verifier
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original 3D GitHub harness at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS
+          ref: 8712368c851abe347ddf97a25bfbd96275d4316c
+          path: source-follow
+          persist-credentials: false
+      - name: Original SAFE-ASI language at immutable commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS
+          ref: 6e3e082d574a4ad45bceb06ccf0b86ac44f942cc
+          path: source-safe
+          persist-credentials: false
+      - name: Download first runner's sealed graph and true source outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-two-wave-final
+          path: proof
+      - name: Download complete original forward wave for independent replay
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chariot-forward-bundle
+          path: forward-bundle
+      - name: Download every independent Chariot reverse leaf again
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-reverse-*
+          path: reverse
+          merge-multiple: true
+      - name: Download every independent word reverse leaf again
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: chariot-word-reverse-*
+          path: language-reverse
+          merge-multiple: true
+      - name: Recompute BOTH original final roots on a separate hosted runner
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin chariot_waves --bin language_cascade --release --offline --locked
+          native/target/release/chariot_waves final "$RUN_KEY" forward-bundle/forward forward-bundle/forward-root.hbp reverse CH20_INDEPENDENT.hbp
+          native/target/release/language_cascade final "$RUN_KEY" forward-bundle/language forward-bundle/language-root.hbp language-reverse CW_INDEPENDENT.hbp
+          cmp -s CH20_INDEPENDENT.hbp proof/CH20_FINAL.hbp
+          cmp -s CW_INDEPENDENT.hbp proof/CW_FINAL.hbp
+          echo 'G3D_TWO_WAVE_INDEPENDENT|leaves=40|word_events=93312|source_replay=BYTE_EQUAL|status=PASS|json=0'
+      - name: Verify exact original source and replay immutable graph byte for byte
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          (cd proof && sha256sum -c G3D_RIME.sha256)
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin provenance_rime --release --offline --locked
+          native/target/release/provenance_rime verify "$RUN_KEY" source-follow source-safe proof/IS_REFS.hbp proof/CH20_FINAL.hbp proof/CW_FINAL.hbp proof/G3D_RIME.hbp
+          native/target/release/provenance_rime emit "$RUN_KEY" source-follow source-safe proof/IS_REFS.hbp proof/CH20_FINAL.hbp proof/CW_FINAL.hbp G3D_REPLAY.hbp
+          cmp -s G3D_REPLAY.hbp proof/G3D_RIME.hbp
+          echo 'G3D_REPLAY|sources=PINNED|history=OBSERVED_ONLY|graph=BYTE_EQUAL|status=PASS|json=0'
+      - name: Separately remeasure GitHub IS refs and retain possible branch advance
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          follow=$(git ls-remote --exit-code https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          safe=$(git ls-remote --exit-code https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '$2=="refs/heads/main"{print $1}')
+          test "$(expr length "$follow")" -eq 40
+          test "$(expr length "$safe")" -eq 40
+          old_follow=$(sed -n 's/.*|follow_main=\([0-9a-f]*\)|safe_main=.*/\1/p' proof/IS_REFS.hbp)
+          old_safe=$(sed -n 's/.*|safe_main=\([0-9a-f]*\)|observed=.*/\1/p' proof/IS_REFS.hbp)
+          moved=0
+          if [ "$follow" != "$old_follow" ] || [ "$safe" != "$old_safe" ]; then moved=1; fi
+          printf 'G3D_REF_REMEASURE|run=%s|follow_now=%s|safe_now=%s|prior_capture_stable=%s|historical_snapshot_preserved=1|status=PASS|json=0\n' "$RUN_KEY" "$follow" "$safe" "$((1-moved))" > G3D_REMEASURE.hbp
+          sha256sum G3D_REPLAY.hbp G3D_REMEASURE.hbp > G3D_REPLAY.sha256
+          sha256sum -c G3D_REPLAY.sha256
+      - name: Archive second independent temporal graph receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chariot-three-dimensional-provenance-replay
+          path: |
+            G3D_REPLAY.hbp
+            G3D_REMEASURE.hbp
+            G3D_REPLAY.sha256
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,238 @@
+name: "P-NP Q-PRISM source-pinned 20x1MiB hosted symbol transfer"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  encode:
+    name: "QPRISM forward 1024-symbol sender ${{ matrix.leaf }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        leaf: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - name: Checkout native implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original Q-PRISM 256-1024 transcode source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control
+          ref: b4a21a25381d6920b7aab92c94c3c3e1420fc9e4
+          path: source-prism
+          persist-credentials: false
+      - name: Install pinned no-dependency Rust
+        run: rustup toolchain install 1.81.0 --profile minimal --component clippy
+      - name: Build source-verified 1024-glyph transport worker
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin qprism_transfer --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_transfer --release --offline --locked
+          native/target/release/qprism_transfer provenance source-test source-prism
+      - name: Encode and write real ten-bit glyphs
+        env:
+          LEAF: ${{ matrix.leaf }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          start="$(date +%s%N)"
+          native/target/release/qprism_transfer forward "$RUN_KEY" source-prism "$LEAF" forward
+          end="$(date +%s%N)"
+          echo "QP20_ENCODE_RUNTIME|leaf=$LEAF|elapsed_ns=$((end-start))|source_bytes=1024000|wire_bytes=1638400|json=0"
+          test "$(stat -c %s "forward/$(printf 'symbol-%02d.bin' "$LEAF")")" -eq 1638400
+      - name: Upload physically encoded symbol payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qp20-forward-${{ matrix.leaf }}
+          path: forward/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  forward_fanin:
+    name: "QPRISM all-twenty encoded payload source verifier"
+    needs: [encode]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control
+          ref: b4a21a25381d6920b7aab92c94c3c3e1420fc9e4
+          path: source-prism
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - name: Download twenty physically transferred symbol payloads
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: qp20-forward-*
+          path: forward
+          merge-multiple: true
+      - name: Independent canonical source/decoder and roster fan-in
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin qprism_transfer --offline --locked
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_transfer --release --offline --locked
+          native/target/release/qprism_transfer fanin "$RUN_KEY" source-prism forward root.hbp
+          test "$(find forward -maxdepth 1 -type f | wc -l)" -eq 40
+          grep -Fq '|leaves=20|raw_bytes=20480000|symbols=16384000|encoded_bytes=32768000|' root.hbp
+      - name: Publish authenticated root, separate from leaf payloads
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qp20-root
+          path: root.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  decode:
+    name: "QPRISM independent inverse receiver ${{ matrix.receiver }} from ${{ matrix.from }}"
+    needs: [forward_fanin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - receiver: 0
+            from: 19
+          - receiver: 1
+            from: 0
+          - receiver: 2
+            from: 1
+          - receiver: 3
+            from: 2
+          - receiver: 4
+            from: 3
+          - receiver: 5
+            from: 4
+          - receiver: 6
+            from: 5
+          - receiver: 7
+            from: 6
+          - receiver: 8
+            from: 7
+          - receiver: 9
+            from: 8
+          - receiver: 10
+            from: 9
+          - receiver: 11
+            from: 10
+          - receiver: 12
+            from: 11
+          - receiver: 13
+            from: 12
+          - receiver: 14
+            from: 13
+          - receiver: 15
+            from: 14
+          - receiver: 16
+            from: 15
+          - receiver: 17
+            from: 16
+          - receiver: 18
+            from: 17
+          - receiver: 19
+            from: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control
+          ref: b4a21a25381d6920b7aab92c94c3c3e1420fc9e4
+          path: source-prism
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - name: Receive only predecessor's encoded 1024-symbol payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: qp20-forward-${{ matrix.from }}
+          path: forward
+      - name: Download original full fan-in root commitment
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: qp20-root
+          path: root
+      - name: Decode physical bytes with both native and independent 40-bit inverse
+        env:
+          RECEIVER: ${{ matrix.receiver }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_transfer --release --offline --locked
+          mkdir -p reverse
+          start="$(date +%s%N)"
+          native/target/release/qprism_transfer reverse "$RUN_KEY" source-prism "$RECEIVER" forward root/root.hbp "$(printf 'reverse/reverse-%02d.hbp' "$RECEIVER")"
+          end="$(date +%s%N)"
+          echo "QP20_DECODE_RUNTIME|receiver=$RECEIVER|elapsed_ns=$((end-start))|verified_bytes=1024000|json=0"
+      - name: Archive independent receiver's exact-source receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qp20-reverse-${{ matrix.receiver }}
+          path: reverse/reverse-*.hbp
+          if-no-files-found: error
+          retention-days: 7
+
+  final_acceptance:
+    name: "QPRISM 20 MiB exact source recovery and 40 hosted workers"
+    needs: [decode]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Q-PRISM-human-organoid-neural-stream-as-a-high-dimensional-control
+          ref: b4a21a25381d6920b7aab92c94c3c3e1420fc9e4
+          path: source-prism
+          persist-credentials: false
+      - run: rustup toolchain install 1.81.0 --profile minimal
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: qp20-forward-*
+          path: forward
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: qp20-reverse-*
+          path: reverse
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: qp20-root
+          path: root
+      - name: Independently revalidate all raw, representation, and transfer checksums
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin qprism_transfer --release --offline --locked
+          native/target/release/qprism_transfer final "$RUN_KEY" source-prism forward root/root.hbp reverse QP20_FINAL.hbp | tee QP20_FINAL.log
+          grep -Fq '|forward_workers=20|reverse_workers=20|source_bytes=20480000|transported_symbols=16384000|transported_bytes=32768000|' QP20_FINAL.hbp
+          grep -Fq '|independent_40bit_decode=PASS|restoration=EXACT|status=PASS|json=0' QP20_FINAL.hbp
+          sha256sum QP20_FINAL.hbp > QP20_FINAL.sha256
+          sha256sum -c QP20_FINAL.sha256
+      - name: Archive accepted full run commitments
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: qp20-source-transport-final
+          path: |
+            QP20_FINAL.hbp
+            QP20_FINAL.log
+            QP20_FINAL.sha256
+            root/root.hbp
+          if-no-files-found: error
+          retention-days: 30

@@ -97,6 +97,24 @@ jobs:
           native/target/release/pnp-native audit . | tee PNP_AUDIT.hbp
           grep -Fq 'PNP_LEGACY_AUDIT|legacy_failed=54|python_scripts=44|old_workflows=10|' PNP_AUDIT.hbp
           grep -Fq '|software_status=LEGACY_FAIL|json=0' PNP_AUDIT.hbp
+      - name: Source-locked OmniMets convergence and five-shell MCP star-language acceptance
+        run: |
+          set -euo pipefail
+          test "$(git -C source-omni hash-object packages/omnimets/src/mets.ts)" = "49bd2c7daec59a8301fd6010f5fdefa11ec2da00"
+          test "$(git -C source-omni hash-object packages/omnimets/src/convergence.ts)" = "c29da7ac6ce6b50af20c552915b67442df565c37"
+          native/target/release/pnp-native layered-sphere-attest | tee PNP_LAYERED_SPHERE.hbp
+          grep -Fq 'PNP_LAYERED_SPHERE|schema=v1|rooms=120|floors=600|transitions=480|microkernel_gulps=1440|nested_child_presentations=360|star_glyphs=5400|' PNP_LAYERED_SPHERE.hbp
+          grep -Fq '|fischer_arbitrary_null_checks=360|rejected=120|language_ladder=64_256_1024_4096_16384|symbol_not_bit=PASS|ternary_prism_inverse=PASS|qprism=PASS|omnibit40=PASS|post_gulp_clear=PASS|watcher=INDEPENDENT_INTEGER|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_LAYERED_SPHERE.hbp
+          grep -Fq 'PNP_OMNIMETS_NATIVE|schema=v1|source_commit=818cc235a6db815e3b2591339cf9b42aad3e85a0|lanes=7|dispatches=1440|promotions=1320|deferrals=120|halts=120|errors=120|samples=1440|ratifications=120|seals=120|k=3|ratify_before_seal=PASS|real_microkernel=PASS|source_immutable=PASS|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_LAYERED_SPHERE.hbp
+          test "$(grep -c '^OMNIMETS_LANE|lane=' PNP_LAYERED_SPHERE.hbp)" -eq 7
+          grep -Fq 'OMNIMETS_SHA|body_sha256=' PNP_LAYERED_SPHERE.hbp
+      - name: Brown Ledger Shannon-paid forward/reverse frozen matrix and null-outward N-Nest gate
+        run: |
+          set -euo pipefail
+          native/target/release/pnp-native brown-ledger-attest | tee PNP_BROWN_LEDGER.hbp
+          grep -Fq 'PNP_BROWN_LEDGER|schema=v1|rooms=120|verified_cells=3240|' PNP_BROWN_LEDGER.hbp
+          grep -Fq '|tamper_rejections=244|prism_floor_roundtrips=120|' PNP_BROWN_LEDGER.hbp
+          grep -Fq '|fischer_null_outward=PASS|fischer_prime_towers=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0' PNP_BROWN_LEDGER.hbp
       - name: Fetch and verify the original Constellation kernels, keys, master table, and disk GGUF
         shell: bash
         run: |

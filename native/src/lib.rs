@@ -2,15 +2,23 @@
 //! Rust 1.81 exact-integer P-NP policy and native matrix-fabric pilot.
 //! Historical Python algorithms are retained solely as legacy evidence.
 
+pub mod behcs_glyph_language;
 pub mod binary_ternary_bridge;
+pub mod bitcoin_gguf;
+pub mod brown_ledger;
 pub mod checkpoint;
 pub mod ensemble;
 pub mod freeze;
+pub mod fischer_prime_tower;
+pub mod layered_sphere;
+pub mod omnimets_ledger;
 pub mod fabric_gc;
 pub mod gc_archive;
 pub mod gulp_gc;
 pub mod guidance;
 pub mod matrix;
+pub mod live_sat_matrix;
+pub mod matrix_selector;
 pub mod omnibit_tournament;
 // The original frozen source contains two historic literal-grouping styles.
 // Scope this lint allowance exclusively to the byte-identical vendor module.

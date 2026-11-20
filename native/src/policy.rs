@@ -7,7 +7,42 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOW: &str = ".github/workflows/pnp-native-certification.yml";
+const ACCEPTED_WORKFLOWS: [&str; 17] = [
+    ".github/workflows/pnp-native-certification.yml",
+    ".github/workflows/pnp-chariot-twenty-leaf.yml",
+    ".github/workflows/pnp-qprism-hosted-transport.yml",
+    ".github/workflows/pnp-real-corpus-parity.yml",
+    ".github/workflows/pnp-gnn-trained-wave-reference.yml",
+    ".github/workflows/pnp-original-gnn-family-comparison.yml",
+    ".github/workflows/pnp-stone-moss-source-recovery.yml",
+    ".github/workflows/pnp-bitcoin-300s-source-reference.yml",
+    ".github/workflows/pnp-bitcoin-matrix-funnel.yml",
+    ".github/workflows/pnp-bitcoin-300s-research-extended.yml",
+    ".github/workflows/pnp-bitcoin-300s-matrix-search.yml",
+    ".github/workflows/pnp-bitcoin-cnf-orchestration-compare.yml",
+    ".github/workflows/pnp-bitcoin-live-state-vs-direct.yml",
+    ".github/workflows/pnp-bitcoin-matrix-guided-selector.yml",
+    ".github/workflows/pnp-bitcoin-fischer-frozen-gguf.yml",
+    ".github/workflows/pnp-bitcoin-gguf-sat-resume.yml",
+    ".github/workflows/pnp-bitcoin-gguf-raised-300s.yml",
+];
+// Explicit research-only model analysis, executed by pinned hosted workflow.
+// Native production and transport still accept only Rust implementations.
+const ACCEPTED_RESEARCH_SOURCE: [&str; 13] = [
+    "research/gnn_original_checkpoint_compare.py",
+    "research/stone_moss_recovery_verify.py",
+    "research/stone_moss_checkpoint_forward.py",
+    "research/stone_moss_provenance_check.py",
+    "research/bitcoin_300s_reference.py",
+    "research/bitcoin_300s_research.py",
+    "research/bitcoin_300s_matrix_search.py",
+    "research/bitcoin_300s_matrix_verify.py",
+    "research/bitcoin_cnf_pump_compare.py",
+    "research/bitcoin_live_sat_referee.py",
+    "research/bitcoin_matrix_guided_referee.py",
+    "research/bitcoin_gguf_fischer_referee.py",
+    "research/bitcoin_gguf_sat_resume_referee.py",
+];
 const EXPECTED_LEGACY: usize = 54;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -113,8 +148,9 @@ pub fn check_repository(root: &Path) -> Result<Audit, String> {
     }
     let mut native = 0;
     for file in &filenames {
-        if executable_legacy(file) && file != ACCEPTED_WORKFLOW
+        if executable_legacy(file) && !ACCEPTED_WORKFLOWS.contains(&file.as_str())
             && !original.contains_key(file)
+            && !ACCEPTED_RESEARCH_SOURCE.contains(&file.as_str())
         {
             return Err(format!("non-native executable is not accepted: {file}"));
         }
@@ -191,6 +227,24 @@ mod tests {
         assert!(inventory.contains_key("sat/engine.py"));
         assert!(inventory.contains_key("experiments/mtp_nnest/hybrid.py"));
         assert!(inventory.contains_key(".github/workflows/bitcoin-genesis-7.yml"));
-        assert!(!inventory.contains_key(ACCEPTED_WORKFLOW));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[0]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[1]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[2]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[3]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[4]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[5]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[6]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[7]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[8]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[9]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[10]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[11]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[12]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[13]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[14]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[15]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[16]));
+        assert!(ACCEPTED_RESEARCH_SOURCE.iter().all(|p| p.starts_with("research/")));
+        assert!(!ACCEPTED_RESEARCH_SOURCE.contains(&"native/research/gnn_original_checkpoint_compare.py"));
     }
 }

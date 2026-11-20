@@ -26,6 +26,34 @@ fn main() {
                 Err(error) => Err(error),
             }
         }
+        Some("layered-sphere-attest") => {
+            if arguments.next().is_some() {
+                return_fail("layered sphere acceptance takes no arguments");
+            }
+            let stats = pnp_native::layered_sphere::certify().map_err(str::to_owned)?;
+            println!("PNP_LAYERED_SPHERE|schema=v1|rooms={}|floors={}|transitions={}|microkernel_gulps={}|nested_child_presentations={}|star_glyphs={}|paid_bytes={}|source_trit_bytes={}|fischer_arbitrary_null_checks={}|rejected={}|language_ladder=64_256_1024_4096_16384|symbol_not_bit=PASS|ternary_prism_inverse=PASS|qprism=PASS|omnibit40=PASS|post_gulp_clear=PASS|watcher=INDEPENDENT_INTEGER|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                stats.rooms, stats.floors, stats.transitions, stats.microkernel_gulps,
+                stats.child_presentations, stats.star_glyphs, stats.paid_bytes,
+                stats.source_bytes, stats.arbitrary_null_checks, stats.rejected);
+            let counts = stats.omnimets.totals();
+            println!("PNP_OMNIMETS_NATIVE|schema=v1|source_commit={}|lanes=7|dispatches={}|promotions={}|deferrals={}|halts={}|errors={}|samples={}|ratifications={}|seals={}|k=3|ratify_before_seal=PASS|real_microkernel=PASS|source_immutable=PASS|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                pnp_native::omnimets_ledger::SOURCE_COMMIT, counts.dispatches,
+                counts.promotions, counts.deferrals, counts.halts, counts.errors,
+                counts.samples, stats.omnimets.ratifications(), stats.omnimets.seals());
+            print!("{}", stats.omnimets.receipt());
+            Ok(())
+        }
+        Some("brown-ledger-attest") => {
+            if arguments.next().is_some() {
+                return_fail("Brown Ledger acceptance takes no arguments");
+            }
+            let result = pnp_native::brown_ledger::certify().map_err(str::to_owned)?;
+            println!("PNP_BROWN_LEDGER|schema=v1|rooms={}|verified_cells={}|raw_bytes={}|paid_slice_bytes={}|paid_delta_bytes={}|tamper_rejections={}|prism_floor_roundtrips={}|fischer_null_outward=PASS|fischer_prime_towers=PASS|freeze_play_reverse=PASS|ternary_binary=PASS|nested_three_seat=PASS|shannon=PAID_METADATA_AND_CLOSURE|trained_gnn=HOLD_FORWARD|status=PASS|json=0",
+                result.rooms, result.checked_cells, result.source_bytes,
+                result.slice_bytes, result.delta_bytes, result.corruptions_rejected,
+                result.floor_roundtrips);
+            Ok(())
+        }
         Some("certify") => match certify_matrix_fabric() {
             Ok((rooms, cells, faults)) => {
                 println!("PNP_NATIVE_MATRIX|architecture=Nx3x3x3|rooms={rooms}|played_cells={cells}|omega_centers=120|geometry=1_6_12_8|shadow=EXACT|fischer_play=EXACT|json=0");

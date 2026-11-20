@@ -1,0 +1,139 @@
+name: "P-NP Bitcoin original SHA256d 300-second solver calibration"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: "Regenerate and pin exact Bitcoin genesis full-SHA256d CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original research source integrity and policy
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          test "$(git hash-object experiments/bitcoin/runner.py)" = 8230c55e8b43c416e2f84410c7526d3848646cf7
+          python3 -m py_compile research/bitcoin_300s_reference.py
+          python3 -s -B tools/exact_policy.py experiments/bitcoin/genesis.py experiments/bitcoin/watched.py experiments/bitcoin/arm.py experiments/bitcoin/runner.py experiments/bitcoin/verify.py
+      - name: Build source-authenticated 32 and 288 free-bit cases
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/GENESIS_BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|full_32_bit_nonce=ENCODED|merkle_nonce_288_bits=ENCODED|SAT_reference_models=4|status=PASS' source/GENESIS_BUILD.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/PINNED.sha256
+          ( cd source && sha256sum -c PINNED.sha256 )
+          ( cd source && sha256sum *.cnf *.txt GENESIS_BUILD.hbp PINNED.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin300-source
+          path: source/
+          if-no-files-found: error
+          retention-days: 30
+
+  benchmark:
+    name: "Bitcoin 300s ${{ matrix.arm }} on ${{ matrix.case }}"
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [minisat, cadical, picosat]
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin300-source
+          path: source
+      - name: Install exact original solver versions
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'minisat=1:2.2.1-8build1' 'cadical=1.7.4-1' 'picosat=965-2' time
+          dpkg-query -W minisat cadical picosat
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Run original checker under real 300-second solver budget
+        env:
+          ARM: ${{ matrix.arm }}
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          python3 -s -B research/bitcoin_300s_reference.py run --arm "$ARM" --case "$CASE" --source source --output "results/$ARM/$CASE" | tee BTC300_RUN.hbp
+          grep -Fq '|seconds=300|' BTC300_RUN.hbp
+          test -s "results/$ARM/$CASE/receipt.txt"
+          ( cd results && find "$ARM/$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$ARM-$CASE.FILES.sha256" )
+          ( cd results && sha256sum -c "$ARM-$CASE.FILES.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin300-result-${{ matrix.arm }}-${{ matrix.case }}
+          path: results/
+          if-no-files-found: error
+          retention-days: 30
+
+  referee:
+    name: "Independent original-source and Bitcoin header referee"
+    needs: benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin300-source
+          path: evidence/source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin300-result-*
+          path: evidence/results
+          merge-multiple: true
+      - name: Verify source bytes, each SAT/HOLD, full SHA256d and 8 negatives
+        run: |
+          set -euo pipefail
+          ( cd evidence/source && sha256sum -c SOURCE.sha256 )
+          test "$(find evidence/results -type f -name receipt.txt | wc -l)" -eq 6
+          for arm in minisat cadical picosat; do for case in nonce32 merkle_nonce288; do ( cd evidence/results && sha256sum -c "$arm-$case.FILES.sha256" ); done; done
+          python3 -s -B research/bitcoin_300s_reference.py verify --source evidence/source --results evidence/results --out evidence/BTC300_FINAL.hbp | tee evidence/BTC300_REFEREE.log
+          grep -Fq '|budget_seconds_each=300|' evidence/BTC300_FINAL.hbp
+          grep -Fq '|node_limited_arms_rerun=NO|' evidence/BTC300_FINAL.hbp
+          ( cd evidence && find . -type f ! -name FINAL_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > FINAL_MANIFEST.sha256 )
+          ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin300-verified-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  archive:
+    name: "Independent archived Bitcoin 300s evidence readback"
+    needs: referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin300-verified-evidence
+          path: evidence
+      - name: Check all source/result files and the final six outcomes
+        run: |
+          set -euo pipefail
+          ( cd evidence && sha256sum -c FINAL_MANIFEST.sha256 )
+          test "$(grep -c '^BTC300_CASE|' evidence/BTC300_FINAL.hbp)" -eq 6
+          grep -Fq 'BTC300_FINAL|schema=1|cases=2|arms=3|observations=6|' evidence/BTC300_FINAL.hbp
+          echo 'BTC300_ARCHIVE|full_receipt=PASS|published_roster=PASS|source_pins=PASS|json=0'

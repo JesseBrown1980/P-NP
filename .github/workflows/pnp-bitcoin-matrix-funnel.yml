@@ -1,0 +1,133 @@
+name: "P-NP Bitcoin original CNF exact matrix funnel and inverse witness"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  pinned-original-cnf:
+    name: "Generate original 32/288-bit Bitcoin genesis SHA256d source"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Generate and pin original full-hash DIMACS input
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/SOURCE.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/SOURCE.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-original-source
+          path: |
+            source/nonce32.cnf
+            source/merkle_nonce288.cnf
+            source/ORIGINAL.sha256
+            source/SOURCE.hbp
+          retention-days: 30
+          if-no-files-found: error
+
+  original-matrix:
+    name: "Rust 1.81 27-cell Bitcoin funnel ${{ matrix.case }}"
+    needs: pinned-original-cnf
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-original-source
+          path: source
+      - name: Strict native source and test acceptance
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --release --offline --locked
+      - name: Real source-to-27-cell frozen slices and strict inverse replay
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          mkdir -p receipts
+          native/target/release/bitcoin_matrix_funnel attest "$CASE" "source/$CASE.cnf" "receipts/$CASE.hbp" | tee "receipts/$CASE.attest.log"
+          native/target/release/bitcoin_matrix_funnel verify "$CASE" "source/$CASE.cnf" "receipts/$CASE.hbp" | tee "receipts/$CASE.verify.log"
+          grep -Fq '|fischer_inverse=EXACT|brown_freeze_play=EXACT|' "receipts/$CASE.hbp"
+          grep -Fq '|solver_search=NOT_RUN|cryptographic_preimage_discovery=NOT_CLAIMED|' "receipts/$CASE.hbp"
+          ( cd receipts && sha256sum "$CASE.hbp" "$CASE.attest.log" "$CASE.verify.log" > "$CASE.sha256" && sha256sum -c "$CASE.sha256" )
+      - name: Reject altered source and altered evidence
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          cp "source/$CASE.cnf" "TAMPER.cnf"
+          printf 'c tamper\n' >> TAMPER.cnf
+          if native/target/release/bitcoin_matrix_funnel verify "$CASE" TAMPER.cnf "receipts/$CASE.hbp" > negative-source.log 2>&1; then exit 1; fi
+          cp "receipts/$CASE.hbp" TAMPER.hbp
+          printf 'TAMPER\n' >> TAMPER.hbp
+          if native/target/release/bitcoin_matrix_funnel verify "$CASE" "source/$CASE.cnf" TAMPER.hbp > negative-receipt.log 2>&1; then exit 1; fi
+          grep -Fq 'BTC_MATRIX_FAIL' negative-source.log
+          grep -Fq 'BTC_MATRIX_FAIL' negative-receipt.log
+          echo "BTC_MATRIX_NEGATIVES|case=$CASE|source=REJECTED|receipt=REJECTED|status=PASS|json=0"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-proof-${{ matrix.case }}
+          path: receipts/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independent original-CNF readback and exact matrix inverse replay"
+    needs: original-matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-original-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-matrix-proof-*
+          path: receipts
+          merge-multiple: true
+      - name: Recompute original source identities and all two matrix receipts
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd receipts && sha256sum -c nonce32.sha256 && sha256sum -c merkle_nonce288.sha256 )
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --release --offline --locked
+          for case in nonce32 merkle_nonce288; do
+            native/target/release/bitcoin_matrix_funnel verify "$case" "source/$case.cnf" "receipts/$case.hbp"
+          done
+          test "$(grep -cl '^BTC_MATRIX_FINAL|' receipts/*.hbp)" -eq 2
+          echo 'BTC_MATRIX_HOSTED|source_cnf=PINNED|case_receipts=2|binary_ternary_roundtrip=PASS|full_sha256d_reference=PASS|search=SEPARATE_GATE|status=PASS|json=0'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-referee-accepted
+          path: receipts/
+          if-no-files-found: error
+          retention-days: 30

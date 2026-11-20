@@ -1,0 +1,163 @@
+name: "P-NP original Bitcoin direct SAT versus exact full-CNF matrix pump"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: btc-cnf-compare-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: "Pin original Bitcoin genesis full-hash 32/288-bit CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify immutable Bitcoin source and generate original Boolean circuits
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          test "$(git hash-object experiments/bitcoin/runner.py)" = 8230c55e8b43c416e2f84410c7526d3848646cf7
+          python3 -m py_compile research/bitcoin_cnf_pump_compare.py
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/SOURCE.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/SOURCE.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum *.cnf *.txt SOURCE.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: btc-cnf-comparison-original-input
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  paired-case:
+    name: "Same-host direct and full-CNF matrix SAT comparison on ${{ matrix.case }}"
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CASE: ${{ matrix.case }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: btc-cnf-comparison-original-input
+          path: source
+      - name: Pin Rust 1.81 and source-locked CaDiCaL 1.7.4
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_cnf_pump --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin bitcoin_cnf_pump --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_cnf_pump --offline --locked --release
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends 'cadical=1.7.4-1' time
+          dpkg-query -W cadical | tee SOLVER_VERSION.hbp
+      - name: Exact full-CNF pump, paid Brown freezes, inverse and source-byte identity
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          mkdir -p "results/$CASE/matrix" "results/$CASE/direct/cadical/$CASE" "results/$CASE/matrix/cadical/$CASE"
+          native/target/release/bitcoin_cnf_pump "$CASE" "source/$CASE.cnf" "results/$CASE/matrix/$CASE.cnf" "results/$CASE/matrix/$CASE.hbp" | tee "results/$CASE/matrix/PUMP_LOG.hbp"
+          cp "source/$CASE.txt" "results/$CASE/matrix/$CASE.txt"
+          cmp "source/$CASE.cnf" "results/$CASE/matrix/$CASE.cnf"
+          sha256sum "source/$CASE.cnf" "results/$CASE/matrix/$CASE.cnf"
+          grep -Fq '|full_frames_reversed=' "results/$CASE/matrix/$CASE.hbp"
+          grep -Fq '|original_cnf_for_solver=BYTE_IDENTICAL|sha256d_search=NOT_RUN|' "results/$CASE/matrix/$CASE.hbp"
+      - name: Compare direct source versus matrix-restored source under 300s each
+        run: |
+          set -euo pipefail
+          run_direct() {
+            python3 -s -B research/bitcoin_300s_reference.py run --arm cadical --case "$CASE" --source source --output "results/$CASE/direct/cadical/$CASE" | tee "results/$CASE/direct/RUN.hbp"
+          }
+          run_matrix() {
+            python3 -s -B research/bitcoin_300s_reference.py run --arm cadical --case "$CASE" --source "results/$CASE/matrix" --output "results/$CASE/matrix/cadical/$CASE" | tee "results/$CASE/matrix/RUN.hbp"
+          }
+          if [[ "$CASE" == nonce32 ]]; then
+            run_direct
+            run_matrix
+          else
+            run_matrix
+            run_direct
+          fi
+          test -s "results/$CASE/direct/cadical/$CASE/receipt.txt"
+          test -s "results/$CASE/matrix/cadical/$CASE/receipt.txt"
+          ( cd results && find "$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$CASE.ALL.sha256" )
+          ( cd results && sha256sum -c "$CASE.ALL.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: btc-cnf-comparison-result-${{ matrix.case }}
+          path: |
+            results/
+            SOLVER_VERSION.hbp
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independently check both original CNFs and all four SAT/HOLD receipts"
+    needs: paired-case
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: btc-cnf-comparison-original-input
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: btc-cnf-comparison-result-*
+          path: evidence
+          merge-multiple: true
+      - name: Verify entire source/model/receipt graph independently
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          test "$(find evidence/results -name receipt.txt -type f | wc -l)" -eq 4
+          ( cd evidence/results && sha256sum -c nonce32.ALL.sha256 && sha256sum -c merkle_nonce288.ALL.sha256 )
+          python3 -s -B research/bitcoin_cnf_pump_compare.py --source source --results evidence/results --out evidence/BTC_CNF_COMPARISON.hbp | tee evidence/REFEREE.hbp
+          grep -Fq '|source_byte_equivalence=PASS|independent_original_clause_check=PASS|' evidence/BTC_CNF_COMPARISON.hbp
+          test "$(grep -c '^BTC_CNF_COMPARE|' evidence/BTC_CNF_COMPARISON.hbp)" -eq 4
+          printf 'c tamper\n' >> evidence/results/nonce32/matrix/nonce32.cnf
+          if python3 -s -B research/bitcoin_cnf_pump_compare.py --source source --results evidence/results --out evidence/NEGATIVE.hbp > evidence/NEGATIVE.log 2>&1; then exit 1; fi
+          cp source/nonce32.cnf evidence/results/nonce32/matrix/nonce32.cnf
+          ( cd evidence && find . -type f ! -name FINAL_SHA256.hbp -print0 | sort -z | xargs -0 sha256sum > FINAL_SHA256.hbp )
+          ( cd evidence && sha256sum -c FINAL_SHA256.hbp )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: btc-cnf-comparison-independently-verified
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  archive-readback:
+    name: "Independent complete Bitcoin direct/pump benchmark readback"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: btc-cnf-comparison-independently-verified
+          path: evidence
+      - name: Check all bytes and comparison receipt roots
+        run: |
+          set -euo pipefail
+          ( cd evidence && sha256sum -c FINAL_SHA256.hbp )
+          grep -Fq 'BTC_CNF_COMPARISON_FINAL|schema=1|cases=2|routes=2|solver=cadical|observations=4|' evidence/BTC_CNF_COMPARISON.hbp
+          echo 'BTC_CNF_COMPARISON_ARCHIVE|actual_source_bytes=PASS|four_solver_receipts=PASS|all_archives=PASS|status=PASS|json=0'

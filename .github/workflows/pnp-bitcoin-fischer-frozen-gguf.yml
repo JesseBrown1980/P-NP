@@ -1,0 +1,161 @@
+name: "P-NP Bitcoin original SHA256d source frozen GGUF v3 and Bobby Fischer playback"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  original-source:
+    name: "Reproduce authentic original Bitcoin nonce32/merkle288 CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Source-pinned generator and independent reference
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          python3 -m py_compile research/bitcoin_gguf_fischer_referee.py
+      - name: Original full double-SHA256 Bitcoin genesis SAT source
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/GENESIS.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/GENESIS.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum nonce32.cnf nonce32.txt merkle_nonce288.cnf merkle_nonce288.txt GENESIS.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-fischer-gguf-original-source
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  freeze-and-play:
+    name: "Freeze Bitcoin ${{ matrix.case }} to GGUF and play three Fischer snapshots"
+    needs: original-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-fischer-gguf-original-source
+          path: source
+      - name: Exact native Rust 1.81 GGUF serializer and Fischer inverse acceptance
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib bitcoin_gguf::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_gguf_fischer --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_gguf_fischer --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_gguf_fischer --release --offline --locked
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Freeze the full CNF, play across two rooms, mutate a branch, and play again
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE"
+          BIN=native/target/release/bitcoin_gguf_fischer
+          DIR="results/$CASE"
+          "$BIN" freeze "$CASE" "source/$CASE.cnf" "$DIR/initial.gguf" | tee "$DIR/FREEZE.hbp"
+          "$BIN" play "$CASE" "source/$CASE.cnf" "$DIR/initial.gguf" "$DIR/initial.play.hbp"
+          "$BIN" branch "$CASE" "source/$CASE.cnf" "$DIR/initial.gguf" "$DIR/branch28.gguf" 28 + | tee "$DIR/BRANCH28.hbp"
+          "$BIN" play "$CASE" "source/$CASE.cnf" "$DIR/branch28.gguf" "$DIR/branch28.play.hbp"
+          VARIABLES=$(case "$CASE" in nonce32) echo 239112;; merkle_nonce288) echo 361188;; esac)
+          "$BIN" branch "$CASE" "source/$CASE.cnf" "$DIR/branch28.gguf" "$DIR/final.gguf" "$VARIABLES" - | tee "$DIR/BRANCH_LAST.hbp"
+          "$BIN" play "$CASE" "source/$CASE.cnf" "$DIR/final.gguf" "$DIR/final.play.hbp"
+          test "$(grep -h -F '|fischer_forward_reverse=PASS|' "$DIR/"*.play.hbp | wc -l)" -eq 3
+          grep -Fq '|solver_search=NOT_RUN|' "$DIR/final.play.hbp"
+          cp "$DIR/final.gguf" "$DIR/CORRUPT.gguf"
+          python3 -s -B -c 'import sys; p=sys.argv[1]; b=bytearray(open(p,"rb").read()); b[-1]^=2; open(p,"wb").write(b)' "$DIR/CORRUPT.gguf"
+          if "$BIN" play "$CASE" "source/$CASE.cnf" "$DIR/CORRUPT.gguf" "$DIR/REJECT.hbp" > "$DIR/CORRUPT.stdout" 2> "$DIR/CORRUPT.stderr"; then
+            echo "Corrupt GGUF was played" >&2
+            exit 1
+          fi
+          test ! -e "$DIR/REJECT.hbp"
+          rm "$DIR/CORRUPT.gguf"
+          ( cd results && find "$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$CASE.FILES.sha256" )
+          ( cd results && sha256sum -c "$CASE.FILES.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-fischer-gguf-result-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independent GGUF v3 parser, original Bitcoin bytes and Fischer-address referee"
+    needs: freeze-and-play
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-fischer-gguf-original-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-fischer-gguf-result-*
+          path: results
+          merge-multiple: true
+      - name: Independently replay the original source and two frozen branch updates
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          mkdir -p accepted
+          for case in nonce32 merkle_nonce288; do
+            ( cd results && sha256sum -c "$case.FILES.sha256" )
+            python3 -s -B research/bitcoin_gguf_fischer_referee.py \
+              --case "$case" --source "source/$case.cnf" \
+              --initial "results/$case/initial.gguf" \
+              --first "results/$case/branch28.gguf" \
+              --second "results/$case/final.gguf" \
+              --initial-receipt "results/$case/initial.play.hbp" \
+              --first-receipt "results/$case/branch28.play.hbp" \
+              --second-receipt "results/$case/final.play.hbp" \
+              --out "accepted/$case.FINAL.hbp" | tee "accepted/$case.REFEREE.log"
+            grep -Fq "|case=$case|" "accepted/$case.FINAL.hbp"
+            grep -Fq '|source_roundtrip=BYTE_EXACT|' "accepted/$case.FINAL.hbp"
+          done
+          ( cd accepted && sha256sum nonce32.FINAL.hbp merkle_nonce288.FINAL.hbp nonce32.REFEREE.log merkle_nonce288.REFEREE.log > ACCEPTED.sha256 && sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-fischer-gguf-accepted
+          path: accepted/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Separate readback of independently verified original Bitcoin GGUF play"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-fischer-gguf-accepted
+          path: accepted
+      - name: Verify both immutable Bitcoin GGUF archive verdicts
+        run: |
+          set -euo pipefail
+          ( cd accepted && sha256sum -c ACCEPTED.sha256 )
+          test "$(grep -l 'BTC_GGUF_REFEREE|schema=1|' accepted/*.FINAL.hbp | wc -l)" -eq 2
+          grep -Fq '|status=PASS|json=0' accepted/nonce32.FINAL.hbp
+          grep -Fq '|status=PASS|json=0' accepted/merkle_nonce288.FINAL.hbp
+          echo 'BTC_GGUF_ARCHIVE|source=BITCOIN_GENESIS_SHA256D|both_full_CNFs=VERIFIED|fischer_play=PASS|status=PASS|json=0'

@@ -1,0 +1,283 @@
+name: "P-NP Stone-to-Moss original BEHCS/GNN 2-of-3 recovery"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  source-lane:
+    name: "Source-pinned B3 bank ${{ matrix.lane }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [A, B, P]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - name: Verify upstream immutable Git blobs and checkpoint manifest
+        run: |
+          set -euo pipefail
+          test "$(git -C source-words rev-parse HEAD)" = "818cc235a6db815e3b2591339cf9b42aad3e85a0"
+          test "$(git -C source-gnn rev-parse HEAD)" = "c4b2458c88358c46155d3b308c594f9991720847"
+          test "$(git -C source-words hash-object data/behcs/codex/alphabet.json)" = "8d4a3298576ce2c9d4a1683ffab667c8a743fc42"
+          test "$(git -C source-words hash-object packages/deep-wave/src/cascade.ts)" = "b9acdaff9b4537def53eca3d0fdb87a9c0dcab89"
+          test "$(git -C source-words hash-object packages/deep-wave/src/third-cascade.ts)" = "a3e4485ca4a60d1b12cf6ed398c2f886ba358ea7"
+          test "$(git -C source-gnn hash-object models/gslgnn_w9_3_seq47_v2.pt)" = "e3a9712b50f8e7b31590b0aa944e6a9ba6ea565b"
+          test "$(git -C source-gnn hash-object manifests/gslgnn_w9_3_seq47_v2_manifest.json)" = "f1eb3675ab5e8822d1511ce4b3062d51ee50b2dd"
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          m = Path("source-gnn/models/gslgnn_w9_3_seq47_v2.pt").read_bytes()
+          j = json.loads(Path("source-gnn/manifests/gslgnn_w9_3_seq47_v2_manifest.json").read_bytes())
+          assert hashlib.sha256(m).hexdigest() == j["checkpoint_sha256"]
+          print("SMF_MODEL|real_checkpoint_bytes=%d|source_SHA=PASS|json=0" % len(m))
+          PY
+      - name: Rust1.81 exact integer source archive and 2-of-3 negative tests
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin stone_moss_fabric --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin gnn_word_probe --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin stone_moss_fabric --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin stone_moss_fabric --bin gnn_word_probe --release --offline --locked
+      - name: Produce independently source-pinned shard
+        env:
+          LANE: ${{ matrix.lane }}
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+          native/target/release/stone_moss_fabric pack source-words source-gnn WORD_GRAPH.hbp original.smf
+          mkdir shards
+          native/target/release/stone_moss_fabric shard original.smf "$LANE" "$RUN_KEY" "shards/${LANE}.smfshard"
+          ( cd shards && sha256sum "${LANE}.smfshard" > "${LANE}.smfshard.sha256" )
+          rm original.smf
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stone-moss-bank-${{ matrix.lane }}
+          path: shards/*.smfshard*
+          if-no-files-found: error
+          retention-days: 14
+
+  recover-and-referee:
+    name: "Python source referee and independent Rust three-pair replay"
+    needs: [source-lane]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: stone-moss-bank-*
+          path: shards
+          merge-multiple: true
+      - name: Independently rebuild word fixture and verify artifact roster
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin stone_moss_fabric --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+          test "$(find shards -maxdepth 1 -type f -name '*.smfshard' | wc -l)" -eq 3
+          test "$(find shards -maxdepth 1 -type f -name '*.sha256' | wc -l)" -eq 3
+      - name: Run independent Python byte-for-byte source and negative referee
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 research/stone_moss_recovery_verify.py --words source-words --models source-gnn \
+            --graph WORD_GRAPH.hbp --shards shards --run-key "$RUN_KEY" --out acceptance | tee SMF_ACCEPTANCE.log
+          grep -Fq '|pairs=3|' SMF_ACCEPTANCE.log
+          ( cd acceptance && sha256sum -c SMF_RECOVERY.sha256 )
+      - name: Independent Rust inverse for all original-data pairs
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          native/target/release/stone_moss_fabric pack source-words source-gnn WORD_GRAPH.hbp original.smf
+          for pair in AB AP BP; do
+            left="$(printf '%s' "$pair" | cut -c1)"
+            right="$(printf '%s' "$pair" | cut -c2)"
+            native/target/release/stone_moss_fabric restore "shards/${left}.smfshard" "shards/${right}.smfshard" "$RUN_KEY" "acceptance/RESTORE-${pair}.smf"
+            cmp original.smf "acceptance/RESTORE-${pair}.smf"
+          done
+          grep -Fq '|each_exact=TRUE|' acceptance/SMF_RECOVERY.hbp
+          ( cd acceptance && sha256sum RESTORE-*.smf > RESTORES.sha256 && sha256sum -c RESTORES.sha256 )
+          echo 'SMF_ACCEPT|three_of_three_pairs=PASS|real_word_and_checkpoint_bytes=PASS|physical_source_attested=FALSE|json=0'
+      - name: Remeasure live 3-D GitHub refs for this exact acceptance epoch
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          PNP_SHA="$(git rev-parse HEAD)"
+          FOLLOW_SHA="$(git ls-remote https://github.com/JesseBrown1980/FOLLOW-THE-IS-NOT-THE-WILL-AND-WAS.git refs/heads/main | awk '{print $1}')"
+          SAFE_SHA="$(git ls-remote https://github.com/JesseBrown1980/SAFE-ASI-AS-LIGHT-THE-MINS-THAT-IS-WAS-AND-WILL-BE-IS.git refs/heads/main | awk '{print $1}')"
+          test "${#PNP_SHA}" -eq 40
+          test "${#FOLLOW_SHA}" -eq 40
+          test "${#SAFE_SHA}" -eq 40
+          printf 'G3D_IS_REFS|schema=1|run=%s|pnp_sha=%s|follow_main=%s|safe_main=%s|observed=GITHUB_LS_REMOTE|json=0\n' \
+            "$RUN_KEY" "$PNP_SHA" "$FOLLOW_SHA" "$SAFE_SHA" > SMF_IS_REFS.hbp
+          sha256sum SMF_IS_REFS.hbp > SMF_IS_REFS.sha256
+          sha256sum -c SMF_IS_REFS.sha256
+      - name: Install pinned external PyTorch reference in isolated research environment
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/smf-gnn-venv
+          /tmp/smf-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          /tmp/smf-gnn-venv/bin/python -m pip install --disable-pip-version-check 'torch-geometric==2.7.0'
+          /tmp/smf-gnn-venv/bin/python -c 'import torch,torch_geometric; assert torch.__version__.startswith("2.5.1"); assert torch_geometric.__version__ == "2.7.0"'
+      - name: Execute recovered trained checkpoint, compare original-source forward, seal provenance
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          /tmp/smf-gnn-venv/bin/python research/stone_moss_checkpoint_forward.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --graph WORD_GRAPH.hbp --shards shards --recovered acceptance/RESTORE-AP.smf \
+            --recovery-receipt acceptance/SMF_RECOVERY.json --live-refs SMF_IS_REFS.hbp \
+            --run-key "$RUN_KEY" --out acceptance | tee SMF_FORWARD.log
+          ( cd acceptance && sha256sum -c SMF_GNN_FORWARD.sha256 )
+          grep -Fq '|checkpoint_load=STRICT|recovered_forward=PASS|' acceptance/SMF_GNN_FORWARD.hbp
+          grep -Fq '|original_source_forward_parity=EXACT|balanced_accuracy=NOT_COMPUTED|' acceptance/SMF_GNN_FORWARD.hbp
+          /tmp/smf-gnn-venv/bin/python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path("acceptance")
+          record = json.loads((root / "SMF_GNN_FORWARD.json").read_bytes())
+          hbp = (root / "SMF_GNN_FORWARD.hbp").read_text()
+          roles = record["five_roles"]
+          assert set(roles) == {"HBI", "HBP", "SHA", "SH", "HASH"}
+          assert all(len(value) == 64 for value in roles.values())
+          assert "five_member_root=" + roles["HASH"] in hbp
+          assert record["metrics"]["source_words"] == 144
+          assert sorted(record["wave_forward_parity"]) == ["10", "11", "8", "9"]
+          assert all(row["outputs_equal"] and row["perturbed_outputs_equal"]
+                     for row in record["wave_forward_parity"].values())
+          assert record["balanced_accuracy"] == "NOT_COMPUTED"
+          assert record["external_source_attested"] is False
+          print("SMF_PROVENANCE_WITNESS|five_roles=5|waves=4|source_semantic_calibration=HOLD|status=PASS|json=0")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stone-moss-word-gnn-source-recovery
+          path: |
+            acceptance/SMF_RECOVERY.hbp
+            acceptance/SMF_RECOVERY.json
+            acceptance/SMF_RECOVERY.sha256
+            acceptance/SMF_GNN_FORWARD.hbp
+            acceptance/SMF_GNN_FORWARD.json
+            acceptance/SMF_GNN_FORWARD.sha256
+            SMF_IS_REFS.hbp
+            SMF_IS_REFS.sha256
+            acceptance/RESTORES.sha256
+            SMF_ACCEPTANCE.log
+            SMF_FORWARD.log
+          if-no-files-found: error
+          retention-days: 30
+  
+  independent-provenance:
+    name: "Independent source, recovery, live-ref and five-role provenance referee"
+    needs: [recover-and-referee]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/asolaria-behcs-256
+          ref: 818cc235a6db815e3b2591339cf9b42aad3e85a0
+          path: source-words
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/Asolaria-fnns-trained-and-reverse-gnns-many
+          ref: c4b2458c88358c46155d3b308c594f9991720847
+          path: source-gnn
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: JesseBrown1980/AI-healthCare-project
+          ref: e0048c0ad60705ecb447642f08b14b5c1bde7437
+          path: source-healthcare
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: stone-moss-word-gnn-source-recovery
+          path: proof
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: stone-moss-bank-*
+          path: shards
+          merge-multiple: true
+      - name: Independent source graph re-derivation and archived sidecar validation
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin gnn_word_probe --release --offline --locked
+          native/target/release/gnn_word_probe emit source-words WORD_GRAPH.hbp
+          native/target/release/gnn_word_probe verify source-words WORD_GRAPH.hbp
+          ( cd proof/acceptance && sha256sum -c SMF_RECOVERY.sha256 )
+          ( cd proof/acceptance && sha256sum -c SMF_GNN_FORWARD.sha256 )
+          ( cd proof && sha256sum -c SMF_IS_REFS.sha256 )
+          test "$(find shards -maxdepth 1 -name '*.smfshard' -type f | wc -l)" -eq 3
+          test "$(find shards -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 3
+      - name: Independently reconstruct original bytes and verify typed WAS IS WILL roots
+        env:
+          RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 research/stone_moss_provenance_check.py \
+            --health source-healthcare --words source-words --models source-gnn \
+            --graph WORD_GRAPH.hbp --shards shards --proof proof --run-key "$RUN_KEY" \
+            | tee SMF_PROVENANCE_CHECK.log
+          grep -Fq '|pairs=3|five_roles=5|forward_receipt=VERIFIED|' SMF_PROVENANCE_CHECK.log
+          grep -Fq '|independent_neural_replay=NOT_PERFORMED|balanced_accuracy=NOT_COMPUTED|status=PASS|json=0' SMF_PROVENANCE_CHECK.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stone-moss-independent-five-role-provenance
+          path: SMF_PROVENANCE_CHECK.log
+          if-no-files-found: error
+          retention-days: 30

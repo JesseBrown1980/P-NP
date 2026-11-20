@@ -1,0 +1,152 @@
+name: "P-NP Bitcoin full matrix and 300-second Fischer-RIME search"
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: "Rebuild byte-pinned Bitcoin nonce32 and merkle_nonce288 CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original source and independent research wrapper integrity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          test "$(git hash-object experiments/bitcoin/arm.py)" = c130a41c31370062c317cc530ed5785cd3959dfb
+          test "$(git hash-object experiments/bitcoin/watched.py)" = 0c27f4293798fe451c620f4871e6c886e389fe61
+          python3 -m py_compile research/bitcoin_300s_matrix_search.py research/bitcoin_300s_matrix_verify.py
+          python3 -s -B tools/exact_policy.py experiments/bitcoin/genesis.py experiments/bitcoin/arm.py experiments/bitcoin/watched.py
+      - name: Reproduce original Bitcoin SHA256d full target circuit source
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/BUILD.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum nonce32.cnf nonce32.txt merkle_nonce288.cnf merkle_nonce288.txt BUILD.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-300-source
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  matrix-search:
+    name: "Matrix + 300s ${{ matrix.arm }} / ${{ matrix.case }}"
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [ym_fischer, rime_new, rime_original]
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-300-source
+          path: source
+      - name: Compile exact Rust 1.81 matrix source transport
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --release --offline --locked
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Transport full original source through matrix then give exact SAT search 300 seconds
+        env:
+          ARM: ${{ matrix.arm }}
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$ARM/$CASE"
+          python3 -s -B research/bitcoin_300s_matrix_search.py run \
+            --arm "$ARM" --case "$CASE" --cnf "source/$CASE.cnf" \
+            --matrix native/target/release/bitcoin_matrix_funnel \
+            --output "results/$ARM/$CASE" | tee "results/$ARM/$CASE/PIPELINE.log"
+          grep -Fq '|search_budget_seconds=300|' "results/$ARM/$CASE/receipt.hbp"
+          grep -Fq '|node_cap=1000000000000|' "results/$ARM/$CASE/receipt.hbp"
+          grep -Fq '|solver_search=NOT_RUN|' "results/$ARM/$CASE/matrix.hbp"
+          ( cd results && find "$ARM/$CASE" -type f -print0 | sort -z | xargs -0 sha256sum > "$ARM-$CASE.sha256" )
+          ( cd results && sha256sum -c "$ARM-$CASE.sha256" )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-300-result-${{ matrix.arm }}-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independent matrix and genuine 300s SHA256d SAT search witness referee"
+    needs: matrix-search
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-300-source
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-matrix-300-result-*
+          path: results
+          merge-multiple: true
+      - name: Independently audit six searches and rebuild original matrix evidence
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          rustup toolchain install 1.81.0 --profile minimal
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_matrix_funnel --release --offline --locked
+          for arm in ym_fischer rime_new rime_original; do
+            for case in nonce32 merkle_nonce288; do
+              ( cd results && sha256sum -c "$arm-$case.sha256" )
+            done
+          done
+          test "$(find results -name receipt.hbp -type f | wc -l)" -eq 6
+          python3 -s -B research/bitcoin_300s_matrix_verify.py \
+            --source source --results results --matrix native/target/release/bitcoin_matrix_funnel \
+            --out MATRIX_300_FINAL.hbp | tee MATRIX_300_REFEREE.log
+          grep -Fq 'BTC300_MATRIX_FINAL|schema=1|cases=2|arms=3|observations=6|' MATRIX_300_FINAL.hbp
+          grep -Fq '|search_budget_seconds=300|' MATRIX_300_FINAL.hbp
+          mkdir -p accepted
+          cp MATRIX_300_FINAL.hbp MATRIX_300_REFEREE.log accepted/
+          ( cd accepted && sha256sum MATRIX_300_FINAL.hbp MATRIX_300_REFEREE.log > FINAL.sha256 && sha256sum -c FINAL.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-matrix-300-independently-accepted
+          path: accepted/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Archive readback of true 300-second Fischer/RIME matrix search"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-matrix-300-independently-accepted
+          path: accepted
+      - name: Audit archived final source/proof evidence
+        run: |
+          set -euo pipefail
+          ( cd accepted && sha256sum -c FINAL.sha256 )
+          test "$(grep -c '^BTC300_MATRIX_CASE|' accepted/MATRIX_300_FINAL.hbp)" -eq 6
+          grep -Fq '|matrix_replay=PASS|node_cap=1000000000000|' accepted/MATRIX_300_FINAL.hbp
+          echo 'BTC300_MATRIX_ARCHIVE|all_six_cases=ACCEPTED|original_source=PINNED|full_sha256d=INDEPENDENT|status=PASS|json=0'
