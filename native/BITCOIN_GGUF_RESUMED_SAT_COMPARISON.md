@@ -103,3 +103,43 @@ external SAT solvers at the entire five-minute limit.
 
 Original Asolaria/Mythos files and historical Bitcoin search sources
 remain untouched. PR #57 stays draft pending acceptance.
+
+## Raised-node five-minute original Bitcoin contest
+
+The next control is implemented in
+`.github/workflows/pnp-bitcoin-gguf-raised-300s.yml`.
+It reuses the *same* original-CNF GGUF binary and independent referee, but
+sets `PNP_BTC_NODE_CAP=1000000000000`, so an old 128-node pilot ceiling no
+longer ends the experiment early. It compares all six source/solver pairs:
+Bitcoin nonce32 and merkle_nonce288, each in direct, GGUF-played and
+GGUF-played + matrix-guided modes.
+
+**Wall protocol:** each independent SAT worker has a 300-second external
+maximum for original CNF read, GGUF freeze/write/read/thaw, Bobby Fischer
+address play, source-only route generation, exact SAT recursion, verification
+and output receipt. An internal **285-second absolute deadline** allows
+counter/receipt publication with 15 seconds reserved for slow final
+serialization. This guard applies in all three raised-node modes; the
+pre-existing 128-node workflows remain unchanged. If the externally managed
+300-second process kill wins, evidence is `HOLD_TIME` with **unobserved**
+partial counters, rather than invented node totals.
+
+Exact DPLL uses a 1,024-level recursion cap only in the raised budget path,
+so a branch can honestly report `HOLD_STACK` without process-aborting
+stack overflow. `HOLD_NODE` identifies the full one-trillion-node ceiling,
+and `HOLD_TIME` identifies an internally timed-out but counted search.
+These are distinct from successful source-authenticated `SAT`.
+
+The independent standard-library referee accepts the same provenance fields
+for pilot and raised modes. Only fully completed, nontimed direct/GGUF
+runs must have identical source-tree counters; time-capped trials can
+legitimately visit different numbers of nodes because GGUF playback adds
+real overhead. All three paths keep the original clause data and test
+any SAT witness against the complete original Bitcoin genesis target.
+The referee separately times its own per-trial verification work.
+
+Status remains **queued / acceptance pending** until the exact-commit
+Rust 1.81 and independent hosted runs publish final PASS/HOLD records.
+A node cap of one trillion is a **safety limit**, not a claim that one
+trillion nodes can fit into 300 seconds. No cryptographic preimage speedup
+or P-vs-NP proof is inferred from bounded budget results.
