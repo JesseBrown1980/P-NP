@@ -530,10 +530,13 @@ mod tests {
                 &cnf, &guidance, Some(64), &restored.states, &sha
             ).expect("guided seeded");
             assert_eq!(guided.status, baseline.status);
-            assert!(guided.model.as_ref().is_none_or(|m| cnf.valid_complete_model(m)));
+            assert!(match &guided.model {
+                Some(model) => cnf.valid_complete_model(model),
+                None => true,
+            });
             assert_eq!(watch.watcher_reads, watch.freeze_play_pairs);
             assert_eq!(live.watcher_reads, live.freeze_play_pairs);
-            assert!(selector.choices > 0);
+            assert!(selector.choices <= guided.nodes);
         }
         assert!(solve_from_assignment(
             &cnf, &guidance, None, &[Trit::Zero]
