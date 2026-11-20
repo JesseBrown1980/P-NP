@@ -1,0 +1,153 @@
+name: "P-NP original Bitcoin RimeSphere streaming 3-27-81 and GGUF/Fischer readback"
+on:
+  push:
+    branches:
+      - research/bitcoin-rimesphere-stream-20261119
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pnp-bitcoin-rimesphere-stream-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-source:
+    name: "Generate and pin original 32-bit and 288-bit Bitcoin SHA256d SAT CNFs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify source generator and independent Python referees
+        run: |
+          set -euo pipefail
+          test "$(git hash-object experiments/bitcoin/genesis.py)" = aa13b39569697f22f1a1604e5cb5bda2274b7ad8
+          python3 -m py_compile research/bitcoin_rimesphere_stream_referee.py research/bitcoin_gguf_fischer_referee.py research/bitcoin_live_sat_referee.py
+      - name: Generate immutable original Bitcoin SHA256d SAT source
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          python3 -s -B experiments/bitcoin/genesis.py source | tee source/BUILD.hbp
+          grep -Fq 'BTC_SOURCE_FINAL|four_sources=PASS|SHA256d_genesis=PASS|' source/BUILD.hbp
+          printf '%s  %s\n' 6fe3e686c0b4c5dbd18a550c0b28c10ec6cabd41b02367a1fb6747eac49f88d3 nonce32.cnf 601412f3d918c401b00df22a1b2799e50811fdbf2f1e87602211d7fb1fa6bb4b merkle_nonce288.cnf > source/ORIGINAL.sha256
+          ( cd source && sha256sum -c ORIGINAL.sha256 )
+          ( cd source && sha256sum nonce32.cnf merkle_nonce288.cnf nonce32.txt merkle_nonce288.txt BUILD.hbp ORIGINAL.sha256 > SOURCE.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-rimesphere-original-sources
+          path: source/
+          retention-days: 30
+          if-no-files-found: error
+
+  rust-and-stream:
+    name: "Stream Bitcoin ${{ matrix.case }} into nested RimeSphere and back"
+    needs: original-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          path: source
+      - name: Rust 1.81 full reversible stream and source-address tests
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib bitcoin_rimesphere_stream::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --bin bitcoin_rimesphere_stream --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_rimesphere_stream --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_rimesphere_stream --release --offline --locked
+          ( cd source && sha256sum -c SOURCE.sha256 )
+      - name: Pump the complete original CNF, stream Fischer 3-27-81, then freeze GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE"
+          /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/worker_time.hbp" \
+            native/target/release/bitcoin_rimesphere_stream stream "$CASE" \
+            "source/$CASE.cnf" "results/$CASE" \
+            > "results/$CASE/stdout.log" 2> "results/$CASE/stderr.log"
+          grep -Fq 'BITCOIN_RIMESPHERE_FINAL|schema=1|' "results/$CASE/BITCOIN_RIMESPHERE.hbp"
+          grep -Fq '|checkpoint=READY|status=PASS|json=0' "results/$CASE/BITCOIN_RIMESPHERE.hbp"
+          cmp "source/$CASE.cnf" "results/$CASE/BITCOIN.replayed.cnf"
+          test "$(head -c 4 "results/$CASE/BITCOIN.rimesphere.gguf")" = GGUF
+          sha256sum "results/$CASE/BITCOIN.rime" "results/$CASE/BITCOIN.hbi" \
+            "results/$CASE/BITCOIN.replayed.cnf" "results/$CASE/BITCOIN.rimesphere.gguf" \
+            > "results/$CASE/WORKER.sha256"
+          sha256sum -c "results/$CASE/WORKER.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-rimesphere-result-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent-referee:
+    name: "Independent source SHA / RimeSphere slice / GGUF byte-exact referee"
+    needs: rust-and-stream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-rimesphere-result-*
+          path: results
+          merge-multiple: true
+      - name: Verify independent original Bitcoin RimeSphere and GGUF source recovery
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          mkdir -p accepted
+          for case in nonce32 merkle_nonce288; do
+            sha256sum -c "results/$case/WORKER.sha256"
+            python3 -s -B research/bitcoin_rimesphere_stream_referee.py \
+              --case "$case" --source "source/$case.cnf" \
+              --folder "results/$case" --out "accepted/$case.FINAL.hbp" \
+              | tee "accepted/$case.REFEREE.log"
+            grep -Fq "|case=$case|" "accepted/$case.FINAL.hbp"
+            grep -Fq '|source_replay=BYTE_EXACT|status=PASS|json=0' "accepted/$case.FINAL.hbp"
+          done
+          ( cd accepted && sha256sum nonce32.FINAL.hbp merkle_nonce288.FINAL.hbp \
+            nonce32.REFEREE.log merkle_nonce288.REFEREE.log > ACCEPTED.sha256 && \
+            sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-rimesphere-stream-accepted
+          path: accepted/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Read back both original Bitcoin RimeSphere source certificates"
+    needs: independent-referee
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-stream-accepted
+          path: accepted
+      - name: Validate original Bitcoin complete-source acceptance roots
+        run: |
+          set -euo pipefail
+          ( cd accepted && sha256sum -c ACCEPTED.sha256 )
+          test "$(grep -l 'BITCOIN_RIME_REFEREE|case=' accepted/*.FINAL.hbp | wc -l)" -eq 2
+          grep -Fq '|status=PASS|json=0' accepted/nonce32.FINAL.hbp
+          grep -Fq '|status=PASS|json=0' accepted/merkle_nonce288.FINAL.hbp
+          echo 'BITCOIN_RIMESPHERE_ARCHIVE|full_original_sources=2|sphere_arity=3-27-81|fischer_address=VERIFIED|gguf_checkpoint=VERIFIED|status=PASS|json=0'
