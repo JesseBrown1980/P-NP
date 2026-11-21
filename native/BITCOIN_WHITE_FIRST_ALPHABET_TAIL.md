@@ -113,7 +113,7 @@ This evidence establishes representation/reconstruction equivalence
 and empirical candidate-order behavior **only**. The full 32-bit
 Bitcoin nonce and generic SHA256d preimage problems remain open
 search tasks, and the preexisting accepted nine-cat full CNF
-511-node frontier is untouched.
+512-node frontier is untouched.
 
 ## Next source-preserving integration gate
 
