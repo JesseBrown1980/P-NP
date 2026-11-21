@@ -105,10 +105,10 @@ def parse_checkpoint(path,variables,clauses,source,mode,seed_sha):
         need(met["projected_rooms"]>0 or met["nodes"]==0,
              "no actual SAT shadow projections counted")
         need(met["projected_bytes"]==
-             (9 if mode=="one" else 35)*met["projected_rooms"],
+             (9 if mode=="one" else 18 if mode=="nine" else 35)*met["projected_rooms"],
              "shadow byte cost differs from actual signed 2D representation")
         need(met["reconstructed_rooms"]==
-             (0 if mode=="one" else met["projected_rooms"]),
+             (met["projected_rooms"] if mode=="three" else 0),
              "8-trit reconstruction witness not counted")
     return dict(
         path=str(path), sha=sha(raw), mode=mode,status=("RUNNING","SAT","UNSAT")[status],

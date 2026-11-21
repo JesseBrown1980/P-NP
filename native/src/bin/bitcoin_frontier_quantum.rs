@@ -35,7 +35,8 @@ fn step(args: &[String]) -> Result<()> {
         "direct" => FrontierMode::Direct,
         "one" => FrontierMode::One,
         "three" => FrontierMode::Three,
-        _ => return Err("mode must be direct/one/three".to_owned()),
+        "nine" => FrontierMode::Nine,
+        _ => return Err("mode must be direct/one/three/nine".to_owned()),
     };
     let (source_sha, variables, clauses) = original(&args[3])?;
     let quota = args[8].parse::<u64>()
@@ -177,7 +178,7 @@ fn step(args: &[String]) -> Result<()> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 9 || args[1] != "step" {
-        eprintln!("BTC_FRONTIER_FAIL|usage=bitcoin_frontier_quantum step <direct|one|three> <nonce32|merkle_nonce288> <original.cnf> <accepted.gguf> <NEW|previous.FRONTIER.frt> <output-folder> <new-node-quantum>|json=0");
+        eprintln!("BTC_FRONTIER_FAIL|usage=bitcoin_frontier_quantum step <direct|one|three|nine> <nonce32|merkle_nonce288> <original.cnf> <accepted.gguf> <NEW|previous.FRONTIER.frt> <output-folder> <new-node-quantum>|json=0");
         std::process::exit(1);
     }
     if let Err(error) = step(&args) {
