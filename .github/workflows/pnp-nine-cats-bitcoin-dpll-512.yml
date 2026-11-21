@@ -1,0 +1,253 @@
+name: "P-NP exact nine Shadow Cats: original Bitcoin 512-node DPLL parity and paid Shannon"
+on:
+  push:
+    branches: [research/nine-cats-bitcoin-exact-dpll-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pnp-nine-cats-dpll-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  step128:
+    name: "Bitcoin ${{ matrix.case }}: 128 original-SHA256d DPLL nodes with 3×3 torus cats"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - name: Verify authentic full Bitcoin CNF and original three-shadow GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "gguf/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.replayed.cnf"
+
+      - name: Rust 1.81 strict Clippy and independent new mode SAT/UNSAT oracle
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib nine_cats_frontier_tests::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib frontier_adversarial_tests::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib brown_ledger::tests --offline --locked
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --bin bitcoin_frontier_quantum --offline --locked -- -D warnings
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_frontier_quantum --release --offline --locked
+      - name: Evaluate exact source-backed nine-cat DPLL and freeze complete 128-node frontier
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          mkdir -p "results/$CASE/nine/128"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/nine/128/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step nine "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            NEW "results/$CASE/nine/128" 128 \
+            > "results/$CASE/nine/128/stdout.log" \
+            2> "results/$CASE/nine/128/stderr.log"; then
+            cat "results/$CASE/nine/128/stderr.log" >&2
+            exit 1
+          fi
+          grep -Fq '|mode=nine|state=RUNNING|' "results/$CASE/nine/128/SESSION.hbp"
+          grep -Fq '|previous_nodes=0|new_nodes=128|nodes=128|' "results/$CASE/nine/128/SESSION.hbp"
+          ( cd "results/$CASE/nine/128" && sha256sum FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 && sha256sum -c RUN.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-nine-cats-dpll-128-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  step512:
+    name: "Bitcoin ${{ matrix.case }}: resume 128→512 plus fresh uninterrupted 512"
+    needs: step128
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [nonce32, merkle_nonce288]
+    steps:
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-${{ matrix.case }}
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - name: Verify authentic full Bitcoin CNF and original three-shadow GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd "gguf/$CASE" && sha256sum -c SHADOW.sha256 )
+          cmp "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.replayed.cnf"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-nine-cats-dpll-128-${{ matrix.case }}
+          path: prior
+      - name: Verify source-bound prior full frontier and build exact production binary
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          ( cd "prior/$CASE/nine/128" && sha256sum -c RUN.sha256 )
+          grep -Fq '|nodes=128|' "prior/$CASE/nine/128/SESSION.hbp"
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 build --manifest-path native/Cargo.toml --bin bitcoin_frontier_quantum --release --offline --locked
+      - name: Continue exactly 384 new nodes, separately run all 512 from original GGUF
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          for stage in 512 whole512; do mkdir -p "results/$CASE/nine/$stage"; done
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/nine/512/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step nine "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            "prior/$CASE/nine/128/FRONTIER.frt" "results/$CASE/nine/512" 384 \
+            > "results/$CASE/nine/512/stdout.log" \
+            2> "results/$CASE/nine/512/stderr.log"; then
+            cat "results/$CASE/nine/512/stderr.log" >&2
+            exit 1
+          fi
+          grep -Fq '|previous_nodes=128|new_nodes=384|nodes=512|' "results/$CASE/nine/512/SESSION.hbp"
+          if ! /usr/bin/time -f 'peak_rss_kib=%M|wall_seconds=%e' -o "results/$CASE/nine/whole512/worker_time.hbp" \
+            native/target/release/bitcoin_frontier_quantum step nine "$CASE" \
+            "source/$CASE.cnf" "gguf/$CASE/BITCOIN.three_shadows.gguf" \
+            NEW "results/$CASE/nine/whole512" 512 \
+            > "results/$CASE/nine/whole512/stdout.log" \
+            2> "results/$CASE/nine/whole512/stderr.log"; then
+            cat "results/$CASE/nine/whole512/stderr.log" >&2
+            exit 1
+          fi
+          grep -Fq '|previous_nodes=0|new_nodes=512|nodes=512|' "results/$CASE/nine/whole512/SESSION.hbp"
+          for stage in 512 whole512; do
+            ( cd "results/$CASE/nine/$stage" && sha256sum FRONTIER.frt SESSION.hbp stdout.log stderr.log worker_time.hbp > RUN.sha256 && sha256sum -c RUN.sha256 )
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-nine-cats-dpll-512-${{ matrix.case }}
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent:
+    name: "Independent original-CNF nine-cat 512-node frontier, paid meters and cross-arm source checks"
+    needs: step512
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-nonce32
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-three-shadow-merkle_nonce288
+          repository: JesseBrown1980/P-NP
+          run-id: 44725165515
+          github-token: ${{ github.token }}
+          path: gguf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-nine-cats-dpll-128-*
+          path: result
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: bitcoin-nine-cats-dpll-512-*
+          path: result
+          merge-multiple: true
+      - name: Independently parse 12 source-bound native Bitcoin frontier artifacts and reconcile Shannon costs
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          for case in nonce32 merkle_nonce288; do
+            ( cd "gguf/$case" && sha256sum -c SHADOW.sha256 )
+            for stage in 128 512 whole512; do
+              ( cd "result/$case/nine/$stage" && sha256sum -c RUN.sha256 )
+            done
+          done
+          mkdir -p acceptance
+          /usr/bin/time -f 'peak_rss_kib=%M|referee_seconds=%e' -o acceptance/TIME.hbp \
+            python3 -s -B research/bitcoin_nine_cats_dpll_referee.py \
+            --source source --gguf gguf --root result \
+            --out acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp \
+            > acceptance/REFEREE.log
+          cat acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp
+          grep -Fq '|original_CNF_SAT=EXACT|split_uninterrupted_parity=PASS|' acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp
+          test "$(grep -c '^BTC_NINE_CATS_DPLL|case=' acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp)" -eq 2
+          ( cd acceptance && sha256sum BTC_NINE_CATS_DPLL_FINAL.hbp REFEREE.log TIME.hbp > ACCEPTED.sha256 && sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-nine-cats-dpll-independent-accepted
+          path: acceptance/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Accepted source-authenticated nine-cat Bitcoin DPLL 512-node independent evidence"
+    needs: independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-nine-cats-dpll-independent-accepted
+          path: acceptance
+      - name: Final nine-cat parity and paid source bank evidence
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ACCEPTED.sha256 )
+          grep -Fq '|status=PASS|json=0' acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp
+          test "$(grep -c '^BTC_NINE_CATS_DPLL|case=' acceptance/BTC_NINE_CATS_DPLL_FINAL.hbp)" -eq 2
+          echo 'BTC_NINE_CATS_DPLL_ARCHIVE|cases=2|mode=nine|nodes=512|reference=512|status=PASS|json=0'
