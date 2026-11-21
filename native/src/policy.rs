@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 
 const MANIFEST: &str = include_str!("../../policy/LEGACY_PINNED.hbp");
-const ACCEPTED_WORKFLOWS: [&str; 24] = [
+const ACCEPTED_WORKFLOWS: [&str; 25] = [
     ".github/workflows/pnp-native-certification.yml",
     ".github/workflows/pnp-chariot-twenty-leaf.yml",
     ".github/workflows/pnp-qprism-hosted-transport.yml",
@@ -32,10 +32,11 @@ const ACCEPTED_WORKFLOWS: [&str; 24] = [
     ".github/workflows/pnp-bitcoin-frontier-independent-512.yml",
     ".github/workflows/pnp-frontier-adversarial-oracle.yml",
     ".github/workflows/pnp-nine-shadow-cats-paid-ledger.yml",
+    ".github/workflows/pnp-nine-cats-bitcoin-dpll-512.yml",
 ];
 // Explicit research-only model analysis, executed by pinned hosted workflow.
 // Native production and transport still accept only Rust implementations.
-const ACCEPTED_RESEARCH_SOURCE: [&str; 20] = [
+const ACCEPTED_RESEARCH_SOURCE: [&str; 21] = [
     "research/gnn_original_checkpoint_compare.py",
     "research/stone_moss_recovery_verify.py",
     "research/stone_moss_checkpoint_forward.py",
@@ -56,6 +57,7 @@ const ACCEPTED_RESEARCH_SOURCE: [&str; 20] = [
     "research/bitcoin_frontier_stress_512_referee.py",
     "research/bitcoin_nine_cats_ledger.py",
     "research/bitcoin_nine_cats_ledger_referee.py",
+    "research/bitcoin_nine_cats_dpll_referee.py",
 ];
 const EXPECTED_LEGACY: usize = 54;
 
@@ -265,6 +267,7 @@ mod tests {
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[21]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[22]));
         assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[23]));
+        assert!(!inventory.contains_key(ACCEPTED_WORKFLOWS[24]));
         assert!(ACCEPTED_RESEARCH_SOURCE.iter().all(|p| p.starts_with("research/")));
         assert!(!ACCEPTED_RESEARCH_SOURCE.contains(&"native/research/gnn_original_checkpoint_compare.py"));
     }
