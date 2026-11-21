@@ -209,9 +209,10 @@ fn infer(
     }
     let residual = ALPHABET - known;
     let compatible_bijections = (1..=residual).product();
+    let known_labels = labels.iter().filter(|symbol| symbol.is_some()).count();
     Ok(Learned {
         labels,
-        known_labels: labels.iter().filter(|symbol| symbol.is_some()).count(),
+        known_labels,
         compatible_bijections,
     })
 }
