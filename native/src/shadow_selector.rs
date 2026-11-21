@@ -18,10 +18,11 @@ use crate::three_shadow::{ThreeShadows, SHADOW_BYTES};
 pub enum ShadowMode {
     One,
     Three,
+    Nine,
 }
 impl ShadowMode {
     pub fn label(self) -> &'static str {
-        match self { Self::One => "one", Self::Three => "three" }
+        match self { Self::One => "one", Self::Three => "three", Self::Nine => "nine" }
     }
 }
 
@@ -110,6 +111,9 @@ impl ShadowSelector {
     pub fn choose(
         &mut self, cnf: &Cnf, order: &[usize], assignment: &[Trit],
     ) -> Result<usize, String> {
+        if self.mode == ShadowMode::Nine {
+            return self.choose_nine(cnf, order, assignment);
+        }
         if assignment.len() != cnf.variables || assignment.len() != self.signs.len() {
             return Err("source-bound shadow live assignment width differs".to_owned());
         }
@@ -198,6 +202,110 @@ impl ShadowSelector {
         self.metrics.choice_wall_ns = self.metrics.choice_wall_ns
             .checked_add(start.elapsed().as_nanos())
             .ok_or("shadow guide wall timer overflow")?;
+        Ok(best)
+    }
+
+    /// Experimental source-born nine cats: three boxes (forward, bilateral,
+    /// backward), each with three cyclic shell radii 1..3. Unlike the earlier
+    /// X/Y/Z line-sum projector this uses candidate-centered torus windows.
+    ///
+    /// Six signed +/- offsets are paid source observations; source-trit
+    /// occurrence signs are a frozen public CNF-derived bank, overridden by
+    /// the current *known* DPLL assignment. No unknown SAT value is read.
+    /// The bilateral cat sees two already-banked source features, not future
+    /// hidden Boolean assignments. Source-only rotations R/R² are checked
+    /// as inverse order-three wave-key permutations.
+    ///
+    /// The nine observables are deliberately lossy. Both SAT polarities are
+    /// explored, with the entire DPLL frontier preserved by the caller.
+    fn choose_nine(
+        &mut self, cnf: &Cnf, order: &[usize], assignment: &[Trit],
+    ) -> Result<usize, String> {
+        if assignment.len() != cnf.variables || assignment.len() != self.signs.len() {
+            return Err("nine-cat source CNF and assigned trit widths differ".to_owned());
+        }
+        let candidates = order.iter().copied()
+            .filter(|&variable| variable >= 1 && variable <= assignment.len()
+                && assignment[variable - 1] == Trit::Zero)
+            .take(CELLS).collect::<Vec<_>>();
+        let first = *candidates.first().ok_or("no open nine-cat SAT branch")?;
+        let began = Instant::now();
+        let mut best = first;
+        let mut best_score = 0_u64;
+        let mut receipt = Vec::<u8>::new();
+        let width = assignment.len();
+        for candidate in candidates {
+            let base = candidate - 1;
+            let mut left_sum = 0_i16;
+            let mut right_sum = 0_i16;
+            let mut bilateral_sum = 0_i16;
+            let mut left_features = [0_i16; 3];
+            let mut center_features = [0_i16; 3];
+            let mut right_features = [0_i16; 3];
+            for radius in 1..=3 {
+                let backwards = (base + width - radius % width) % width;
+                let forwards = (base + radius) % width;
+                let mut left = self.signs[backwards];
+                let mut right = self.signs[forwards];
+                if assignment[backwards] != Trit::Zero {
+                    left = assignment[backwards] as i8;
+                }
+                if assignment[forwards] != Trit::Zero {
+                    right = assignment[forwards] as i8;
+                }
+                // Both counterspins are deterministic permutations of the
+                // SAME underlying signed values, not independent information.
+                for source in [left, right] {
+                    let step1 = (source + 2).rem_euclid(3) - 1;
+                    let step2 = (step1 + 2).rem_euclid(3) - 1;
+                    let step3 = (step2 + 2).rem_euclid(3) - 1;
+                    if step3 != source {
+                        return Err("nine-cat wave key R/R² inversion failed".to_owned());
+                    }
+                }
+                left_sum += i16::from(left);
+                right_sum += i16::from(right);
+                bilateral_sum += i16::from(left) * i16::from(right);
+                left_features[radius - 1] = left_sum;
+                right_features[radius - 1] = right_sum;
+                center_features[radius - 1] = bilateral_sum;
+                increment(&mut self.metrics.source_trit_reads, 2);
+            }
+            let mut score = 0_u64;
+            // Canonical serialized order: the three forward cats,
+            // three bilateral cats, then three backward cats.
+            for value in right_features.into_iter()
+                .chain(center_features)
+                .chain(left_features)
+            {
+                score += u64::from(value.unsigned_abs());
+                receipt.extend_from_slice(&value.to_le_bytes());
+            }
+            increment(&mut self.metrics.room_projections, 1);
+            increment(&mut self.metrics.stored_projection_bytes, 18);
+            increment(&mut self.metrics.pixel_reads, 9);
+            if score > best_score {
+                best = candidate;
+                best_score = score;
+            }
+        }
+        increment(&mut self.metrics.choices, 1);
+        if self.metrics.choices == 1 {
+            self.metrics.first_order_candidate = first as u64;
+            self.metrics.first_shadow_candidate = best as u64;
+            self.metrics.first_shadow_score = best_score;
+        }
+        if best != first {
+            increment(&mut self.metrics.non_first_choices, 1);
+        }
+        self.metrics.root = hash_bytes(format!(
+            "PNP_SHADOW_CHOICE_V1|{}|{}|nine|{}|{}|{}",
+            self.metrics.root, self.source,
+            self.metrics.choices, best, hash_bytes(&receipt)
+        ).as_bytes());
+        self.metrics.choice_wall_ns = self.metrics.choice_wall_ns
+            .checked_add(began.elapsed().as_nanos())
+            .ok_or("nine-cat choice time counter overflow")?;
         Ok(best)
     }
 
