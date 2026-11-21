@@ -1,0 +1,93 @@
+name: "Bitcoin white-first tail funnel: paid Shannon three paths and nine-cat 256 alphabet"
+on:
+  push:
+    branches: [research/bitcoin-white-first-tail-alphabet-20261121]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pnp-bitcoin-white-first-tail-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  producer:
+    name: "Original Genesis SHA256d: eight reversible alphabets, 3 paths, 28 actual and 256 rank controls"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Public Bitcoin SHA256d forward oracle and frozen tail-to-center RimeSphere
+        run: |
+          set -euo pipefail
+          python3 -m py_compile research/bitcoin_white_first_tail_funnel.py
+          mkdir -p evidence
+          /usr/bin/time -f 'source_process_peak_rss_kib=%M|source_process_wall_seconds=%e' -o evidence/producer_time.hbp \
+            python3 -s -B research/bitcoin_white_first_tail_funnel.py \
+            --out evidence/WHITE_FIRST_LEDGER.json \
+            > evidence/PRODUCER.log
+          cat evidence/PRODUCER.log
+          grep -Fq '|primary28=SHA256D_EXECUTED|heldout256=EXACT_RANK|' evidence/PRODUCER.log
+          grep -Fq '|eight_orbits=PASS|wave_inverse=PASS|brown_ledger=PAID|' evidence/PRODUCER.log
+          python3 -m json.tool evidence/WHITE_FIRST_LEDGER.json >/dev/null
+          ( cd evidence && sha256sum PRODUCER.log producer_time.hbp WHITE_FIRST_LEDGER.json > PRODUCER.sha256 && sha256sum -c PRODUCER.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-white-first-primary
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent:
+    name: "Separate scorer: 4096x8 reversals, 28+256 source-true cat rankings, paid source and advice"
+    needs: producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-white-first-primary
+          path: primary
+      - name: Independently verify original source, all 284 challenge ranks and Shannon ledger
+        run: |
+          set -euo pipefail
+          ( cd primary && sha256sum -c PRODUCER.sha256 )
+          python3 -m py_compile research/bitcoin_white_first_tail_referee.py
+          mkdir -p acceptance
+          /usr/bin/time -f 'referee_peak_rss_kib=%M|referee_wall_seconds=%e' -o acceptance/referee_time.hbp \
+            python3 -s -B research/bitcoin_white_first_tail_referee.py \
+            --source primary/WHITE_FIRST_LEDGER.json \
+            --out acceptance/INDEPENDENT.hbp \
+            > acceptance/REFEREE.log
+          cat acceptance/INDEPENDENT.hbp
+          grep -Fq '|full_4096_hash_orbit_inversion=PASS|' acceptance/INDEPENDENT.hbp
+          grep -Fq '|black_white_brown_256_recomputed=PASS|' acceptance/INDEPENDENT.hbp
+          grep -Fq '|status=PASS|json=0' acceptance/INDEPENDENT.hbp
+          ( cd acceptance && sha256sum INDEPENDENT.hbp REFEREE.log referee_time.hbp > ACCEPTED.sha256 && sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-white-first-independent
+          path: acceptance/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Final byte-authenticated black/white/brown alphabet and Bitcoin tail-funnel evidence"
+    needs: independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-white-first-independent
+          path: acceptance
+      - name: Independent frozen receipt readback
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ACCEPTED.sha256 )
+          grep -Fq '|status=PASS|json=0' acceptance/INDEPENDENT.hbp
+          echo 'BTC_WHITE_FIRST_ARCHIVE|original_bitcoin_sha256d=PASS|three_paths=PAID|eight_point_alphabet=PASS|heldout_28_and_256=PASS|independent_source_referee=PASS|status=PASS|json=0'
