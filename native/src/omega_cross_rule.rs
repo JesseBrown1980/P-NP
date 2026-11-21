@@ -142,9 +142,9 @@ fn infer_rule(observations: &[Observation]) -> Result<Coefficients, String> {
         }
     }
     let mut coefficients = [[0_u8; 10]; 3];
-    for column in 0..10 {
-        for output in 0..3 {
-            coefficients[output][column] = rows[column][10 + output];
+    for (output, coefficient_row) in coefficients.iter_mut().enumerate() {
+        for (column, coefficient) in coefficient_row.iter_mut().enumerate() {
+            *coefficient = rows[column][10 + output];
         }
     }
     for observation in observations {
