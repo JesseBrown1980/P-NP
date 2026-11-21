@@ -208,7 +208,6 @@ pub fn run_gate() -> Result<GateReport, String> {
         if predicted != expected {
             return Err("held-out sixth-view prediction differed".to_owned());
         }
-        withheld_correct += 1;
 
         for id in 0..omega::OPERATOR_COUNT {
             let id = u8::try_from(id).map_err(|_| "catalog ID overflow")?;
@@ -228,6 +227,7 @@ pub fn run_gate() -> Result<GateReport, String> {
             }
             portability += 1;
         }
+        withheld_correct += 1;
 
         let raw = original.map(i64::from);
         let frozen = relic::freeze_triple(raw);
