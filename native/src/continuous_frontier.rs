@@ -26,6 +26,7 @@ pub enum FrontierMode {
     Direct,
     One,
     Three,
+    Nine,
 }
 impl FrontierMode {
     pub fn label(self) -> &'static str {
@@ -33,16 +34,18 @@ impl FrontierMode {
             Self::Direct => "direct",
             Self::One => "one",
             Self::Three => "three",
+            Self::Nine => "nine",
         }
     }
     fn symbol(self) -> u8 {
-        match self { Self::Direct => 0, Self::One => 1, Self::Three => 2 }
+        match self { Self::Direct => 0, Self::One => 1, Self::Three => 2, Self::Nine => 3 }
     }
     fn from_symbol(value: u8) -> Result<Self> {
         match value {
             0 => Ok(Self::Direct),
             1 => Ok(Self::One),
             2 => Ok(Self::Three),
+            3 => Ok(Self::Nine),
             _ => Err("unsupported checkpoint Fischer-shadow mode".to_owned()),
         }
     }
@@ -51,6 +54,7 @@ impl FrontierMode {
             Self::Direct => None,
             Self::One => Some(ShadowMode::One),
             Self::Three => Some(ShadowMode::Three),
+            Self::Nine => Some(ShadowMode::Nine),
         }
     }
 }
