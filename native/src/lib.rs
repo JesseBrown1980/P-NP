@@ -10,6 +10,8 @@ pub mod continuous_frontier;
 mod frontier_independent_tests;
 #[cfg(test)]
 mod frontier_adversarial_tests;
+#[cfg(test)]
+mod nine_cats_frontier_tests;
 pub mod bitcoin_rimesphere_stream;
 pub mod brown_ledger;
 pub mod checkpoint;
