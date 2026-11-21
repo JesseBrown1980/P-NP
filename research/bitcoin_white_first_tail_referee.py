@@ -153,7 +153,7 @@ def main():
          "incomplete source/CRT/orbit/index payment")
     need(entry["bit_information"]["hash_output_bits"]==256
          and entry["bit_information"]["alphabet_cardinality"]==256
-         and entry["bit_information"]["hash_state_count"]=="2^256",
+         and entry["bit_information"]["possible_full_hashes"]=="2^256",
          "confused 256-symbol alphabet with 256-bit output")
     text=("BTC_WHITE_FIRST_REFEREE|schema=1|original_bitcoin_genesis_SHA256d=PASS|"
           "full_4096_hash_orbit_inversion=PASS|"
