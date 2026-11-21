@@ -1,0 +1,125 @@
+name: "P-NP nine Shadow Cats: source-authenticated Bitcoin and paid Brown/Shannon Ledger"
+on:
+  push:
+    branches: [research/nine-shadow-cats-shannon-ledger-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pnp-nine-cats-ledger-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-ledger:
+    name: "Rust 1.81: original Brown Ledger, three-shadow inverse and ternary sphere acceptance"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Original source Brown Ledger with strict Rust 1.81 checks
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.81.0 --profile minimal --component clippy
+          cargo +1.81.0 clippy --manifest-path native/Cargo.toml --lib --offline --locked -- -D warnings
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib brown_ledger::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib three_shadow::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib continuous_frontier::tests --offline --locked
+          cargo +1.81.0 test --manifest-path native/Cargo.toml --lib frontier_adversarial_tests::tests --offline --locked
+          echo 'BROWN_LEDGER_NATIVE|source=EXISTING_RUST_1.81|paid_center=PASS|signed_deltas=PASS|tamper_controls=PASS|original_three_shadows=PASS|full_frontier=PASS|status=PASS|json=0'
+  actual-bitcoin:
+    name: "Full original SHA256d Bitcoin CNF: nine linked cats, wave keys and priced closure"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - name: Independently authenticate the actual source CNFs and execute nine-cat experiment
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          mkdir -p results
+          python3 -s -B research/bitcoin_nine_cats_ledger.py \
+            --source source --out results/NINE_CATS_PAID_LEDGER.json \
+            > results/PRIMARY.log
+          cat results/PRIMARY.log
+          test -s results/NINE_CATS_PAID_LEDGER.json
+          grep -Fq '|all_full_source_shas=PASS|' results/PRIMARY.log
+          grep -Fq '|unpaid_third=NOT_UNIQUE|' results/PRIMARY.log
+          python3 -m json.tool results/NINE_CATS_PAID_LEDGER.json > /dev/null
+          ( cd results && sha256sum PRIMARY.log NINE_CATS_PAID_LEDGER.json > PRIMARY.sha256 && sha256sum -c PRIMARY.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-nine-cats-paid-ledger-primary
+          path: results/
+          retention-days: 30
+          if-no-files-found: error
+
+  independent:
+    name: "Different Python referee: source index, nine-cat ranking, inverse and Shannon cost"
+    needs: [native-ledger, actual-bitcoin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-rimesphere-original-sources
+          repository: JesseBrown1980/P-NP
+          run-id: 44652775916
+          github-token: ${{ github.token }}
+          path: source
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-nine-cats-paid-ledger-primary
+          path: primary
+      - name: Independently calculate full original-CNF signed source and nine-cat choices
+        run: |
+          set -euo pipefail
+          ( cd source && sha256sum -c SOURCE.sha256 )
+          ( cd primary && sha256sum -c PRIMARY.sha256 )
+          mkdir -p acceptance
+          /usr/bin/time -f 'referee_peak_rss_kib=%M|referee_seconds=%e' -o acceptance/TIME.hbp \
+            python3 -s -B research/bitcoin_nine_cats_ledger_referee.py \
+            --source source --report primary/NINE_CATS_PAID_LEDGER.json \
+            --out acceptance/INDEPENDENT.hbp > acceptance/INDEPENDENT.log
+          cat acceptance/INDEPENDENT.hbp
+          grep -Fq '|original_SHA256d_CNF=EXACT|' acceptance/INDEPENDENT.hbp
+          grep -Fq '|status=PASS|json=0' acceptance/INDEPENDENT.hbp
+          test "$(grep -c '^BTC_NINE_CATS_REFEREE|case=' acceptance/INDEPENDENT.hbp)" -eq 2
+          ( cd acceptance && sha256sum INDEPENDENT.hbp INDEPENDENT.log TIME.hbp > ACCEPTED.sha256 && sha256sum -c ACCEPTED.sha256 )
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitcoin-nine-cats-paid-ledger-independent-acceptance
+          path: acceptance/
+          retention-days: 30
+          if-no-files-found: error
+
+  archive:
+    name: "Archive: nine-cat observer cost, paid closure and correct original Bitcoin provenance"
+    needs: independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitcoin-nine-cats-paid-ledger-independent-acceptance
+          path: acceptance
+      - name: Validate independent signed receipt from genuine hosted experiment
+        run: |
+          set -euo pipefail
+          ( cd acceptance && sha256sum -c ACCEPTED.sha256 )
+          grep -Fq '|status=PASS|json=0' acceptance/INDEPENDENT.hbp
+          echo 'BTC_NINE_CATS_LEDGER_ARCHIVE|test_scope=SOURCE_ONLY_OBSERVATIONS|original_bitcoin_cases=2|strict_native_ledger=PASS|separate_referee=PASS|observations_not_cryptographic_inversion|status=PASS|json=0'
