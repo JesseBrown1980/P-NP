@@ -33,7 +33,7 @@ def independent_source(path,expected,variables,clauses):
     require(digest(path.read_bytes())==expected,"Bitcoin source sha differs")
     signs=[0]*variables
     rows=0
-    for line in path.open("ascii"):
+    for line in path.open("r",encoding="ascii"):
         if line[0:1] in ("p","c") or not line.strip():continue
         bits=line.split()
         require(bits[-1]=="0","undelimited source clause")
