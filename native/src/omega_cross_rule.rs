@@ -10,6 +10,12 @@ type Coefficients = [[u8; 10]; 3];
 
 const TRAIN_VIEWS: [u8; 5] = [0, 1, 2, 3, 4];
 const WITHHELD_VIEW: u8 = 5;
+// Independently enumerated outputs of the seven omitted source states.
+// These values are fixture witnesses and are never passed to infer_rule.
+const WITHHELD_REFERENCE: [State; 7] = [
+    [1, 2, 0], [1, 2, 1], [2, 0, 0], [2, 1, 2],
+    [0, 2, 0], [0, 2, 2], [1, 0, 2],
+];
 const ORACLE_COEFFICIENTS: Coefficients = [
     [1, 2, 0, 1, 1, 2, 0, 2, 1, 0],
     [2, 1, 1, 0, 0, 2, 1, 1, 0, 2],
@@ -198,9 +204,7 @@ pub fn run_gate() -> Result<GateReport, String> {
             WITHHELD_VIEW, transition(source_recovered, &fitted),
         )?;
         // The withheld target is generated only after the prediction exists.
-        let expected = view_encode(
-            WITHHELD_VIEW, transition(original, &ORACLE_COEFFICIENTS),
-        )?;
+        let expected = view_encode(WITHHELD_VIEW, WITHHELD_REFERENCE[withheld_correct])?;
         if predicted != expected {
             return Err("held-out sixth-view prediction differed".to_owned());
         }
@@ -214,11 +218,9 @@ pub fn run_gate() -> Result<GateReport, String> {
                 return Err("catalog inverse failed on hidden input".to_owned());
             }
             let output = view_encode(id, transition(recovered, &fitted))?;
-            let actual = view_encode(
-                id, transition(original, &ORACLE_COEFFICIENTS),
-            )?;
+            let actual = view_encode(id, WITHHELD_REFERENCE[withheld_correct])?;
             if output != actual || view_decode(id, output)?
-                != transition(original, &ORACLE_COEFFICIENTS)
+                != WITHHELD_REFERENCE[withheld_correct]
             {
                 return Err("40-operator held-out transport mismatch".to_owned());
             }
