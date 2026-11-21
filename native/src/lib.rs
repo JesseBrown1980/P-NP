@@ -19,6 +19,7 @@ pub mod omega_operator_catalog;
 pub mod omnibit_operator_gate;
 pub mod policy;
 pub mod relic;
+pub mod omega_cross_rule;
 pub mod prism;
 pub mod scoring;
 pub mod sha256;
