@@ -219,10 +219,12 @@ pub fn run_gate() -> Result<GateReport, String> {
             }
             let output = view_encode(id, transition(recovered, &fitted))?;
             let actual = view_encode(id, WITHHELD_REFERENCE[withheld_correct])?;
-            if output != actual || view_decode(id, output)?
-                != WITHHELD_REFERENCE[withheld_correct]
-            {
-                return Err("40-operator held-out transport mismatch".to_owned());
+            let restored = view_decode(id, output)?;
+            if output != actual || restored != WITHHELD_REFERENCE[withheld_correct] {
+                return Err(format!(
+                    "40-operator held-out transport mismatch: ordinal={ordinal} id={id} predicted={output:?} target={actual:?} restored={restored:?} source_target={:?}",
+                    WITHHELD_REFERENCE[withheld_correct],
+                ));
             }
             portability += 1;
         }
