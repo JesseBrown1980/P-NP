@@ -134,7 +134,7 @@ fn encoding(v:&[i32],rhs:bool)->Cnf {
     (0..1<<v.len()).filter(|&p|parity(p)!=rhs).map(|p|
         v.iter().enumerate().map(|(j,&v)|if p&(1<<j)!=0 {-v}else{v}).collect()).collect()
 }
-fn fixture(n:usize,family:usize,seed:usize,mode:usize)->(String,Vec<i32>,Vec<i32>) {
+pub(super) fn fixture(n:usize,family:usize,seed:usize,mode:usize)->(String,Vec<i32>,Vec<i32>) {
     let mut state=(17001+n*100+family*10+seed) as u64;
     let mut names:Vec<i32>=(1..=2*n as i32).collect();shuffle(&mut names,&mut state);
     let (x,y)=names.split_at(n);
