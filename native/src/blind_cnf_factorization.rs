@@ -159,7 +159,8 @@ fn projected_reference(cs:&Cnf,x:&[i32],y:&[i32],family:usize)->u64 {
         let mut a=0;
         for i in 0..x.len() {
             let v=p>>i&1;let w=if i==0 {0}else{p>>(if family==0 {i-1}else{0})&1};
-            if v!=0{a|=bit(x[i]);}if v^w!=0{a|=bit(y[i]);}
+            if v!=0{a|=bit(x[i]);}
+        if v^w!=0{a|=bit(y[i]);}
         }
         count+=u64::from(cs.iter().all(|c|c.iter().any(|&v|(a&bit(v)!=0)==(v>0))));
     }
