@@ -2,7 +2,7 @@
 use crate::blind_cnf_factorization::fixture;
 use std::collections::{BTreeMap, BTreeSet};
 
-type Form = (u128, bool);
+pub(super) type Form = (u128, bool);
 type Clause = Vec<Form>;
 type Key = (usize, Vec<Clause>);
 type Bucket = BTreeMap<Vec<u32>, BTreeSet<u32>>;
@@ -24,7 +24,7 @@ fn compact(mask: u128, coords: &[usize]) -> u128 {
         m | (((mask >> i) & 1) << j)
     })
 }
-fn parse(text: &str) -> (usize, Vec<Vec<i32>>) {
+pub(super) fn parse(text: &str) -> (usize, Vec<Vec<i32>>) {
     let mut lines = text.lines();
     let h: Vec<_> = lines.next().expect("header").split_whitespace().collect();
     assert_eq!(&h[..2], &["p", "cnf"]);
@@ -40,7 +40,7 @@ fn parse(text: &str) -> (usize, Vec<Vec<i32>>) {
     assert_eq!(clauses.len(), h[3].parse::<usize>().expect("m"));
     (n, clauses)
 }
-fn recognition(clauses: &[Vec<i32>]) -> (Vec<Form>, Vec<Vec<i32>>) {
+pub(super) fn recognition(clauses: &[Vec<i32>]) -> (Vec<Form>, Vec<Vec<i32>>) {
     let mut buckets = Bucket::new();
     for c in clauses {
         let mut key: Vec<_> = c.iter().map(|v| v.unsigned_abs()).collect();
@@ -70,7 +70,7 @@ fn recognition(clauses: &[Vec<i32>]) -> (Vec<Form>, Vec<Vec<i32>>) {
     }
     (eq, residual)
 }
-fn coordinates(n: usize, mut eq: Vec<Form>, residual: &[Vec<i32>]) -> Option<(Vec<Form>, usize)> {
+pub(super) fn coordinates(n: usize, mut eq: Vec<Form>, residual: &[Vec<i32>]) -> Option<(Vec<Form>, usize)> {
     let active = residual.iter().flatten().fold(0u128, |m, v| m | (1 << (v.unsigned_abs()-1)));
     let mut order: Vec<_> = (0..n).collect();
     order.sort_by_key(|&i| (active & (1 << i) != 0, i));
@@ -163,7 +163,7 @@ fn query(g: &Generator, a: u128) -> (u128, bool) {
     let ok = g.slices.iter().all(|(coords, i)| g.tables[*i].1 & (1 << compact(a, coords)) != 0);
     (x, ok)
 }
-fn original(clauses: &[Vec<i32>], x: u128) -> bool {
+pub(super) fn original(clauses: &[Vec<i32>], x: u128) -> bool {
     clauses.iter().all(|c| c.iter().any(|&v| (x & (1 << (v.unsigned_abs()-1)) != 0) == (v > 0)))
 }
 #[test]
