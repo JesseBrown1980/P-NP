@@ -204,3 +204,6 @@ mod blind_cnf_factorization;
 
 #[cfg(test)]
 mod finite_slice_generator;
+
+#[cfg(test)]
+mod connected_slice_separator;
