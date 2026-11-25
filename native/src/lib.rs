@@ -195,3 +195,6 @@ pub fn certify_lazy_wave() -> Result<(usize, usize, usize), &'static str> {
     }
     Ok((rooms, path_decisions, children_verified))
 }
+
+#[cfg(test)]
+mod address_factorization;
