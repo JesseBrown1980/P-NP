@@ -201,3 +201,6 @@ mod address_factorization;
 
 #[cfg(test)]
 mod blind_cnf_factorization;
+
+#[cfg(test)]
+mod finite_slice_generator;
