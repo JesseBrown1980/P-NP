@@ -198,3 +198,6 @@ pub fn certify_lazy_wave() -> Result<(usize, usize, usize), &'static str> {
 
 #[cfg(test)]
 mod address_factorization;
+
+#[cfg(test)]
+mod blind_cnf_factorization;
