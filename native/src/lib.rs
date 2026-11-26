@@ -216,3 +216,6 @@ mod overlapping_signed_amo;
 
 #[cfg(test)]
 mod uniform_gate_boundary;
+
+#[cfg(test)]
+mod shadow_residual_projection;
