@@ -222,3 +222,6 @@ mod shadow_residual_projection;
 
 #[cfg(test)]
 mod nonaffine_weighted_shadow;
+
+#[cfg(test)]
+mod primitive_shadow_generator;
