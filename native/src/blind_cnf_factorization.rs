@@ -112,7 +112,7 @@ fn solve(s:&str)->ResultRow {
 fn restrict(cs:&Cnf,u:i32)->Cnf {
     cs.iter().filter(|c|!c.contains(&u)).map(|c|c.iter().copied().filter(|&v|v!= -u).collect()).collect()
 }
-fn dpll(mut cs:Cnf,mut remaining:u32,nodes:&mut u64)->u64 {
+pub(super) fn dpll(mut cs:Cnf,mut remaining:u32,nodes:&mut u64)->u64 {
     *nodes+=1;
     loop {
         if cs.iter().any(Vec::is_empty){return 0;}
@@ -124,7 +124,7 @@ fn dpll(mut cs:Cnf,mut remaining:u32,nodes:&mut u64)->u64 {
     let u=cs.iter().min_by_key(|c|c.len()).expect("clause")[0];
     dpll(restrict(&cs,u),remaining&!bit(u),nodes)+dpll(restrict(&cs,-u),remaining&!bit(u),nodes)
 }
-fn shuffle<T>(xs:&mut[T],state:&mut u64) {
+pub(super) fn shuffle<T>(xs:&mut[T],state:&mut u64) {
     for i in (1..xs.len()).rev() {
         *state^=*state<<13;*state^=*state>>7;*state^=*state<<17;
         xs.swap(i,(*state as usize)%(i+1));
