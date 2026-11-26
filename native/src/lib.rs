@@ -225,3 +225,6 @@ mod nonaffine_weighted_shadow;
 
 #[cfg(test)]
 mod primitive_shadow_generator;
+
+#[cfg(test)]
+mod automatic_shadow_replay;
