@@ -207,3 +207,6 @@ mod finite_slice_generator;
 
 #[cfg(test)]
 mod connected_slice_separator;
+
+#[cfg(test)]
+mod boolean_polynomial_boundary;
