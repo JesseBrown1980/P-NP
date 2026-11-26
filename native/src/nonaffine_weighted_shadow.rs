@@ -4,7 +4,6 @@ use crate::finite_slice_generator::original;
 use crate::connected_slice_separator::plan;
 use crate::freeze::FrozenMatrix;
 use crate::matrix::{Matrix,CELLS};
-use std::collections::BTreeSet;
 
 type Cnf = Vec<Vec<i32>>;
 type Factor = (u128, Vec<u128>);
@@ -117,7 +116,7 @@ fn oracle(specs:&[Spec]) -> u128 {
             let mut next=[0;2];
             for (b,v) in next.iter_mut().enumerate() {
                 for (a,&r) in row.iter().enumerate() {
-                    let w=u128::from(!m)+ts.iter().filter(|&&t|t==a+2*b).count() as u128;
+                    let w=u128::from(!*m)+ts.iter().filter(|&&t|t==a+2*b).count() as u128;
                     *v+=r*w;
                 }
             }
