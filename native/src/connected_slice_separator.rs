@@ -33,7 +33,7 @@ fn discover(text: &str) -> Option<Model> {
     Some((forms, free, clauses))
 }
 // Incremental minimum-degree heuristic. Its result is a certified order, not a minimal-width claim.
-fn plan(n: usize, clauses: &[Clause]) -> Option<(Vec<usize>, usize)> {
+pub(super) fn plan(n: usize, clauses: &[Clause]) -> Option<(Vec<usize>, usize)> {
     let mut adj = vec![0u128; n];
     for c in clauses {
         let m = scope(c);
@@ -57,14 +57,14 @@ fn plan(n: usize, clauses: &[Clause]) -> Option<(Vec<usize>, usize)> {
     assert_eq!(order.len(), n);
     Some((order, width))
 }
-struct ResultRow {
-    count: u128,
-    witness: u128,
-    entries: usize,
+pub(super) struct ResultRow {
+    pub(super) count: u128,
+    pub(super) witness: u128,
+    pub(super) entries: usize,
     messages: usize,
-    width: usize,
+    pub(super) width: usize,
 }
-fn evaluate(clauses: &[Clause], order: &[usize]) -> ResultRow {
+pub(super) fn evaluate(clauses: &[Clause], order: &[usize]) -> ResultRow {
     let mut fs: Vec<Factor> = clauses.iter().map(|c| {
         let m = scope(c);
         let table = (0..1usize << m.count_ones()).map(|i| {
