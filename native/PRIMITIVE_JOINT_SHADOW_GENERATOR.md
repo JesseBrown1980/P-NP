@@ -25,7 +25,8 @@ Local scripts and receipts (SHA256):
 - pnp_joint_generator_results.txt bd4fe2bf4491b477a0b53cbb115ea0aeef3015971c63a4f74a5a38056228cee4
 - pnp_joint_shadow_matrix_audit.py a7532fac64a7719c5bf5b2c5e52c66d36645a74b8a0d349323d07d0968b78b1b
 - pnp_joint_shadow_matrix_results.txt 03e2b74804685880bd6d4c4013b2f3b9fc61342c0e5af07041cdd84be7ab3938
-- evidence bundle f413e424468bc29bdf3d5b41264438d38ba53fcb3f37c1d866b88463d3559708 (local bundle; not a GitHub artifact)
+- evidence bundle 6ff0545a8b50fb23c38f3a2ce2acbc726b81bd2ef5886c356ba7945f1866aa7a (local bundle; not a GitHub artifact)
+- Archive dependencies: pnp_residual_affine_audit.py, pnp_blind_cnf_audit.py, pnp_uniform_gate_audit.py (the latter SHA256 85021d284c00f30ffd83ca344737e259a94942f0c552e0a9b82f861264a54f42).
 - Native test src/primitive_shadow_generator.rs.
 
 Next: avoid product-order blowup with alternative certified decompositions (factor networks / AND-OR DAGs / dynamic coordinate ordering), measure discovery, intermediate memory, bit operations and witness costs against optimized standard algorithms. Use connected high-width and arbitrary SAT controls. The historical Brown–Hilbert/Radiated Slice/Fischer machinery was not invoked by this experiment; the reusable identity is compatible with addressed playback. P=NP remains open; no merge authorization.
