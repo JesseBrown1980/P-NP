@@ -219,3 +219,6 @@ mod uniform_gate_boundary;
 
 #[cfg(test)]
 mod shadow_residual_projection;
+
+#[cfg(test)]
+mod nonaffine_weighted_shadow;
