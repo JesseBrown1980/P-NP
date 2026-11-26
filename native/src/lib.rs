@@ -213,3 +213,6 @@ mod boolean_polynomial_boundary;
 
 #[cfg(test)]
 mod overlapping_signed_amo;
+
+#[cfg(test)]
+mod uniform_gate_boundary;
