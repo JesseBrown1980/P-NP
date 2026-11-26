@@ -210,3 +210,6 @@ mod connected_slice_separator;
 
 #[cfg(test)]
 mod boolean_polynomial_boundary;
+
+#[cfg(test)]
+mod overlapping_signed_amo;
