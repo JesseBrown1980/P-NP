@@ -220,3 +220,45 @@ fn canonical_tree_generator_and_native_fischer_routing() {
     assert!(canonical(3,&norm(vec![vec![1,2],vec![2,3],vec![1,3]])).is_none());
     println!("CANONICAL_TREE|cases={cases}|hits={hits}|witnesses={witnesses}");
 }
+
+#[test]
+fn actual_native_fischer_and_reverse_order_residual_controls() {
+    use crate::guidance::{Guidance, Strategy};
+    use crate::solver::{check_against_exhaustive, solve, Status};
+    use crate::ternary::Cnf as NativeCnf;
+    let mut totals = [0u64;4];
+    let mut cases = 0;
+    for n in [8,12,16] {
+        for seed in 0..4 {
+            let mut state = (20261127+n*100+seed) as u64;
+            let mut ids: Vec<_> = (1..=n as i32).collect();
+            let mut cs = Vec::new();
+            for _ in 0..5*n {
+                shuffle(&mut ids,&mut state);
+                cs.push(ids[..3].iter().enumerate().map(|(j,&v)| {
+                    if state&(1<<j)==0 {v} else {-v}
+                }).collect());
+            }
+            let cs = norm(cs);
+            assert!(canonical(n,&cs).is_none());
+            let cnf = NativeCnf { variables:n, clauses:cs };
+            let base = Guidance::for_source(&cnf,Strategy::Base).expect("base");
+            let fischer = Guidance::for_source(&cnf,Strategy::Fischer).expect("Fischer");
+            let mut reverse = fischer.clone();
+            reverse.order.reverse();
+            let hybrid = Guidance::for_source(&cnf,Strategy::Hybrid3).expect("frozen hybrid");
+            assert_eq!(fischer.fischer_addresses,n);
+            assert_eq!(hybrid.wave_reads,n);
+            assert!(hybrid.root_accepted);
+            for (i,g) in [base,fischer,reverse,hybrid].iter().enumerate() {
+                let result = solve(&cnf,g,Some(100_000));
+                assert_ne!(result.status,Status::Hold);
+                assert!(check_against_exhaustive(&cnf,&result));
+                totals[i] += result.nodes;
+            }
+            cases += 1;
+        }
+    }
+    assert_eq!(cases,12);
+    println!("NATIVE_FISCHER_RESIDUAL|cases={cases}|base={}|forward={}|reverse={}|hybrid3={}",totals[0],totals[1],totals[2],totals[3]);
+}
