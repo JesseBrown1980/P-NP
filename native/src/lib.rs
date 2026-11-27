@@ -195,3 +195,42 @@ pub fn certify_lazy_wave() -> Result<(usize, usize, usize), &'static str> {
     }
     Ok((rooms, path_decisions, children_verified))
 }
+
+#[cfg(test)]
+mod address_factorization;
+
+#[cfg(test)]
+mod blind_cnf_factorization;
+
+#[cfg(test)]
+mod finite_slice_generator;
+
+#[cfg(test)]
+mod connected_slice_separator;
+
+#[cfg(test)]
+mod boolean_polynomial_boundary;
+
+#[cfg(test)]
+mod overlapping_signed_amo;
+
+#[cfg(test)]
+mod uniform_gate_boundary;
+
+#[cfg(test)]
+mod shadow_residual_projection;
+
+#[cfg(test)]
+mod nonaffine_weighted_shadow;
+
+#[cfg(test)]
+mod primitive_shadow_generator;
+
+#[cfg(test)]
+mod automatic_shadow_replay;
+
+#[cfg(test)]
+mod signed_residual_reuse;
+
+#[cfg(test)]
+mod canonical_tree_address;

@@ -1,0 +1,32 @@
+# Primitive weighted joint-shadow generators (2026-11-26)
+
+Status: local exact research audit PASS; new native test awaits hosted acceptance. Previous nonaffine weighted shadow acceptance PASS (run 45879385528 at 52f86fc467cef287bfac3a6332897777e0994a25). Related NONAFFINE_WEIGHTED_SHADOW.md and UNIFORM_NP_PROOF_TARGET.md.
+
+## Exact law: scale and primitive replay
+
+Represent an integer-valued boundary function by a root edge (w,v), where w>=0 is an integer and v is a normalized ordered binary decision DAG node. A terminal node 0 represents the constant one. A zero edge is canonical (0,0). Given two normalized children (a,L),(b,R), equal children collapse; otherwise extract g=gcd(a,b)>0 and intern the ordered key (level,(a/g,L),(b/g,R)). Return (g,node). Inductively the represented function is unchanged pointwise, and the gcd of the leaf values of each primitive node is one. The key retains the actual joint function, not just its marginal sums. This is standard multiplicative edge-weighted decision-diagram normalization, applied to the shadow-addressing pipeline.
+
+For a node at level i, its primitive suffix sum is C(v)=sum of each child edge weight times its primitive suffix sum, multiplied by 2 for each skipped boundary bit (for terminal use the remaining number of bits). Root scale multiplies the final sum. Memoize primitive node values rather than every scaled occurrence: counts can be computed by one visit per reachable node, with integer bit costs charged separately. Query multiplies scales along one addressed path. Product and restriction/summation recursively cofactor functions; these operations preserve the exact joint function. Size of intermediate diagrams and integer scales is not necessarily polynomial in input size.
+
+For W=[[2,1],[1,2]] and E=I_2, the k-pair products are Kronecker powers across the all-left/all-right cut. Under paired order, each nontrivial pair prepends three primitive nodes to the shared suffix; 3k nodes and k local shadow projections suffice. W gives count 6^k and E gives 2^k. Under separated order, the 2^k row vectors are pairwise nonproportional: the matrices are invertible over Q (rank 2^k). Any ordered scalar-weighted DAG must retain at least 2^k distinct residual nodes at the all-left cut. The obstruction is order-dependent: the same function has a small paired-order DAG. This demonstrates why exact shadows must preserve joint structure and why choosing the address order is essential. It does not establish an order-independent complexity lower bound or a universal efficient ordering algorithm.
+
+## Executed local audits
+
+The first script directly compiles local source CNF factors for two families (optional selector giving W, mandatory equality giving E), eliminates the internal selector by cofactor sum, and multiplies the resulting DAGs. The paired and separated orders are explicitly supplied in this first experiment. Across 7 sizes k=3,5,8,12,16,24,32, two families, two orders, two diagram representations, 44/56 configurations completed and 12 HOLD (all separated, k>=16, 60000 allocated-node cap). All completed counts agree with independent closed form; 15872 address checks. Unnormalized comparator is the same in-house ordinary multi-terminal ADD, not an optimized third-party solver. Example k=32 weighted: 64 boundary bits, 96 total source variables, normalized 96 live nodes / 624 allocated intermediate nodes, 2079 apply calls, 992 cache misses, 448 restriction calls; ordinary ADD 1617 live nodes / 2769 allocated, 78175 apply calls including scalar handling, 11296 cache misses. Counts exclude arbitrary precision bit costs. No wall time or byte comparison. Largest normalized count 6^32=7958661109946400884391936. Dense truth-table reference would have 2^64 entries; it was not constructed.
+
+Second independent-name experiment uses the supplied boundary/internal partition and discovers connected components solely from source clause incidences, then chooses consecutive boundary coordinates per component. The input includes the boundary query (which variables to retain), not hidden generator grouping. 42/42 cases, 3 randomized name/clause seeds for every size and both families; 14208 exact independent address checks and 7224 reconstructed full CNF witnesses, each checked against original source. Counts match closed form and original scaled-state DP. 1800 primitive count states versus 10791 scaled-state memo entries (83.32% fewer); 27504 apply calls and 182688 restriction calls including replay. The native module exercises a fixed-pair version of the exact normalization, suffix composition and primitive DP, not the full blind compiler. It also checks root-scale tampering. Native compiler unavailable locally.
+
+Additional general controls: 12 random/planted 3-CNF cases (8,12,16 variables) and four pigeonhole cases, both ordinary and normalized representations under natural and greedy degree order, 64/64 exact count agreement with DPLL; reconstruct and verify a witness for each satisfiable run. Small controls only; this is not a proof of polynomial resource bounds on arbitrary SAT. Greedy degree order need not improve decision diagrams. No optimized external decision diagram solver comparison yet.
+
+## Provenance
+
+Local scripts and receipts (SHA256):
+- pnp_joint_generator_audit.py 3c7ee0c62172303de5099d8f298a15daa1e70fa54b83acba414c4edb74accca1
+- pnp_joint_generator_results.txt bd4fe2bf4491b477a0b53cbb115ea0aeef3015971c63a4f74a5a38056228cee4
+- pnp_joint_shadow_matrix_audit.py a7532fac64a7719c5bf5b2c5e52c66d36645a74b8a0d349323d07d0968b78b1b
+- pnp_joint_shadow_matrix_results.txt 03e2b74804685880bd6d4c4013b2f3b9fc61342c0e5af07041cdd84be7ab3938
+- evidence bundle 6ff0545a8b50fb23c38f3a2ce2acbc726b81bd2ef5886c356ba7945f1866aa7a (local bundle; not a GitHub artifact)
+- Archive dependencies: pnp_residual_affine_audit.py, pnp_blind_cnf_audit.py, pnp_uniform_gate_audit.py (the latter SHA256 85021d284c00f30ffd83ca344737e259a94942f0c552e0a9b82f861264a54f42).
+- Native test src/primitive_shadow_generator.rs.
+
+Next: avoid product-order blowup with alternative certified decompositions (factor networks / AND-OR DAGs / dynamic coordinate ordering), measure discovery, intermediate memory, bit operations and witness costs against optimized standard algorithms. Use connected high-width and arbitrary SAT controls. The historical Brown–Hilbert/Radiated Slice/Fischer machinery was not invoked by this experiment; the reusable identity is compatible with addressed playback. P=NP remains open; no merge authorization.
