@@ -231,3 +231,6 @@ mod automatic_shadow_replay;
 
 #[cfg(test)]
 mod signed_residual_reuse;
+
+#[cfg(test)]
+mod canonical_tree_address;
