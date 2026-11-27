@@ -228,3 +228,6 @@ mod primitive_shadow_generator;
 
 #[cfg(test)]
 mod automatic_shadow_replay;
+
+#[cfg(test)]
+mod signed_residual_reuse;
