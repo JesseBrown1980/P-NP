@@ -11,6 +11,8 @@ pub mod gc_archive;
 pub mod gulp_gc;
 pub mod guidance;
 pub mod matrix;
+pub mod least_action_sat;
+pub mod boundary_quotient;
 pub mod omnibit_tournament;
 // The original frozen source contains two historic literal-grouping styles.
 // Scope this lint allowance exclusively to the byte-identical vendor module.
