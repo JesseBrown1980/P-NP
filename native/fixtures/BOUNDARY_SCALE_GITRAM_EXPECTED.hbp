@@ -14,7 +14,7 @@ SCALE|cell=12|width=9|density=1|states=512|classes=17|minimum=0|adversarial_clas
 SCALE|cell=13|width=9|density=3|states=512|classes=125|minimum=0|adversarial_classes=512|sha256=4bc332e2d5ead09e09b058167ac6224e9aa6bc7ffefd99445ea4360a5bf5223b
 SCALE|cell=14|width=9|density=6|states=512|classes=64|minimum=0|adversarial_classes=512|sha256=acd8168e0712085f67b21d1c4d9ef68a8322280e2b75bd323b8dd045bfde3229
 SCALE|cell=15|width=9|density=12|states=512|classes=256|minimum=6|adversarial_classes=512|sha256=45c5a6ec312f6c7d73a1d596e4b527d1c8b3e3a4ad655f25cc20cccb7880e6e1
-SCALE|cell=16|width=10|density=1|states=1024|classes=24|minimum=0|adversarial_classes=1024|sha256=4ec68bd9efbab996225708ca2c2d04c2cd783d0fca628d44d21eff29e9663ac7
+SCALE|cell=16|width=10|density=1|states=1024|classes=24|minimum=0|adversarial_classes=1024|sha256=4ec68bd9efbab996225708ca2c2e04c2cd783d0fca628d44d21eff29e9663ac7
 SCALE|cell=17|width=10|density=3|states=1024|classes=43|minimum=0|adversarial_classes=1024|sha256=72c1a2f0690ed6b80273d15b5f067a3c5e2565a564fbf360990586f95bcafd7c
 SCALE|cell=18|width=10|density=6|states=1024|classes=192|minimum=0|adversarial_classes=1024|sha256=92c1dbf049688e19521105f5a897f79175ad962b68a8b03a5869738e8d383b16
 SCALE|cell=19|width=10|density=12|states=1024|classes=512|minimum=9|adversarial_classes=1024|sha256=dba278513887822706e4d30e0fbaa1a8d464be2565d5811ef6df972e8c80af04
