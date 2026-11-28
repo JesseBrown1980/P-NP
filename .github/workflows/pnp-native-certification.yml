@@ -165,7 +165,7 @@ jobs:
       - name: Independently scan executable project Rust source
         run: |
           set -euo pipefail
-          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric,temporal_fabric,prl_temporal_fabric,least_action_sat}.rs; then
+          if grep -nE '\b(f32|f64|serde_json|NodeJS|nodejs|javascript|v8)\b|unsafe[[:space:]]*\{' native/src/{lib,main,matrix,freeze,triad,ternary,guidance,solver,relic,source,sha256,wave,scoring,ensemble,checkpoint,fabric_gc,prism,gc_archive,gulp_gc,binary_ternary_bridge,omnibit_tournament,omega_operator_catalog,omnibit_operator_gate,tls_memory,tls_stochastic,tls_omnibit_gc,tls_entropy_omnibit,tls_stream_fabric,http0_fabric_witness,http0_compute,microkernel_compute,matrix_wire,full_matrix_fabric,temporal_fabric,prl_temporal_fabric,least_action_sat,boundary_quotient}.rs; then
             echo 'PNP_NATIVE_REJECT|reason=noninteger_or_nonrust_source|json=0'
             exit 1
           fi
@@ -1376,8 +1376,9 @@ jobs:
           rustc +1.81.0 --version | tee gitram-cell/RUST.hbp
           grep -Fq 'rustc 1.81.0 ' gitram-cell/RUST.hbp
           rustc +1.81.0 --edition=2021 --test -D warnings -C overflow-checks=yes native/src/least_action_sat.rs -o gitram-cell/cell-test
+          rustc +1.81.0 --edition=2021 --test -D warnings -C overflow-checks=yes native/src/boundary_quotient.rs -o gitram-cell/quotient-test
           git rev-parse HEAD > gitram-cell/COMMIT.hbp
-          sha256sum native/src/least_action_sat.rs native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp > gitram-cell/SOURCE.sha256
+          sha256sum native/src/least_action_sat.rs native/src/boundary_quotient.rs native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp > gitram-cell/SOURCE.sha256
       - name: Execute disjoint cell, compare exact minima and seal checkpoint
         run: |
           set -euo pipefail
@@ -1386,7 +1387,16 @@ jobs:
           grep -o 'GITRAM_SHARD_PASS|.*' gitram-cell/CELL.log > gitram-cell/CELL.hbp
           grep -F "cell=$cell|" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp > "$RUNNER_TEMP/EXPECTED.hbp"
           cmp gitram-cell/CELL.hbp "$RUNNER_TEMP/EXPECTED.hbp"
-          (cd gitram-cell && sha256sum CELL.hbp CELL.log COMMIT.hbp RUST.hbp SOURCE.sha256 cell-test > SHA256SUMS)
+          gitram-cell/quotient-test --exact tests::quotient_negative_controls
+          gitram-cell/quotient-test --ignored --exact tests::gitram_quotient --nocapture --test-threads=1 | tee gitram-cell/QUOTIENT.log
+          grep -o 'MATRIX|.*' gitram-cell/QUOTIENT.log > gitram-cell/MATRICES.hbp
+          test "$(wc -l < gitram-cell/MATRICES.hbp)" -eq 36
+          hash="$(sha256sum gitram-cell/MATRICES.hbp | cut -d' ' -f1)"
+          summary="$(grep -o 'QUOTIENT_SHARD_PASS|.*' gitram-cell/QUOTIENT.log)"
+          printf '%s|matrix_sha256=%s\n' "$summary" "$hash" > gitram-cell/QUOTIENT.hbp
+          grep -F "cell=$cell|" native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp > "$RUNNER_TEMP/EXPECTED_QUOTIENT.hbp"
+          cmp gitram-cell/QUOTIENT.hbp "$RUNNER_TEMP/EXPECTED_QUOTIENT.hbp"
+          (cd gitram-cell && sha256sum CELL.hbp CELL.log COMMIT.hbp RUST.hbp SOURCE.sha256 cell-test quotient-test QUOTIENT.log QUOTIENT.hbp MATRICES.hbp > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -1429,6 +1439,12 @@ jobs:
             grep -F "cell=$cell|" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp > "$RUNNER_TEMP/EXPECTED.hbp"
             cmp "$d/CELL.hbp" "$RUNNER_TEMP/EXPECTED.hbp"
             cat "$d/CELL.hbp" >> gitram-sealed/ALL.hbp
+            grep -F "cell=$cell|" native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp > "$RUNNER_TEMP/EXPECTED_QUOTIENT.hbp"
+            cmp "$d/QUOTIENT.hbp" "$RUNNER_TEMP/EXPECTED_QUOTIENT.hbp"
+            test "$(wc -l < "$d/MATRICES.hbp")" -eq 36
+            hash="$(sha256sum "$d/MATRICES.hbp" | cut -d' ' -f1)"
+            grep -Fq "|matrix_sha256=$hash" "$d/QUOTIENT.hbp"
+            cat "$d/QUOTIENT.hbp" >> gitram-sealed/QUOTIENT_ALL.hbp
           done
           cmp gitram-sealed/ALL.hbp native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp
           # Reject missing or duplicated evidence and altered minima.
@@ -1439,7 +1455,15 @@ jobs:
           sed '1s/minima=0/minima=9/' gitram-sealed/ALL.hbp > "$RUNNER_TEMP/TAMPER.hbp"
           if cmp -s "$RUNNER_TEMP/TAMPER.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp; then exit 1; fi
           echo 'GITRAM_FAN_IN_PASS|cells=20|cases=240|sat=103|unsat=137|source=PINNED|missing_duplicate_tamper=REJECTED|scope=BOUNDED_WIDTH|json=0' | tee gitram-sealed/VERDICT.hbp
-          (cd gitram-sealed && sha256sum ALL.hbp VERDICT.hbp > SHA256SUMS && sha256sum -c SHA256SUMS)
+          cmp gitram-sealed/QUOTIENT_ALL.hbp native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp
+          head -n 19 gitram-sealed/QUOTIENT_ALL.hbp > "$RUNNER_TEMP/QUOTIENT_MISSING.hbp"
+          if cmp -s "$RUNNER_TEMP/QUOTIENT_MISSING.hbp" native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp; then exit 1; fi
+          cat "$RUNNER_TEMP/QUOTIENT_MISSING.hbp" <(head -n 1 gitram-sealed/QUOTIENT_ALL.hbp) > "$RUNNER_TEMP/QUOTIENT_DUPLICATE.hbp"
+          if cmp -s "$RUNNER_TEMP/QUOTIENT_DUPLICATE.hbp" native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp; then exit 1; fi
+          sed '1s/classes=3/classes=9/' gitram-sealed/QUOTIENT_ALL.hbp > "$RUNNER_TEMP/QUOTIENT_TAMPER.hbp"
+          if cmp -s "$RUNNER_TEMP/QUOTIENT_TAMPER.hbp" native/fixtures/BOUNDARY_QUOTIENT_GITRAM_EXPECTED.hbp; then exit 1; fi
+          echo 'QUOTIENT_FAN_IN_PASS|cells=20|cases=240|entries=244800|sat=162|unsat=78|compressed_cases=203|dense_slots=2246400|quotient_slots=1060400|scope=BOUNDED_WIDTH|json=0' | tee gitram-sealed/QUOTIENT_VERDICT.hbp
+          (cd gitram-sealed && sha256sum ALL.hbp VERDICT.hbp QUOTIENT_ALL.hbp QUOTIENT_VERDICT.hbp > SHA256SUMS && sha256sum -c SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
           name: least-action-sealed
