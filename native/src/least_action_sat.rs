@@ -102,4 +102,50 @@ mod tests {
         assert!(compose(&[[Some(u64::MAX); 4]; 4], &[[Some(1); 4]; 4]).is_err());
         assert_eq!(compose(&[[None; 4]; 4], &k).unwrap(), [[None; 4]; 4]);
     }
+
+    /// GitRAM cells use disjoint deterministic inputs, not identical repeats.
+    #[test]
+    #[ignore = "run by the GitRAM cell workflow"]
+    fn gitram_cell() {
+        let cell: usize = std::env::var("GITRAM_CELL").expect("cell id")
+            .parse().expect("numeric cell id");
+        assert!(cell < 20);
+        let n = cell / 2 + 1;
+        let mut state = 27181_u64 + (cell as u64) * 65537;
+        let mut minima = Vec::new();
+        for case in 0..12 {
+            let planted = (cell * 37 + case * 13) % (1 << (n + 2));
+            let mut windows = Vec::new();
+            for t in 0..n {
+                let mut w = [0; 8];
+                for (sign, count) in w.iter_mut().enumerate() {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    *count = if case % 3 == 2 { state % 3 } else { u64::from(state % 5 == 0) };
+                    if case % 3 == 0 && (0..3).all(|j| {
+                        ((planted >> (t + j)) & 1) != ((sign >> (2 - j)) & 1)
+                    }) {
+                        *count = 0;
+                    }
+                    if case % 3 == 1 && t == case % n {
+                        *count = 1;
+                    }
+                }
+                windows.push(w);
+            }
+            let kernels: Vec<_> = windows.iter().map(window_kernel).collect();
+            let forward = kernels[1..].iter().try_fold(kernels[0], |a, b| compose(&a, b))
+                .expect("bounded action");
+            let backward = kernels[..n-1].iter().rev().try_fold(kernels[n-1], |b, a| compose(a, &b))
+                .expect("bounded action");
+            assert_eq!(forward, backward);
+            let oracle = exhaustive(&windows);
+            assert_eq!(minimum(&forward), Some(oracle));
+            minima.push(oracle);
+        }
+        let sat = minima.iter().filter(|&&v| v == 0).count();
+        let values: Vec<_> = minima.iter().map(u64::to_string).collect();
+        println!("GITRAM_SHARD_PASS|cell={cell:02}|cases=12|sat={sat}|unsat={}|minima={}", 12-sat, values.join(","));
+    }
 }
