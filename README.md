@@ -1,5 +1,9 @@
 # P-NP — exact complexity research laboratory
 
+## November 28: least-action SAT and GitRAM verification
+
+**Hosted GitRAM bounded-width probe PASS** ([run 46151136012](https://github.com/JesseBrown1980/P-NP/actions/runs/46151136012), commit `2674f116b63f110c34c83abb01d3373b9841d6ab`): all 20 Rust 1.81 cells and the independent SHA-256 fan-in passed. Exact minima matched the pre-frozen oracle for 240 distinct consecutive-triple CNF instances: 103 SAT and 137 UNSAT. Missing, duplicate, and altered checkpoints were rejected. The original exploratory 240-case local probe is separate. [Protocol and scope](native/LEAST_ACTION_SAT_PROTOCOL.md) · [Native kernel](native/src/least_action_sat.rs) · [Matrix Laws source PR #20](https://github.com/JesseBrown1980/The-matrix-law-essentials/pull/20). Full repository native acceptance remains separate; no arbitrary SAT polynomial-time or general solver-speed claim. A new local normalized-row shadow quotient in Matrix Laws is a candidate for a later native transfer, not yet an accepted SAT compression result.
+
 ## Mandatory native software acceptance (November 17–18, 2026)
 
 **The Yang–Mills engineering standard now governs every P-NP implementation, retrospectively and prospectively.** Rust **1.81.0**, exact integers/trits, zero floating point, **zero Node.js / JSON / V8 runtime**, offline locked builds, Clippy `-D warnings`, original-source SHA pins, separate independent checks, tamper rejection, exact HBP/HBI receipts and independently rechecked archives.
