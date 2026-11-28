@@ -1433,11 +1433,11 @@ jobs:
           cmp gitram-sealed/ALL.hbp native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp
           # Reject missing or duplicated evidence and altered minima.
           head -n 19 gitram-sealed/ALL.hbp > "$RUNNER_TEMP/MISSING.hbp"
-          ! cmp -s "$RUNNER_TEMP/MISSING.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp
+          if cmp -s "$RUNNER_TEMP/MISSING.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp; then exit 1; fi
           cat "$RUNNER_TEMP/MISSING.hbp" <(head -n 1 gitram-sealed/ALL.hbp) > "$RUNNER_TEMP/DUPLICATE.hbp"
-          ! cmp -s "$RUNNER_TEMP/DUPLICATE.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp
+          if cmp -s "$RUNNER_TEMP/DUPLICATE.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp; then exit 1; fi
           sed '1s/minima=0/minima=9/' gitram-sealed/ALL.hbp > "$RUNNER_TEMP/TAMPER.hbp"
-          ! cmp -s "$RUNNER_TEMP/TAMPER.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp
+          if cmp -s "$RUNNER_TEMP/TAMPER.hbp" native/fixtures/LEAST_ACTION_GITRAM_EXPECTED.hbp; then exit 1; fi
           echo 'GITRAM_FAN_IN_PASS|cells=20|cases=240|sat=103|unsat=137|source=PINNED|missing_duplicate_tamper=REJECTED|scope=BOUNDED_WIDTH|json=0' | tee gitram-sealed/VERDICT.hbp
           (cd gitram-sealed && sha256sum ALL.hbp VERDICT.hbp > SHA256SUMS && sha256sum -c SHA256SUMS)
       - uses: actions/upload-artifact@v4
