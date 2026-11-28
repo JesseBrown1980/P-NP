@@ -204,4 +204,130 @@ mod tests {
         let sat=minima.iter().filter(|v| *v=="0").count();
         println!("QUOTIENT_SHARD_PASS|cell={cell:02}|width={w}|cases=12|entries={}|sat={sat}|unsat={}|classes={}|minima={}",36*d*d,12-sat,ranks.join(","),minima.join(","));
     }
+
+    fn scale_source(cell: usize, w: usize) -> Vec<Vec<Clause>> {
+        let mut state = 2026112801 + 100003 * cell as u64;
+        let mut triples = Vec::new();
+        for a in 0..=w {
+            for b in a+1..=w {
+                for c in b+1..=w {
+                    triples.push([a,b,c]);
+                }
+            }
+        }
+        (0..2*w).map(|_| {
+            (0..[1,3,6,12][cell%4]).map(|_| {
+                let p=triples[(next(&mut state)%triples.len() as u64) as usize];
+                let s=next(&mut state) as usize % 8;
+                [(p[0],s&1),(p[1],(s>>1)&1),(p[2],(s>>2)&1)]
+            }).collect()
+        }).collect()
+    }
+
+    // At exactly w transitions the initial and final bit strings uniquely
+    // determine every intermediate window. Evaluate original clause literals.
+    fn direct_block(w: usize, input: &[Vec<Clause>]) -> Matrix {
+        assert_eq!(input.len(),w);
+        let d=1_usize<<w;
+        let weights: Vec<Vec<u64>>=input.iter().map(|clauses| {
+            (0..2*d).map(|v| {
+                clauses.iter().filter(|c| {
+                    c.iter().all(|&(p,b)| ((v>>(w-p))&1)!=b)
+                }).count() as u64
+            }).collect()
+        }).collect();
+        (0..d).map(|i| {
+            (0..d).map(|j| {
+                let bits=(i<<w)|j;
+                Some(weights.iter().enumerate().map(|(t,c)| {
+                    c[(bits>>(w-1-t)) & (2*d-1)]
+                }).sum())
+            }).collect()
+        }).collect()
+    }
+
+    // Independent incoming-edge recurrence, retaining all endpoint states.
+    fn incoming(w: usize, input: &[Vec<Clause>]) -> Matrix {
+        let d=1_usize<<w;
+        let mut a=vec![vec![None;d];d];
+        for (i,row) in a.iter_mut().enumerate() {
+            row[i]=Some(0_u64);
+        }
+        for clauses in input {
+            let costs: Vec<u64>=(0..2*d).map(|v| {
+                let mut cost=0;
+                for clause in clauses {
+                    let mut satisfied=false;
+                    for &(p,b) in clause {
+                        satisfied |= ((v>>(w-p))&1)==b;
+                    }
+                    if !satisfied {cost+=1;}
+                }
+                cost
+            }).collect();
+            for row in &mut a {
+                let mut dst=Vec::with_capacity(d);
+                for j in 0..d {
+                    let first=row[j/2].map(|x| x.checked_add(costs[j]).expect("bounded"));
+                    let second=row[j/2+d/2].map(|x| x.checked_add(costs[j+d]).expect("bounded"));
+                    dst.push(match (first,second) {
+                        (Some(x),Some(y))=>Some(x.min(y)),
+                        (Some(x),None)|(None,Some(x))=>Some(x),
+                        (None,None)=>None,
+                    });
+                }
+                *row=dst;
+            }
+        }
+        a
+    }
+
+    // CNF equality pair (!x OR y) AND (x OR !y) for each crossing bit.
+    // Distinct rows have distinct unique zero locations, so no row merges.
+    fn equality_adversary(w: usize) -> Matrix {
+        let d=1_usize<<w;
+        (0..d).map(|i| (0..d).map(|j| {
+            let mut cost=0_u64;
+            for p in 0..w {
+                let x=(i>>p)&1!=0;
+                let y=(j>>p)&1!=0;
+                cost+=u64::from(x&&!y)+u64::from(!x&&y);
+            }
+            assert_eq!(cost,u64::from((i^j).count_ones()));
+            Some(cost)
+        }).collect()).collect()
+    }
+
+    #[test]
+    #[ignore = "GitRAM wide boundary scaling"]
+    fn gitram_scale() {
+        use std::io::{BufWriter,Write};
+        let cell: usize=std::env::var("GITRAM_CELL").expect("cell id").parse().expect("numeric id");
+        assert!(cell<20);
+        let w=6+cell/4;
+        let d=1_usize<<w;
+        let density=[1,3,6,12][cell%4];
+        let input=scale_source(cell,w);
+        let a=direct_block(w,&input[..w]);
+        let b=direct_block(w,&input[w..]);
+        assert_eq!(a,incoming(w,&input[..w]));
+        assert_eq!(b,incoming(w,&input[w..]));
+        let q=quotient(&a).unwrap();
+        let c=q.compose(&b).unwrap();
+        assert_eq!(c,incoming(w,&input));
+        let h=equality_adversary(w);
+        let hq=quotient(&h).unwrap();
+        assert_eq!(hq.classes(),d);
+        let minimum=c.iter().flatten().flatten().min().expect("finite");
+        let path=std::env::var("GITRAM_SCALE_OUTPUT").expect("output file");
+        let mut writer=BufWriter::new(std::fs::File::create(path).expect("output"));
+        for matrix in [&a,&b,&c,&h] {
+            for v in matrix.iter().flatten() {
+                let value=u16::try_from(v.expect("finite")).expect("bounded cost");
+                writer.write_all(&value.to_le_bytes()).expect("write");
+            }
+        }
+        writer.flush().expect("flush");
+        println!("SCALE|cell={cell:02}|width={w}|density={density}|states={d}|classes={}|minimum={minimum}|adversarial_classes={}",q.classes(),hq.classes());
+    }
 }
